@@ -1,0 +1,2 @@
+dataset,hidden_dim_1,hidden_dim_2,dropout,learning_rate,num_epochs,num_layers, aucroc,loss
+CollegeMsg,64,32,0.0001,0.2,500,3,0.36363636363636365,0.7810986638069153
