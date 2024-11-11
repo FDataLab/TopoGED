@@ -1,0 +1,1 @@
+dataset,hidden_dim_1,hidden_dim_2,mlp_dim,learning_rate,num_layers_LSTM,num_layers_GRU,trained_epochs,valid_loss
