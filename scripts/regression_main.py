@@ -182,7 +182,9 @@ with torch.no_grad():
             predicted_embeddings = my_utils.linear_fit(predicted_embeddings)  # Fit a LinearRegression model for monotonically increasing behavior
             
             # Visualize 20-dim embeddings
-            print(f"Time Index:\t{time_index}\tPredicted Embedding:\t{'\t'.join(map(str, predicted_embedding))}\tReal Embedding:\t{'\t'.join(map(str, real_embedding))}")
+            predicted_str = '\t'.join(map(str, predicted_embedding))
+            real_str = '\t'.join(map(str, real_embedding))
+            print(f"Time Index:\t{time_index}\tPredicted Embedding:\t{predicted_str}\tReal Embedding:\t{real_str}")
             print("-" * 50)
 
             time_index += 1

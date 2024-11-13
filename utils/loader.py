@@ -25,7 +25,7 @@ class Loader():
         return all_data
 
     def load_data(self, dataset):
-        self.to_cached()
+        #self.to_cached()
         data_files = [file for file in os.listdir(self.output_dir)]
         if dataset in data_files:
             graphs, labels = self.from_cached(dataset)
