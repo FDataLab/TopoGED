@@ -80,6 +80,7 @@ mlp_dims = [32, 64]
 learning_rates = [0.0001, 0.001]
 num_epochs = 500
 best_aucroc = float('-inf')  # Init
+old_valid_aucroc = float('-inf')
 
 print(f'Beginning grid search on dataset: {args.dataset}')
 
