@@ -3,7 +3,11 @@ import pandas as pd
 import numpy as np
 import pickle
 import networkx as nx
+
+# Update path for imports
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 class Loader():
@@ -14,6 +18,16 @@ class Loader():
 
     # Process all data
     def load_all_data(self):
+        """
+        Load all datasets at once and return them as a list
+        
+        Args:
+            None
+        
+        Returns:
+            all_data (list): All datasets available
+        """
+        
         all_data = []
         self.to_cached()
 
@@ -25,7 +39,17 @@ class Loader():
         return all_data
 
     def load_data(self, dataset):
-        #self.to_cached()
+        """
+        Load a single, specified dataset that exists
+        
+        Args:
+            dataset (string): The name of the dataset to load
+        
+        Returns:
+            graphs (list): A list of networkx graphs to process
+            labels (list): The associated labels for each graph
+        """
+        self.to_cached()
         data_files = [file for file in os.listdir(self.output_dir)]
         if dataset in data_files:
             graphs, labels = self.from_cached(dataset)
@@ -38,6 +62,15 @@ class Loader():
 
     # Read labels from file
     def read_labels(self, dataset):
+        """
+        Read the labels from a csv file for later processing
+        
+        Args:
+            dataset (string): The name of the dataset to load
+        
+        Returns:
+            labels (list): All labels for the specified dataset
+        """
         labels = pd.read_csv(self.label_dir + '/{}_Label.csv'.format(dataset), header=None)
         labels = labels.iloc[:, 0]
         labels = labels.squeeze().tolist()
@@ -46,6 +79,15 @@ class Loader():
 
     # Load the data from edge list txt file
     def read_edges(self, dataset):
+        """
+        Read the edgelists a file for later processing
+        
+        Args:
+            dataset (string): The name of the dataset to load
+        
+        Returns:
+            data (list): All graphs created for processing
+        """
         print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
         data = []
         edgelist_rawfile = self.edgelist_dir + '/{}.txt'.format(dataset)
@@ -64,6 +106,15 @@ class Loader():
 
     # Get the data folders into respective cached pkl files
     def to_cached(self):
+        """
+        Send all of the processed datasets to pkl files for easy loading later
+        
+        Args:
+            None
+        
+        Returns:
+            None
+        """
         raw_data = [file for file in os.listdir(self.edgelist_dir)]
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
         cached_data = [file for file in os.listdir(self.output_dir)]
@@ -87,6 +138,16 @@ class Loader():
 
     # Load from the pkl file
     def from_cached(self, file_name):
+        """
+        Load the specified file, if it exists, from the pkl file
+
+        Args:
+            file_name (string): The specified datset to load
+
+        Returns:
+            graphs (list): A list of networkx graphs to process
+            labels (list): The associated labels for each graph
+        """
         with open(self.output_dir + '/' + file_name + '/' + file_name + '.pkl', "rb") as f:
             data = pickle.load(f)
 

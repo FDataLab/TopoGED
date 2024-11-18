@@ -2,6 +2,13 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 
+# Update path for imports
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+
 # Dataset class for embeddings with flexibility for both train and test sets
 class EmbeddingDataset(Dataset):
     def __init__(self, embeddings):

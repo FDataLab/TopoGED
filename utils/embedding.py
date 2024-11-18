@@ -1,5 +1,13 @@
 import numpy as np
 
+
+# Update path for imports
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+
 def degree_activation(degrees, threshold):
     return {node for node, degree in degrees.items() if degree <= threshold}
 

@@ -4,9 +4,14 @@ import numpy as np
 from sklearn.linear_model import LinearRegression 
 
 
+# Update path for imports
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 # A class with general utility functions
 class Utils:
-    def linear_fit(embeddings):
+    def linear_fit(self, embedding):
         """
         Fit a LinearRegression model to ensure monotonically increasing behavior in our embedding vector
 
@@ -22,9 +27,9 @@ class Utils:
         indices = np.arange(1,11).reshape(-1,1)
 
         # Data preparation
-        for i in range(len(embeddings)):
-            nodes.append(embeddings[i])
-            edges.append(embeddings[i + 1])
+        for i in range(0, len(embedding), 2):
+            nodes.append(embedding[i])
+            edges.append(embedding[i + 1])
 
         # Get nodes
         model = LinearRegression()
@@ -44,7 +49,7 @@ class Utils:
         return new_embeddings
 
 
-    def compute_overshoots(pred, real):
+    def compute_overshoots(self, pred, real):
         """
         Compute how far off the embedding was for each particular index
 
