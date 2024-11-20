@@ -116,6 +116,65 @@ class Visualizer:
             # For now just takes last one
             plt.savefig(self.figdir_regression + self.dataset + '_embedding_graph.png')
             plt.clf()
+            
+    def display_single_embedding(self, embedding, num_buckets=10):
+        """
+        Display, in two graphs, the predicted embeddings and true embeddings
+
+        Args:
+            predicted_embeddings (list): The feature vector to display
+
+        Returns:
+            None
+        """
+        nodes = []
+        in_edges = []
+        out_edges = []
+        in_weight = []
+        out_weight = []
+        
+        indices = np.linspace(1, num_buckets, num=num_buckets)
+        for i in range(0, len(embedding), 5):
+            nodes.append(embedding[i])
+            in_edges.append(embedding[i + 1])
+            out_edges.append(embedding[i + 2])
+            in_weight.append(embedding[i + 3])
+            out_weight.append(embedding[i + 4])
+
+        fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(20, 8))  
+        ax1.plot(indices, nodes, label="Node Count", color='blue')
+        ax1.set_xlabel("Degree Percentile")
+        ax1.set_ylabel("Number of Nodes")
+        ax1.legend()
+        ax1.set_title("Plot of Node Counts")
+        
+        ax2.plot(indices, in_edges, label="In Edge Count", color='blue')
+        ax2.set_xlabel("Degree Percentile")
+        ax2.set_ylabel("Number of Edges")
+        ax2.legend()
+        ax2.set_title("Plot of In Edge Counts")
+        
+        ax3.plot(indices, out_edges, label="Out Edge Count", color='blue')
+        ax3.set_xlabel("Degree Percentile")
+        ax3.set_ylabel("Number of Edges")
+        ax3.legend()
+        ax3.set_title("Plot of Out Edge Counts")
+        
+        ax4.plot(indices, in_weight, label="In Weight Count", color='blue')
+        ax4.set_xlabel("Degree Percentile")
+        ax4.set_ylabel("Value")
+        ax4.legend()
+        ax4.set_title("Plot of In Weight Counts")
+        
+        ax5.plot(indices, out_weight, label="Out Weight Count", color='blue')
+        ax5.set_xlabel("Degree Percentile")
+        ax5.set_ylabel("Value")
+        ax5.legend()
+        ax5.set_title("Plot of Out Weight Counts")
+        
+        # For now just takes last one
+        plt.show()
+        plt.clf()
     
     
     def display_differences(self, predicted_embeddings, real_embeddings, linfit_embeddings):

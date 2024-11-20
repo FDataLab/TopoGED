@@ -67,55 +67,6 @@ class Utils:
             overshoots.append(pred_val - real_val)
 
         return overshoots
-    
-
-    def compute_distances(self, pred, real):
-        """
-        Compute the distance between two given vectors
-
-        Args:
-            pred (list): The predicted embeddings from the model
-            real (list): The real embeddings to compare to
-
-        Returns:
-            distance (float): The distance (l2norm) between the two vectors
-        """
-        distance = np.linalg.norm(pred - real)
-
-
-    def distances_from_overshoots(self, path):
-        """
-        Compute the distance between the predicted and real results, when just given the subtracted vector
-
-        Args:
-            path (string): The path to the overshoot csv file
-
-        Returns:
-            None
-        """
-        df = pd.read_csv(path)
-        distances = []
-        df['norm'] = np.linalg.norm(df.values, axis=1)
-        df.to_csv(path)
-
-
-    def compute_cosine_similarity(self, pred, real):
-        """
-        Compute the cosine similarity between two given vectors
-
-        Args:
-            pred (list): The predicted embeddings from the model
-            real (list): The real embeddings to compare to
-
-        Returns:
-            similarity (float): The cosine similarity between the two vectors
-        """
-        pred = pred.reshape(1, -1)
-        real = real.reshape(1, -1)
-
-        # Calculate cosine similarity
-        similarity = cosine_similarity(pred, real)
-        return similarity
 
 
     def round_features(self, embeddings, num_extra_features=0):
@@ -277,6 +228,56 @@ class Utils:
 
         # Show the plot
         plt.show()
+        
+        
+    def compute_distances(self, pred, real):
+        """
+        Compute the distance between two given vectors
+
+        Args:
+            pred (list): The predicted embeddings from the model
+            real (list): The real embeddings to compare to
+
+        Returns:
+            distance (float): The distance (l2norm) between the two vectors
+        """
+        distance = np.linalg.norm(pred - real)
+        return distance
+
+
+    def distances_from_overshoots(self, path):
+        """
+        Compute the distance between the predicted and real results, when just given the subtracted vector
+
+        Args:
+            path (string): The path to the overshoot csv file
+
+        Returns:
+            None
+        """
+        df = pd.read_csv(path)
+        distances = []
+        df['norm'] = np.linalg.norm(df.values, axis=1)
+        df.to_csv(path)
+
+
+    def compute_cosine_similarity(self, pred, real):
+        """
+        Compute the cosine similarity between two given vectors
+
+        Args:
+            pred (list): The predicted embeddings from the model
+            real (list): The real embeddings to compare to
+
+        Returns:
+            similarity (float): The cosine similarity between the two vectors
+        """
+        pred = pred.reshape(1, -1)
+        real = real.reshape(1, -1)
+
+        # Calculate cosine similarity
+        similarity = cosine_similarity(pred, real)[0][0]
+        return similarity
 
 
     def display_similarity_values(self, similarity_scores):
