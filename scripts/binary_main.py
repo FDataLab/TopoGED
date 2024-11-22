@@ -108,7 +108,6 @@ for dataset in datasets:
                         for lr_val in learning_rates:
                             learning_rate = lr_val
                             no_improvement_counter = 0  # Number of epochs that we haven't seen an improvement in the validation AUCROC
-                            old_valid_aucroc = float('-inf')
                             valid_losses = []
                             train_losses = []
                             valid_aucrocs = []
@@ -144,28 +143,31 @@ for dataset in datasets:
                                 train_losses.append(train_loss)
                                 valid_aucrocs.append(valid_aucroc)
                                 train_aucrocs.append(train_auc_roc)
+
+                                if valid_aucroc >= best_aucroc:
+                                    no_improvement_counter = 0
+                                    best_model = model
+                                    best_aucroc = valid_aucroc
+                                    best_valid_losses = valid_losses
+                                    best_train_losses = train_losses
+                                    best_valid_aucrocs = valid_aucrocs
+                                    best_train_aucrocs = train_aucrocs
+                                    best_params = {
+                                        'dataset': dataset,
+                                        'seed': seed,
+                                        'hidden_dim_1': hidden_1,
+                                        'hidden_dim_2': hidden_2,
+                                        'mlp_dim': mlp_dim,
+                                        'learning_rate': lr_val,
+                                        'dropout': dropout,
+                                        'num_layers_LSTM': num_layer,
+                                        'num_layers_GRU': num_layer,
+                                    }
                                 
                                 # Early stopping only after 100 epochs
-                                if epoch >= 100:
-                                    if valid_aucroc >= old_valid_aucroc:
+                                if epoch >= 50:
+                                    if valid_aucroc >= best_aucroc:
                                         no_improvement_counter = 0
-                                        best_model = model
-                                        old_valid_aucroc = valid_aucroc
-                                        best_valid_losses = valid_losses
-                                        best_train_losses = train_losses
-                                        best_valid_aucrocs = valid_aucrocs
-                                        best_train_aucrocs = train_aucrocs
-                                        best_params = {
-                                            'dataset': dataset,
-                                            'seed': seed,
-                                            'hidden_dim_1': hidden_1,
-                                            'hidden_dim_2': hidden_2,
-                                            'mlp_dim': mlp_dim,
-                                            'learning_rate': lr_val,
-                                            'dropout': dropout,
-                                            'num_layers_LSTM': num_layer,
-                                            'num_layers_GRU': num_layer,
-                                        }
                                     else:
                                         no_improvement_counter += 1
                                         

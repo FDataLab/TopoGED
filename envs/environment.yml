@@ -89,4 +89,4 @@ dependencies:
   - xz=5.4.6=h8cc25b3_1
   - zlib=1.2.13=h8cc25b3_1
   - zstd=1.5.6=h8880b57_0
-prefix: C:\Users\ronan\Anaconda3\envs\temporal_env
+prefix: C:/Users/ronan/miniconda3/envs/temporal_env

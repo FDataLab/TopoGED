@@ -52,7 +52,7 @@ if not os.path.isfile(csv_file_path):
 # Constants
 output_dim = 20  # Regression
 input_dim = 20  # 20-dimensional embeddings
-patience = 25  # Early stopping patience
+patience = 15  # Early stopping patience
 
 # Grid search params
 datasets = ['networkbancor', 'networkcentra', 'networkindicator', 'networkcoindash', 'networkdgd', 'networkiconomi', 'mathoverflow', 'Reddit_B', 'networkadex', 
@@ -98,7 +98,6 @@ for dataset in datasets:
                 for hidden_2 in hidden_dim_2:
                     for mlp_dim in mlp_dims:
                         for lr_val in learning_rates:
-                            old_valid_loss = float('inf')
                             valid_losses = []
                             train_losses = []
                             no_improvement_counter = 0
@@ -130,26 +129,30 @@ for dataset in datasets:
                                 train_losses.append(train_loss)
                                 valid_losses.append(valid_loss)
 
+                                # Save the best model and parameters
+                                if valid_loss < best_valid_loss:
+                                    no_improvement_counter = 0
+                                    best_model = model
+                                    best_valid_loss = valid_loss
+                                    best_valid_losses = valid_losses
+                                    best_train_losses = train_losses
+                                    best_params = {
+                                        'dataset': dataset,
+                                        'seed': seed,
+                                        'hidden_dim_1': hidden_1,
+                                        'hidden_dim_2': hidden_2,
+                                        'mlp_dim': mlp_dim,
+                                        'learning_rate': lr_val,
+                                        'dropout': dropout,
+                                        'num_layers_LSTM': num_layer,
+                                        'num_layers_GRU': num_layer,
+                                    }
+
                                 # Early stopping
-                                if epoch >= 100:
+                                if epoch >=50:
                                     # After 100 epochs, look at early stopping
-                                    if valid_loss < old_valid_loss:
+                                    if valid_loss < best_valid_loss:
                                         no_improvement_counter = 0
-                                        best_model = model
-                                        old_valid_loss = valid_loss
-                                        best_valid_losses = valid_losses
-                                        best_train_losses = train_losses
-                                        best_params = {
-                                            'dataset': dataset,
-                                            'seed': seed,
-                                            'hidden_dim_1': hidden_1,
-                                            'hidden_dim_2': hidden_2,
-                                            'mlp_dim': mlp_dim,
-                                            'learning_rate': lr_val,
-                                            'dropout': dropout,
-                                            'num_layers_LSTM': num_layer,
-                                            'num_layers_GRU': num_layer,
-                                        }
                                     else:
                                         no_improvement_counter += 1
                                         
