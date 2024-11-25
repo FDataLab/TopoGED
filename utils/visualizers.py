@@ -83,24 +83,30 @@ class Visualizer:
         for predicted, real, linfit in zip(predicted_embeddings, real_embeddings, linfit_embeddings):
             real_nodes = []
             real_edges = []
+            real_weights = []
             pred_nodes = []
             pred_edges = []
+            pred_weights = []
             linfit_nodes = []
             linfit_edges = []
+            linfit_weights = []
             indices = np.linspace(1, 10, num=10)
-            for i in range(0, len(predicted), 2):
+            for i in range(0, len(predicted), 3):
                 linfit_nodes.append(linfit[i])
                 real_nodes.append(real[i])
                 pred_nodes.append(predicted[i])
                 linfit_edges.append(linfit[i + 1])
                 real_edges.append(real[i + 1])
                 pred_edges.append(predicted[i + 1])
+                real_weights.append(real[i + 2])
+                pred_weights.append(predicted[i + 2])
+                linfit_weights.append(linfit[i + 2])
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))  
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 5))  
             ax1.plot(indices, real_nodes, label="Real Node Count", color='blue')
             ax1.plot(indices, pred_nodes, label="Predicted Node Count", color='orange')
             ax1.plot(indices, linfit_nodes, label="Linear Fit Node Count", color='green')
-            ax1.set_xlabel("Degree Percentile")
+            ax1.set_xlabel("Percentile Activated")
             ax1.set_ylabel("Number of Nodes")
             ax1.legend()
             ax1.set_title("Plot of Node Counts")
@@ -108,14 +114,88 @@ class Visualizer:
             ax2.plot(indices, real_edges, label="Real Edge Count", color='blue')
             ax2.plot(indices, pred_edges, label="Predicted Edge Count", color='orange')
             ax2.plot(indices, linfit_edges, label="Linear Fit Edge Count", color='green')
-            ax2.set_xlabel("Degree Percentile")
+            ax2.set_xlabel("Percentile Activated")
             ax2.set_ylabel("Number of Edges")
             ax2.legend()
             ax2.set_title("Plot of Edge Counts")
             
+            ax3.plot(indices, real_weights, label="Real Weight Activated", color='blue')
+            ax3.plot(indices, pred_weights, label="Predicted Weight Activated", color='orange')
+            ax3.plot(indices, linfit_weights, label="Linear Fit Weight Activated", color='green')
+            ax3.set_xlabel("Percentile Activated")
+            ax3.set_ylabel("Activated Weight")
+            ax3.legend()
+            ax3.set_title("Plot of Weight Activated")
+            
             # For now just takes last one
-            plt.savefig(self.figdir_regression + self.dataset + '_embedding_graph.png')
+            #plt.savefig(self.figdir_regression + self.dataset + '_embedding_graph.png')
+            plt.show()
             plt.clf()
+            
+            
+    def display_embeddings_once(self, predicted_embedding, real_embedding, linfit_embedding):
+        """
+        Display, in two graphs, the predicted embeddings and true embeddings
+
+        Args:
+            predicted_embeddings (list): The predicted feature vector to display
+            real_embeddings (list): The real feature vector to display
+            linfit_embeddings (list): The predicted feature vector after linear regression fit to it to display
+
+        Returns:
+            None
+        """
+        real_nodes = []
+        real_edges = []
+        real_weights = []
+        pred_nodes = []
+        pred_edges = []
+        pred_weights = []
+        linfit_nodes = []
+        linfit_edges = []
+        linfit_weights = []
+        indices = np.linspace(1, 10, num=10)
+        for i in range(0, len(predicted_embedding), 3):
+            linfit_nodes.append(linfit_embedding[i])
+            real_nodes.append(real_embedding[i])
+            pred_nodes.append(predicted_embedding[i])
+            linfit_edges.append(linfit_embedding[i + 1])
+            real_edges.append(real_embedding[i + 1])
+            pred_edges.append(predicted_embedding[i + 1])
+            real_weights.append(real_embedding[i + 2])
+            pred_weights.append(predicted_embedding[i + 2])
+            linfit_weights.append(linfit_embedding[i + 2])
+
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 5))  
+        ax1.plot(indices, real_nodes, label="Real Node Count", color='blue')
+        ax1.plot(indices, pred_nodes, label="Predicted Node Count", color='orange')
+        ax1.plot(indices, linfit_nodes, label="Linear Fit Node Count", color='green')
+        ax1.set_xlabel("Percentile Activated")
+        ax1.set_ylabel("Number of Nodes")
+        ax1.legend()
+        ax1.set_title("Plot of Node Counts")
+        
+        ax2.plot(indices, real_edges, label="Real Edge Count", color='blue')
+        ax2.plot(indices, pred_edges, label="Predicted Edge Count", color='orange')
+        ax2.plot(indices, linfit_edges, label="Linear Fit Edge Count", color='green')
+        ax2.set_xlabel("Percentile Activated")
+        ax2.set_ylabel("Number of Edges")
+        ax2.legend()
+        ax2.set_title("Plot of Edge Counts")
+        
+        ax3.plot(indices, real_weights, label="Real Weight Activated", color='blue')
+        ax3.plot(indices, pred_weights, label="Predicted Weight Activated", color='orange')
+        ax3.plot(indices, linfit_weights, label="Linear Fit Weight Activated", color='green')
+        ax3.set_xlabel("Percentile Activated")
+        ax3.set_ylabel("Activated Weight")
+        ax3.legend()
+        ax3.set_title("Plot of Weight Activated")
+        
+        # For now just takes last one
+        #plt.savefig(self.figdir_regression + self.dataset + '_embedding_graph.png')
+        plt.show()
+        plt.clf()
+            
             
     def display_single_embedding(self, embedding, num_buckets=10):
         """
@@ -128,49 +208,33 @@ class Visualizer:
             None
         """
         nodes = []
-        in_edges = []
-        out_edges = []
-        in_weight = []
-        out_weight = []
+        edges = []
+        weights = []
         
         indices = np.linspace(1, num_buckets, num=num_buckets)
         for i in range(0, len(embedding), 5):
             nodes.append(embedding[i])
-            in_edges.append(embedding[i + 1])
-            out_edges.append(embedding[i + 2])
-            in_weight.append(embedding[i + 3])
-            out_weight.append(embedding[i + 4])
+            edges.append(embedding[i + 1])
+            weights.append(embedding[i + 2])
 
-        fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(20, 8))  
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(20, 8))  
         ax1.plot(indices, nodes, label="Node Count", color='blue')
-        ax1.set_xlabel("Degree Percentile")
+        ax1.set_xlabel("Percentile Activated")
         ax1.set_ylabel("Number of Nodes")
         ax1.legend()
         ax1.set_title("Plot of Node Counts")
         
-        ax2.plot(indices, in_edges, label="In Edge Count", color='blue')
-        ax2.set_xlabel("Degree Percentile")
+        ax2.plot(indices, edges, label="Edge Count", color='blue')
+        ax2.set_xlabel("Percentile Activated")
         ax2.set_ylabel("Number of Edges")
         ax2.legend()
-        ax2.set_title("Plot of In Edge Counts")
+        ax2.set_title("Plot of Edge Counts")
         
-        ax3.plot(indices, out_edges, label="Out Edge Count", color='blue')
-        ax3.set_xlabel("Degree Percentile")
-        ax3.set_ylabel("Number of Edges")
+        ax3.plot(indices, weights, label="Total Weight", color='blue')
+        ax3.set_xlabel("Percentile Activated")
+        ax3.set_ylabel("Activated Weight")
         ax3.legend()
-        ax3.set_title("Plot of Out Edge Counts")
-        
-        ax4.plot(indices, in_weight, label="In Weight Count", color='blue')
-        ax4.set_xlabel("Degree Percentile")
-        ax4.set_ylabel("Value")
-        ax4.legend()
-        ax4.set_title("Plot of In Weight Counts")
-        
-        ax5.plot(indices, out_weight, label="Out Weight Count", color='blue')
-        ax5.set_xlabel("Degree Percentile")
-        ax5.set_ylabel("Value")
-        ax5.legend()
-        ax5.set_title("Plot of Out Weight Counts")
+        ax3.set_title("Plot of Weight Activated")
         
         # For now just takes last one
         plt.show()

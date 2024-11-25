@@ -26,12 +26,14 @@ class Utils:
         new_embeddings = []
         nodes = []
         edges = []
+        weights = []
         indices = np.arange(1,11).reshape(-1,1)
 
         # Data preparation
-        for i in range(0, len(embedding), 2):
+        for i in range(0, len(embedding), 3):
             nodes.append(embedding[i])
             edges.append(embedding[i + 1])
+            weights.append(embedding[i + 2])
 
         # Get nodes
         model = LinearRegression()
@@ -42,11 +44,17 @@ class Utils:
         model = LinearRegression()
         model.fit(indices, edges)
         new_edges = model.predict(indices)
+        
+        # Get weights
+        model = LinearRegression()
+        model.fit(indices, weights)
+        new_weights = model.predict(indices)
 
         # Add back to the embeddings
-        for node_val, edge_val in zip(new_nodes, new_edges):
+        for node_val, edge_val, weight_val in zip(new_nodes, new_edges, new_weights):
             new_embeddings.append(node_val)
             new_embeddings.append(edge_val)
+            new_embeddings.append(weight_val)
 
         return new_embeddings
 

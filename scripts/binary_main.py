@@ -18,6 +18,11 @@ from utils.visualizers import Visualizer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score 
 
+import wandb
+
+wandb.init(
+    project="Binary", name="grid_search_params"
+)
 
 # Default training function
 def train_model(model, train_loader, optimizer, criterion):
@@ -106,6 +111,17 @@ for dataset in datasets:
                 for hidden_2 in hidden_dim_2:
                     for mlp_dim in mlp_dims:
                         for lr_val in learning_rates:
+                            # Initialize wandb
+                            wandb.init(project="Binary", config={
+                                'dataset': dataset,
+                                'num_layers': num_layer,
+                                'hidden_dim_1': hidden_1,
+                                'hidden_dim_2': hidden_2,
+                                'mlp_dim': mlp_dim,
+                                'learning_rate': lr_val,
+                                'seed': seed
+                            })
+                            
                             learning_rate = lr_val
                             no_improvement_counter = 0  # Number of epochs that we haven't seen an improvement in the validation AUCROC
                             valid_losses = []
@@ -196,6 +212,13 @@ for dataset in datasets:
                                 'train_loss': train_loss,
                                 'valid_loss': valid_loss
                             }
+                            
+                            wandb.log({
+                                'train_loss': train_loss,
+                                'train_aucroc': train_auc_roc,
+                                'valid_loss': valid_loss,
+                                'valid_aucroc': valid_aucroc
+                            })
 
                             pd.DataFrame([new_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
     print("testing on dataset " + dataset)                        

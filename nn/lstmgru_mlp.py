@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class LSTMGRU_MLP(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim_1=64, hidden_dim_2=32, mlp_dim=32, num_layers_LSTM=1, num_layers_GRU=1):
+    def __init__(self, input_dim, output_dim, hidden_dim_1=64, dropout=0, hidden_dim_2=32, mlp_dim=32, num_layers_LSTM=1, num_layers_GRU=1):
         super(LSTMGRU_MLP, self).__init__()
         self.hidden_dim_1 = hidden_dim_1
         self.hidden_dim_2 = hidden_dim_2
@@ -11,10 +11,10 @@ class LSTMGRU_MLP(nn.Module):
         self.output_dim = output_dim
         
          # Define LSTM layers
-        self.lstm1 = nn.LSTM(input_size=input_dim, hidden_size=self.hidden_dim_1, num_layers=num_layers_LSTM)
+        self.lstm1 = nn.LSTM(input_size=input_dim, hidden_size=self.hidden_dim_1, num_layers=num_layers_LSTM, dropout=dropout)
 
         # Define GRU layers
-        self.gru1 = nn.GRU(input_size=self.hidden_dim_1, hidden_size=self.hidden_dim_2, num_layers=num_layers_GRU)
+        self.gru1 = nn.GRU(input_size=self.hidden_dim_1, hidden_size=self.hidden_dim_2, num_layers=num_layers_GRU, dropout=dropout)
 
         self.mlp = nn.Sequential(
             nn.Linear(self.hidden_dim_2, self.mlp_dim),

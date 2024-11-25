@@ -23,7 +23,8 @@ def generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, pe
             possible_edges = [edge for edge in nx.non_edges(G) if node in edge]
             if possible_edges:
                 selected_edge = random.choice(possible_edges)
-                G.add_edge(*selected_edge)
+                G.add_edge(*selected_edge, value=1)
+                
         
         # Randomly add additional edges based on the average number of edges per node
         num_edges = avg_edges_per_node * num_nodes
@@ -31,7 +32,9 @@ def generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, pe
         if num_edges > len(possible_edges):
             num_edges = len(possible_edges)
         selected_edges = np.random.choice(len(possible_edges), int(num_edges), replace=False)
-        G.add_edges_from([possible_edges[j] for j in selected_edges])
+        for edge_index in selected_edges:
+            edge = possible_edges[edge_index]
+            G.add_edge(edge[0], edge[1], value=1)
 
         # Print the graph details for verification
         print(f"Graph {i}: Nodes = {G.number_of_nodes()}, Edges = {G.number_of_edges()}")

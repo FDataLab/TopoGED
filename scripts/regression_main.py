@@ -18,6 +18,12 @@ from utils.embedding import process_graphs_for_embeddings
 from utils.visualizers import Visualizer
 from sklearn.model_selection import train_test_split
 
+import wandb
+
+wandb.init(
+    project="Regression", name="grid_search_params"
+)
+
 
 # Default training function
 def train_model(model, train_loader, optimizer, criterion):
@@ -32,6 +38,63 @@ def train_model(model, train_loader, optimizer, criterion):
         epoch_loss += loss.item()
 
     return epoch_loss / len(train_loader)
+
+
+def test_model(best_model, test_loader, criterion):
+    test_loss = 0
+    best_model.eval()
+    split_index = len(train_loader) + len(valid_loader)  # The start of the test set time index
+    time_index = split_index  # Start time index at the beginning of the test set
+    predicted_embeddings = []
+    predicted_embeddings_linfit = []
+    real_embeddings = []
+    my_utils = Utils()
+
+    print('USING LINEAR REGRESSION MODEL PRIOR TO DISPLAYING EMBEDDINGS')
+
+    # For storing overshoots for later reference
+    overshoot_file_path = 'data/output/results/RegressionTesting/data/' + dataset + '_overshoots.csv'
+    if not os.path.isfile(overshoot_file_path):
+        columns = [f'overshoot{i}' for i in range(20)]
+        pd.DataFrame(columns=columns).to_csv(overshoot_file_path, index=False)
+
+
+    with torch.no_grad():
+        for x, y in test_loader:
+            output = best_model(x)  # Maintain hidden state across time steps
+            y = y.float()
+            loss = criterion(output, y)
+            test_loss += loss.item()
+            
+            # Print time index, predicted embedding, and real embedding
+            for i in range(len(x)):
+                predicted_embedding = output[i].numpy()
+                real_embedding = y[i].numpy()
+                predicted_embedding_linfit = my_utils.linear_fit(predicted_embedding)
+
+                predicted_embeddings_linfit.append(predicted_embedding_linfit)  # Fit a LinearRegression model for monotonically increasing behavior
+                real_embeddings.append(real_embedding)
+                predicted_embeddings.append(predicted_embedding)  # add to list for reconstruction
+                
+                # Visualize 20-dim embeddings
+                predicted_linfit_str = '\t'.join(map(str, predicted_embedding_linfit))
+                predicted_str = '\t'.join(map(str, predicted_embedding))
+                real_str = '\t'.join(map(str, real_embedding))
+                print(f"Time Index:\t{time_index}\nPredicted Embedding:\t{predicted_str}\nLinear Fit Embedding:\t{predicted_embedding_linfit}\nReal Embedding:\t{real_str}")
+                print("-" * 50)
+                
+                # Save overshoots
+                overshoots = my_utils.compute_overshoots(predicted_embedding, real_embedding)
+                new_row = {f'overshoot_{i}': overshoots[i] for i in range(len(overshoots))}
+                pd.DataFrame([new_row]).to_csv(overshoot_file_path, mode='a', header=False, index=False)
+
+                time_index += 1
+        
+        
+    test_loss /= len(test_loader)
+    
+    return test_loss
+    
 
 
 # parser = argparse.ArgumentParser()
@@ -98,6 +161,18 @@ for dataset in datasets:
                 for hidden_2 in hidden_dim_2:
                     for mlp_dim in mlp_dims:
                         for lr_val in learning_rates:
+                            # Initialize wandb
+                            wandb.init(project="Regression", config={
+                                'dataset': dataset,
+                                'num_layers': num_layer,
+                                'hidden_dim_1': hidden_1,
+                                'hidden_dim_2': hidden_2,
+                                'mlp_dim': mlp_dim,
+                                'learning_rate': lr_val,
+                                'seed': seed
+                            })
+                            
+                            
                             valid_losses = []
                             train_losses = []
                             no_improvement_counter = 0
@@ -179,7 +254,10 @@ for dataset in datasets:
                                 'train_loss': train_loss,
                                 'valid_loss': valid_loss
                             }
-
+                            wandb.log({
+                                'train_loss': train_loss,
+                                'valid_loss': valid_loss
+                            })
                             pd.DataFrame([new_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
 
     # Visualize our results
