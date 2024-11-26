@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 # Function to generate graphs with a cosine cycle pattern for nodes with random edges
 def generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, period_days, start_size):
     graphs = []
-    
+    labels = []
+    labels.append(0)
     # Cosine pattern with a cycle (adjusted period for nodes)
     node_pattern = (max_nodes / 2) * (1 + np.cos(2 * np.pi * np.arange(num_graphs) / period_days))
 
@@ -39,8 +40,11 @@ def generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, pe
         # Print the graph details for verification
         print(f"Graph {i}: Nodes = {G.number_of_nodes()}, Edges = {G.number_of_edges()}")
         graphs.append(G)
+        if i > 0:
+            label = 1 if (graphs[i].number_of_edges() >= graphs[i -1].number_of_edges()) else 0
+            labels.append(label)
 
-    return graphs
+    return graphs, labels
 
 if __name__ == "__main__":
     # Parameters for graph generation
