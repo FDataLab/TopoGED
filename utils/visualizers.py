@@ -259,4 +259,84 @@ class Visualizer:
             plt.xlabel('Dimension')
             plt.show()
             plt.clf()
-    
+            
+        
+    def display_composite_embeddings(self, betweenness_embeddings, closeness_embeddings, degree_embeddings, forman_embeddings, weight_embeddings, num_buckets=10, display_idx=0):
+        """
+        
+        """
+        # Initialize embedding lists
+        degree_nodes = []
+        degree_edges = []
+        degree_weights = []
+        closeness_nodes = []
+        closeness_edges = []
+        closeness_weights = []
+        betweenness_nodes = []
+        betweenness_edges = []
+        betweenness_weights = []
+        weight_nodes = []
+        weight_edges = []
+        weight_weights = []
+        forman_nodes = []
+        forman_edges = []
+        forman_weights = []
+
+        indices = np.linspace(1, num_buckets, num=num_buckets)  # Indices for graphing
+
+        # Get the individual embeddings
+        for i in range(0, (num_buckets * 3), 3):
+            betweenness_nodes.append(betweenness_embeddings[display_idx][i])
+            betweenness_edges.append(betweenness_embeddings[display_idx][i + 1])
+            betweenness_weights.append(betweenness_embeddings[display_idx][i + 2])
+            
+            closeness_nodes.append(closeness_embeddings[display_idx][i])
+            closeness_edges.append(closeness_embeddings[display_idx][i + 1])
+            closeness_weights.append(closeness_embeddings[display_idx][i + 2])
+            
+            degree_nodes.append(degree_embeddings[display_idx][i])
+            degree_edges.append(degree_embeddings[display_idx][i + 1])
+            degree_weights.append(degree_embeddings[display_idx][i + 2])
+            
+            forman_nodes.append(forman_embeddings[display_idx][i])
+            forman_edges.append(forman_embeddings[display_idx][i + 1])
+            forman_weights.append(forman_embeddings[display_idx][i + 2])
+            
+            weight_nodes.append(weight_embeddings[display_idx][i])
+            weight_edges.append(weight_embeddings[display_idx][i + 1])
+            weight_weights.append(weight_embeddings[display_idx][i + 2])
+
+
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(20, 9))  
+        ax1.plot(indices, betweenness_nodes, label="Betweenness", color='green')
+        ax1.plot(indices, closeness_nodes, label="Closeness", color='orange')
+        ax1.plot(indices, degree_nodes, label="Degree", color='blue')
+        ax1.plot(indices, forman_nodes, label="F. Ricci", color='black')
+        ax1.plot(indices, weight_nodes, label="Weight", color='purple')
+        ax1.set_xlabel("Percentile")
+        ax1.set_ylabel("Number of Nodes")
+        ax1.legend()
+        ax1.set_title(f"Plot of Node Counts {num_buckets} Thresholds")
+
+        ax2.plot(indices, betweenness_edges, label="Betweenness", color='green')
+        ax2.plot(indices, closeness_edges, label="Closeness", color='orange')
+        ax2.plot(indices, degree_edges, label="Degree", color='blue')
+        ax2.plot(indices, forman_edges, label="F. Ricci", color='black')
+        ax2.plot(indices, weight_edges, label="Weight", color='purple')
+        ax2.set_xlabel("Percentile")
+        ax2.set_ylabel("Number of Edges")
+        ax2.legend()
+        ax2.set_title(f"Plot of Edge Counts {num_buckets} Thresholds")
+
+        ax3.plot(indices, betweenness_weights, label="Betweenness", color='green')
+        ax3.plot(indices, closeness_weights, label="Closeness", color='orange')
+        ax3.plot(indices, degree_weights, label="Degree", color='blue')
+        ax3.plot(indices, forman_weights, label="F. Ricci", color='black')
+        ax3.plot(indices, weight_weights, label="Weight", color='purple')
+        ax3.set_xlabel("Percentile")
+        ax3.set_ylabel("Value")
+        ax3.legend()
+        ax3.set_title(f"Plot of Weight Counts {num_buckets} Thresholds")
+        
+        plt.show()
+        plt.clf()

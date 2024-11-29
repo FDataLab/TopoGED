@@ -4,7 +4,7 @@ import random
 import matplotlib.pyplot as plt
 
 # Function to generate graphs with a cosine cycle pattern for nodes with random edges
-def generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, period_days, start_size):
+def generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, period_days, start_size, max_weight):
     graphs = []
     labels = []
     labels.append(0)
@@ -24,7 +24,7 @@ def generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, pe
             possible_edges = [edge for edge in nx.non_edges(G) if node in edge]
             if possible_edges:
                 selected_edge = random.choice(possible_edges)
-                G.add_edge(*selected_edge, value=1)
+                G.add_edge(*selected_edge, value=random.randint(1, max_weight))
                 
         
         # Randomly add additional edges based on the average number of edges per node
@@ -56,6 +56,34 @@ if __name__ == "__main__":
 
     # Generate graphs with cosine patterns for nodes and random edges
     synthetic_graphs = generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, period_days, start_size)
+
+    # Optional: Plot the number of nodes over time
+    node_pattern = (max_nodes / 2) * (1 + np.cos(2 * np.pi * np.arange(num_graphs) / period_days))
+    num_nodes_with_randomness = [
+        start_size + max(2, min(int(n + np.random.uniform(-0.3 * max_nodes, 0.3 * max_nodes)), max_nodes))
+        for n in node_pattern
+    ]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(num_nodes_with_randomness, label="Number of Nodes", color="blue")
+    plt.title(f"Number of Nodes Over Time with {period_days}-Day Cosine Pattern")
+    plt.xlabel("Time (Graph Index)")
+    plt.ylabel("Number of Nodes")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+
+if __name__ == "__main__":
+    # Parameters for graph generation
+    num_graphs = 100 # Number of graphs for training
+    max_nodes = 100  # Maximum number of nodes
+    avg_edges_per_node = 10  # Average number of edges per node
+    period_days = 30  # Set the period of the cosine cycle
+    start_size = 10  # Starting size for nodes
+
+    # Generate graphs with cosine patterns for nodes and random edges
+    synthetic_graphs, labels = generate_cosine_pattern_graphs(num_graphs, max_nodes, avg_edges_per_node, period_days, start_size)
 
     # Optional: Plot the number of nodes over time
     node_pattern = (max_nodes / 2) * (1 + np.cos(2 * np.pi * np.arange(num_graphs) / period_days))
