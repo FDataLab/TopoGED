@@ -67,17 +67,10 @@ for dataset in datasets:
     top_runs = {}  # For storing the best models through training
     
     for activation, activation_name in zip(activations, activation_names):
-        data, labels = my_loader.load_data(dataset)
-        my_activation = activation(num_buckets=num_buckets)    
-        
-        # Since Forman Ricci requires directed edges
-        if activation==EmbedForman:
-            embeddings = my_activation.process_graphs_for_embeddings(data, is_directed=True)
-        else:
-            embeddings = my_activation.process_graphs_for_embeddings(data)
+        data, labels = my_loader.load_data(dataset, activation_name)  # Load embeddings and labels
 
         # Split data 70/15/15
-        X_train, X_tmp, y_train, y_tmp = train_test_split(embeddings, labels, test_size=0.3, shuffle=False)
+        X_train, X_tmp, y_train, y_tmp = train_test_split(data, labels, test_size=0.3, shuffle=False)
         X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, shuffle=False)
 
         train_dataset = BinaryDataset(X_train, y_train)

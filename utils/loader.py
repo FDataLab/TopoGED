@@ -9,6 +9,11 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from utils.embedding_methods.betweenness import EmbedBetweenness
+from utils.embedding_methods.closeness import EmbedCloseness
+from utils.embedding_methods.degree import EmbedDegree
+from utils.embedding_methods.forman_ricci import EmbedForman
+from utils.embedding_methods.weight import EmbedWeight
 
 class Loader():
     # File paths
@@ -38,7 +43,7 @@ class Loader():
         
         return all_data
 
-    def load_data(self, dataset):
+    def load_data(self, dataset, activation):
         """
         Load a single, specified dataset that exists
         
@@ -50,9 +55,12 @@ class Loader():
             labels (list): The associated labels for each graph
         """
         self.to_cached()
+        seek_file = dataset + '_' + activation  # Based on dataset and activation combination
+        print(seek_file)
         data_files = [file for file in os.listdir(self.output_dir)]
-        if dataset in data_files:
-            graphs, labels = self.from_cached(dataset)
+        print(data_files)
+        if seek_file in data_files:
+            graphs, labels = self.from_cached(seek_file)
             return graphs, labels
         
         else:
@@ -143,13 +151,31 @@ class Loader():
         raw_data = [file for file in os.listdir(self.edgelist_dir)]
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
         cached_data = [file for file in os.listdir(self.output_dir)]
-        missing_cached = [item for item in raw_data if item not in cached_data]
 
+        activations = [EmbedBetweenness, EmbedCloseness, EmbedDegree, EmbedForman, EmbedWeight]  # All activation functions to use
+        activation_names = ['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']
+        
+        missing_cached = []
+        for dataset in raw_data:
+            # Check for base file
+            base_file = f'{dataset}/dataset.pkl'
+            if base_file not in cached_data:
+                missing_cached.append(dataset)
+                continue  # Skip to the next dataset if the base file is missing
+
+            # Check for activation-specific files
+            for activation_name in activation_names:
+                activation_file = f'{dataset}/dataset_{activation_name}.pkl'
+                if activation_file not in cached_data:
+                    missing_cached.append(dataset)
+                    break  # Skip to the next dataset if any activation file is missing
+                
         # If we are missing files, generate them
         if missing_cached:
             print(f'Generating pkl files for the following datasets: {missing_cached}')
 
             for file in missing_cached:
+                # Generate base data with graphs, labels
                 graphs = self.read_edges_directed(file)
                 labels = self.read_labels(file)
                 data = list(zip(graphs, labels))
@@ -159,6 +185,25 @@ class Loader():
                 print('sending to ' + data_dir + '/' + file + '.pkl')
                 with open(data_dir + '/' + file + '.pkl', "wb") as f:
                     pickle.dump(data, f)
+                    
+                # Generate data with embeddings, labels
+                for activation, activation_name in zip(activations, activation_names):
+                    print(f'Generating for {file} with activation {activation_name}')
+                    my_activation = activation(num_buckets=10)    
+        
+                    # Since Forman Ricci requires directed edges
+                    if activation==EmbedForman:
+                        embeddings = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
+                    else:
+                        embeddings = my_activation.process_graphs_for_embeddings(graphs)
+                        
+                    data = list(zip(embeddings, labels))
+
+                    data_dir = self.output_dir + '/' + file
+                    os.makedirs(data_dir, exist_ok=True)
+                    print('sending to ' + data_dir + '/' + file + '_' + activation_name + '.pkl')
+                    with open(data_dir + '/' + file + '_' + activation_name  + '.pkl', "wb") as f:
+                        pickle.dump(data, f)
 
 
     # Load from the pkl file
