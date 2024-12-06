@@ -2,6 +2,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import random
+import torch
 from sklearn.linear_model import LinearRegression 
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -13,6 +15,67 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # A class with general utility functions
 class Utils:
+    def update_top_models(self, top_runs, activation, run_id, model, valid_aucroc, dataset, top_x=3):
+        """
+        Saves the top # models from training to test and save later using a priority queue structure
+        
+        Args:
+            top_runs (dict): Saves the top runs as a {'activation': [model_1, ...]} dict
+            activation (str): The activation function currently in use
+            run_id (str): The name of the run to reference on wandb
+            model (LSTMGRU_MLP()): The model to be saved
+            valid_aucroc (float): The criteria to save the model
+            dataset (str): The name of the dataset, for saving
+            top_x (int): The number of models to keep
+            
+        Returns:
+            top_runs (dict): The modified top runs based on inputs
+        """
+        # If not initialized, add it
+        if activation not in top_runs:
+            top_runs[activation] = []
+        
+        top_runs[activation].append({'model': model, 'run_id': run_id, 'valid_aucroc': valid_aucroc, 'dataset': dataset})  # Add to the list
+        top_runs[activation].sort(key=lambda x: x['valid_aucroc'], reverse=True)  # Sort the list by score (descending)
+        
+        # Keep only the top x models
+        if len(top_runs[activation]) > top_x:
+            top_runs[activation].pop()
+        
+        return top_runs
+    
+    
+    def save_models(self, top_runs, path):
+        for activation_name, info in top_runs.items():
+            for rank, entry in enumerate(info, start=1):  # To get the model ranking
+                run_name = entry['run_id'] 
+                model = entry['model']  
+                dataset = entry['dataset']
+                
+                # Run name is here for clarity and reference
+                torch.save(model.state_dict(), f"{path}/{run_name}_{activation_name}_{dataset}_{rank}.pt")
+    
+    
+    def set_seeds(self, random_seed):
+        """
+        Sets the random state for involved libraries
+        
+        Args: 
+            random_seed (int): The seed value to use
+            
+        Returns:
+            None
+        """
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed(random_seed)
+        torch.cuda.manual_seed_all(random_seed)
+        # torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        print(f'INFO: set seeds to {random_seed}')
+    
+    
     def linear_fit(self, embedding):
         """
         Fit a LinearRegression model to ensure monotonically increasing behavior in our embedding vector

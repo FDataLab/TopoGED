@@ -1,0 +1,1 @@
+run_id,dataset,activation,seed,hidden_dim_1,hidden_dim_2,mlp_dim,learning_rate,num_layers_LSTM,num_layers_GRU,trained_epochs,train_loss,train_aucroc,valid_loss,valid_aucroc

@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import matplotlib.pyplot as plt 
+import seaborn as sns
 from utils.utils import Utils
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, average_precision_score
 
@@ -76,14 +78,14 @@ class LSTMGRU_MLP(nn.Module):
         return (epoch_loss / len(train_loader)), train_aucroc, train_aucpr, train_accuracy
     
     
-    def test_model_binary(self, best_model, test_loader, criterion, y_test):
-        best_model.eval()
+    def test_model_binary(self, model, test_loader, criterion, y_test, display_confusion=False):
+        model.eval()
         test_loss = 0
         test_preds = []
 
         with torch.no_grad():
             for x, y in test_loader:
-                output = best_model(x)  # Maintain hidden state across time steps
+                output = model(x)  # Maintain hidden state across time steps
                 test_preds.append(output.detach().numpy())
                 y = y.squeeze().float()
                 loss = criterion(output, y)
@@ -98,6 +100,20 @@ class LSTMGRU_MLP(nn.Module):
         test_aucpr = average_precision_score(y_test, test_preds)
         test_pred_labels = [1 if prob >= 0.5 else 0 for prob in test_preds]
         test_accuracy = accuracy_score(y_test, test_pred_labels)
+
+        if display_confusion:
+            cm = confusion_matrix(y_test, test_pred_labels)
+
+            # Display confusion matrix
+            print("Confusion Matrix:")
+            # Optionally, plot the confusion matrix using seaborn for better visualization
+            plt.figure(figsize=(6, 5))
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['Shrink', 'Growth'], yticklabels=['Shrink', 'Growth'])
+            plt.ylabel('Actual')
+            plt.xlabel('Predicted')
+            plt.title('Confusion Matrix')
+            plt.show()
+            plt.clf()
 
         return test_loss, test_aucroc, test_aucpr, test_accuracy
     
