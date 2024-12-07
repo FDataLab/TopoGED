@@ -150,25 +150,33 @@ class Loader():
         """
         raw_data = [file for file in os.listdir(self.edgelist_dir)]
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
-        cached_data = [file for file in os.listdir(self.output_dir)]
+        cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
         activations = [EmbedBetweenness, EmbedCloseness, EmbedDegree, EmbedForman, EmbedWeight]  # All activation functions to use
         activation_names = ['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']
         
         missing_cached = []
         for dataset in raw_data:
+            dataset_folder = os.path.join(self.output_dir, dataset)
+            
+            # Check if the folder exists
+            if dataset not in cached_data_folders:
+                missing_cached.append(dataset)
+                continue  # Skip to the next dataset if the folder doesn't exist
+
             # Check for base file
-            base_file = f'{dataset}/dataset.pkl'
-            if base_file not in cached_data:
+            base_file = os.path.join(dataset_folder, f'{dataset}.pkl')
+            if not os.path.exists(base_file):
                 missing_cached.append(dataset)
                 continue  # Skip to the next dataset if the base file is missing
 
             # Check for activation-specific files
             for activation_name in activation_names:
-                activation_file = f'{dataset}/dataset_{activation_name}.pkl'
-                if activation_file not in cached_data:
+                activation_file = os.path.join(dataset_folder, f'{dataset}_{activation_name}.pkl')
+                if not os.path.exists(activation_file):
                     missing_cached.append(dataset)
                     break  # Skip to the next dataset if any activation file is missing
+
                 
         # If we are missing files, generate them
         if missing_cached:
