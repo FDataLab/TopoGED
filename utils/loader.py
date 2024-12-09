@@ -55,12 +55,13 @@ class Loader():
             labels (list): The associated labels for each graph
         """
         self.to_cached()
-        seek_file = dataset + '_' + activation  # Based on dataset and activation combination
-        print(seek_file)
-        data_files = [file for file in os.listdir(self.output_dir)]
-        print(data_files)
+        seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
+        dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+        data_files = os.listdir(dataset_folder)
+        
         if seek_file in data_files:
-            graphs, labels = self.from_cached(seek_file)
+            seek_file_path = os.path.join(dataset_folder, seek_file)
+            graphs, labels = self.from_cached(seek_file_path)  # Load data
             return graphs, labels
         
         else:
@@ -226,7 +227,7 @@ class Loader():
             graphs (list): A list of networkx graphs to process
             labels (list): The associated labels for each graph
         """
-        with open(self.output_dir + '/' + file_name + '/' + file_name + '.pkl', "rb") as f:
+        with open(file_name, "rb") as f:
             data = pickle.load(f)
 
         graphs, labels = zip(*data)
