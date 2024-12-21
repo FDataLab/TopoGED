@@ -30,6 +30,9 @@ class LSTMGRU_MLP(nn.Module):
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x):
+        # Ensure the input tensor is on the same device as the model
+        x = x.to(next(self.parameters()).device)
+        
         # Forward pass through the LSTM layers
         x, _ = self.lstm1(x)
 
@@ -50,11 +53,15 @@ class LSTMGRU_MLP(nn.Module):
     
     
     def train_model_binary(self, model, train_loader, optimizer, criterion):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        
         model.train()
         epoch_loss = 0
         predictions = []
         labels = []
         for x, y in train_loader:
+            x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
             output = model(x)
             y = y.squeeze().float()
@@ -79,12 +86,16 @@ class LSTMGRU_MLP(nn.Module):
     
     
     def test_model_binary(self, model, test_loader, criterion, y_test, display_confusion=False):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        
         model.eval()
         test_loss = 0
         test_preds = []
 
         with torch.no_grad():
             for x, y in test_loader:
+                x, y = x.to(device), y.to(device)
                 output = model(x)  # Maintain hidden state across time steps
                 test_preds.append(output.detach().numpy())
                 y = y.squeeze().float()
@@ -119,6 +130,9 @@ class LSTMGRU_MLP(nn.Module):
     
     
     def test_model_regression(self, best_model, test_loader, criterion, split_index):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = model.to(device)
+        
         test_loss = 0
         cosine_similarities = []
         norms = []
@@ -131,6 +145,7 @@ class LSTMGRU_MLP(nn.Module):
 
         with torch.no_grad():
             for x, y in test_loader:
+                x, y = x.to(device), y.to(device)
                 output = best_model(x)  # Maintain hidden state across time steps
                 y = y.float()
                 loss = criterion(output, y)
@@ -138,8 +153,8 @@ class LSTMGRU_MLP(nn.Module):
                 
                 # Print time index, predicted embedding, and real embedding
                 for i in range(len(x)):
-                    predicted_embedding = output[i].numpy()
-                    real_embedding = y[i].numpy()
+                    predicted_embedding = output[i].cpu().numpy()
+                    real_embedding = y[i].cpu().numpy()
                     predicted_embedding_linfit = my_utils.linear_fit(predicted_embedding)
 
                     predicted_embeddings_linfit.append(predicted_embedding_linfit)  # Fit a LinearRegression model for monotonically increasing behavior
@@ -165,6 +180,5 @@ class LSTMGRU_MLP(nn.Module):
         test_loss /= len(test_loader)
         avg_norm = np.mean(norms)
         avg_cosine_similarity = np.mean(cosine_similarities)
-        
         
         return test_loss, avg_norm, avg_cosine_similarity
