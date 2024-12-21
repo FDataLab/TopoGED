@@ -7,6 +7,12 @@ import torch
 from sklearn.linear_model import LinearRegression 
 from sklearn.metrics.pairwise import cosine_similarity
 
+# Import all embedding methods
+from utils.embedding_methods.betweenness import EmbedBetweenness
+from utils.embedding_methods.closeness import EmbedCloseness
+from utils.embedding_methods.degree import EmbedDegree
+from utils.embedding_methods.forman_ricci import EmbedForman
+from utils.embedding_methods.weight import EmbedWeight
 
 # Update path for imports
 import os
@@ -44,6 +50,52 @@ class Utils:
         
         return top_runs
     
+    
+    def concat_embeddings(self, prev_embeddings, new_embeddings):
+        """
+        Concatenate two embeddings together
+        
+        Args: 
+            prev_embeddings (list): The old embeddings to add to (may be empty)
+            new_embeddings (list): The embeddings to add to end
+            
+        Returns:
+            prev_embeddings (list): The updated embeddings
+        """
+        # If no embeddings have been processed yet
+        if prev_embeddings == None:
+            return new_embeddings 
+        
+        for old_embedding, curr_embedding in zip(prev_embeddings, new_embeddings):
+            old_embedding.extend(curr_embedding)
+            
+        return prev_embeddings
+    
+    
+    def get_activation_name(self, activation):
+        """
+        For fetching the embedding from its file, get the name
+        
+        Args: 
+            activation (Class): The activation method to be used
+            
+        Returns:
+            Value (str): The name of the embedding method for retrieval
+        """
+        # For loading the embeddings
+        if activation == EmbedBetweenness:
+            return 'Betweenness'
+        elif activation == EmbedCloseness:
+            return 'Closeness'
+        elif activation == EmbedDegree:
+            return 'Degree'
+        elif activation == EmbedForman:
+            return 'Forman'
+        elif activation == EmbedWeight:
+            return 'Weight'
+
+        return 'None'  # Will cause crash
+        
     
     def save_models(self, top_runs, path):
         for activation_name, info in top_runs.items():

@@ -127,6 +127,10 @@ class Loader():
         data = []
         edgelist_rawfile = self.edgelist_dir + '/{}.txt'.format(dataset)
         edgelist_df = pd.read_csv(edgelist_rawfile)
+        
+        # Filter out edges where 'value' is greater than 10^20 (this is a hacking attempt in blockchain)
+        edgelist_df = edgelist_df[edgelist_df['value'] <= 10**20]
+        
         uniq_ts_list = np.unique(edgelist_df['Snapshot'])
 
         # Loop over snapshot ids
@@ -153,8 +157,9 @@ class Loader():
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
         cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
-        activations = [EmbedBetweenness, EmbedCloseness, EmbedDegree, EmbedForman, EmbedWeight]  # All activation functions to use
-        activation_names = ['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']
+        # Betweenness and Closeness take too long to process and are deemed not feasible 
+        activations = [EmbedDegree, EmbedForman, EmbedWeight]  # All activation functions to use
+        activation_names = ['Degree', 'Forman', 'Weight']
         
         missing_cached = []
         for dataset in raw_data:
