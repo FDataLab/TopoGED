@@ -265,11 +265,10 @@ def main():
     other_datasets = ['networkdgd']  # These dont work
     num_layers = [3, 2]
     dropouts = [0, 0.2, 0.35]
-    hidden_dim_1 = [64, 128, 256]
+    hidden_dim_1 = [32, 64, 128, 256]
     hidden_dim_2 = [32, 64, 128, 256]
-    mlp_dims = [32, 64]
     learning_rates = [0.0001, 0.001]
-    l2_regularizations = [0.00001, 0.0001, 0.001]
+    l2_regularizations = [0, 0.00001, 0.0001, 0.001]
     norm_status = [False, True]
 
     # Prep objects and variables
@@ -277,15 +276,15 @@ def main():
 
     # Write the header if the file doesn't already exist
     if not os.path.isfile(csv_file_path):
-        pd.DataFrame(columns=['run_id', 'dataset', 'activation', 'seed', 'normalization', 'hidden_size_rnn', 'hidden_size_other', 'learning_rate', 'dropout', 'l2_regularization', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'train_aucroc', 'valid_aucroc', 'train_aucpr', 'valid_aucpr', 'train_accuracy', 'valid_accuracy', 'test_loss', 'test_aucroc', 'test_aucpr', 'test_accuracy']).to_csv(csv_file_path, index=False)
+        pd.DataFrame(columns=['run_id', 'dataset', 'activatio n', 'seed', 'normalization', 'hidden_size_rnn', 'hidden_size_other', 'learning_rate', 'dropout', 'l2_regularization', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'train_aucroc', 'valid_aucroc', 'train_aucpr', 'valid_aucpr', 'train_accuracy', 'valid_accuracy', 'test_loss', 'test_aucroc', 'test_aucpr', 'test_accuracy']).to_csv(csv_file_path, index=False)
 
     # Prepare a list of all combinations of parameters
     models_params = []
-    counter = -1  # Counter for run identifier
     for dataset in datasets:
         for activations, activation_name in zip(activation_combos, activation_combos_names):
             if dataset == 'Reddit_B' and EmbedForman in activations:
                 continue
+            counter = -1  # Counter for run identifier
             for norm in norm_status:
                 for num_layer in num_layers:
                     for dropout in dropouts:
@@ -298,7 +297,7 @@ def main():
                                             models_params.append((dataset, activation_name, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, combo, counter, seed, csv_file_path, model_dir))
 
     # Limit processes to a lower number than the number of physical cores (e.g., 8)
-    num_processes = min(8, multiprocessing.cpu_count())
+    num_processes = min(6, multiprocessing.cpu_count())
     
     # Use multiprocessing Pool to train models in parallel
     with multiprocessing.Pool(processes=num_processes) as pool:

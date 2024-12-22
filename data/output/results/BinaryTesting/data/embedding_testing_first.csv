@@ -1,1 +1,0 @@
-run_id,dataset,activation,seed,normalization,hidden_dim_1,hidden_dim_2,mlp_dim,learning_rate,dropout,l2_regularization,num_layers_LSTM,num_layers_GRU,trained_epochs,train_loss,valid_loss,train_aucroc,valid_aucroc,train_aucpr,valid_aucpr,train_accuracy,valid_accuracy,test_aucroc,test_aucpr,test_accuracy,test_loss
