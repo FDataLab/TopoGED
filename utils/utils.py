@@ -125,7 +125,7 @@ class Utils:
         torch.cuda.manual_seed_all(random_seed)
         # torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
-        print(f'INFO: set seeds to {random_seed}')
+        #print(f'INFO: set seeds to {random_seed}')
     
     
     def linear_fit(self, embedding):
