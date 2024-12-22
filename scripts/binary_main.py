@@ -14,7 +14,6 @@ from torch.utils.data import DataLoader
 from nn.lstmgru_mlp import LSTMGRU_MLP
 from utils.utils import Utils
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 
 # Import all embedding methods
 from utils.embedding_methods.betweenness import EmbedBetweenness
@@ -31,7 +30,7 @@ wandb.init(
     project="Binary", name="newton_testing"
 )
 
-csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_first.csv')
+csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_tmp.csv')
 model_dir = os.path.abspath('data/output/cached_model/BinaryTesting/EmbeddingTesting')
 
 # Write the header if the file doesn't already exist
@@ -45,13 +44,12 @@ patience = 25  # Early stopping patience
 num_epochs = 500  # Max epochs to train
 num_buckets = 10  # Number of buckets for embeddings
 
-# Set up the embedding methods for testing
-activations = [EmbedForman, EmbedDegree, EmbedCloseness, EmbedBetweenness, EmbedWeight]
-activation_names = ['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']
 
 # Grid search params
-datasets = ['networkcindicator', 'CollegeMsg', 'networkaion', 'networkadex',  'networkaeternity']
-
+activation_combos = [[EmbedDegree], [EmbedForman], [EmbedWeight], [EmbedDegree, EmbedForman], [EmbedDegree, EmbedWeight], [EmbedForman, EmbedWeight], [EmbedDegree, EmbedForman, EmbedWeight]]
+activation_combos_names = ['Degree', 'Forman', 'Weight', 'Degree_Forman', 'Degree_Weight', 'Forman_Weight', 'Degree_Forman_Weight']
+model_combos = [['LSTM', 'MLP', 'Sigmoid'], ['GRU', 'MLP', 'Sigmoid'], ['LSTM', 'Sigmoid'], ['GRU', 'Sigmoid']]
+datasets = ['networkadex', 'networkcindicator', 'CollegeMsg', 'networkaion', 'networkaeternity']
 num_layers = [3, 2]
 dropouts = [0, 0.2, 0.35]
 hidden_dim_1 = [64, 128, 256]
@@ -59,7 +57,7 @@ hidden_dim_2 = [32, 64, 128, 256]
 mlp_dims = [32, 64]
 learning_rates = [0.0001, 0.001]
 l2_regularizations = [0.00001, 0.0001, 0.001]
-norm_status = [True, False]
+norm_status = [False, True]
 
 # Prep objects and variables
 my_loader = Loader()
@@ -70,13 +68,18 @@ my_utils.set_seeds(seed)
 for dataset in datasets:
     top_runs = {}  # For storing the best models through training
     
-    for activation, activation_name in zip(activations, activation_names):
+    for activations, activation_name in zip(activation_combos, activation_combos_names):
+        embeddings = None  # Initialize for storing final embeddings
+        for activation in activations:
+            tmp_activation_name = my_utils.get_activation_name(activation)
+            data, labels = my_loader.load_data(dataset, tmp_activation_name)  # Load embeddings and labels
+            embeddings = my_utils.concat_embeddings(embeddings, data)  # Add the new data
+            
         # Since forman ricci does not work on Reddit_B dataset:
         if dataset=='Reddit_B' and activation_name == 'Forman':
             continue
         data, labels = my_loader.load_data(dataset, activation_name)  # Load embeddings and labels
-        print(data)
-        print(labels)
+        
         # Split data 70/15/15
         X_train, X_tmp, y_train, y_tmp = train_test_split(data, labels, test_size=0.3, shuffle=False)
         X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, shuffle=False)
@@ -111,7 +114,7 @@ for dataset in datasets:
                     
                 for embedding in X_train:
                     tmp_embedding = []
-                    for i in range(0, 15, 3):
+                    for i in range(0, len(embedding), 3):
                         tmp_embedding.append(embedding[i] / max_nodes)
                         tmp_embedding.append(embedding[i + 1] / max_edges)
                         tmp_embedding.append(embedding[i + 2] / max_weight)
@@ -120,7 +123,7 @@ for dataset in datasets:
                     
                 for embedding in X_val:
                     tmp_embedding = []
-                    for i in range(0, 15, 3):
+                    for i in range(0, len(embedding), 3):
                         tmp_embedding.append(embedding[i] / max_nodes)
                         tmp_embedding.append(embedding[i + 1] / max_edges)
                         tmp_embedding.append(embedding[i + 2] / max_weight)
@@ -129,7 +132,7 @@ for dataset in datasets:
                         
                 for embedding in X_test:
                     tmp_embedding = []
-                    for i in range(0, 15, 3):
+                    for i in range(0, len(embedding), 3):
                         tmp_embedding.append(embedding[i] / max_nodes)
                         tmp_embedding.append(embedding[i + 1] / max_edges)
                         tmp_embedding.append(embedding[i + 2] / max_weight)
@@ -142,6 +145,7 @@ for dataset in datasets:
                 
             else:
                 X_train_scaled, X_val_scaled, X_test_scaled = X_train, X_val, X_test
+
 
             train_dataset = BinaryDataset(X_train_scaled, y_train)
             valid_dataset = BinaryDataset(X_val_scaled, y_val)
