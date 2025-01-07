@@ -90,7 +90,7 @@ class Decoder(nn.Module):
 
         for i, layer_name in enumerate(layers):
             if layer_name == 'Attention':
-                print(f'Making attention with embed_dim: {current_in_channels}')
+                #print(f'Making attention with embed_dim: {current_in_channels}')
                 self.decoder.append(
                     self.layer_map['Attention'](
                         embed_dim=current_in_channels,
@@ -111,7 +111,7 @@ class Decoder(nn.Module):
                 current_in_channels = out_channels if i >= num_modules - 2 else hids_size_other[i]
             else:
                 self.decoder.append(
-                    self._init_layer(layer_name, current_in_channels, out_channels if i >= num_modules - 2 else hids_size_rnn[i], num_layers[i], dropout[i], bias[i])
+                    self._init_layer(layer_name, current_in_channels, out_channels if i == num_modules - 2 else hids_size_rnn[i], num_layers[i], dropout[i], bias[i])
                 )
                 if layer_name != 'Dropout':  # Only update channels if not dropout
                     current_in_channels = out_channels if i >= num_modules - 2 else hids_size_rnn[i]
@@ -125,7 +125,7 @@ class Decoder(nn.Module):
                     dropout_prob :float,
                     bias: bool):
         
-        print(f'Making {layer} with input_size: {in_channel} and output_size: {hidden_size}')
+        #print(f'Making {layer} with input_size: {in_channel} and output_size: {hidden_size}')
         
         if layer in ['LSTM', 'GRU', 'RNN']:
             return self.layer_map[layer](input_size=in_channel, hidden_size=hidden_size, num_layers=num_layers, bias=bias, dropout=dropout_prob)
@@ -152,7 +152,7 @@ class Decoder(nn.Module):
         if out_features is None:
             out_features = hidden_size
         
-        print(f'Making MLP with input_size: {in_features}, hidden_size: {hidden_size} and output_size: {out_features}')
+        #print(f'Making MLP with input_size: {in_features}, hidden_size: {hidden_size} and output_size: {out_features}')
         
         return nn.Sequential(
             nn.Linear(in_features, hidden_size, bias=bias),

@@ -254,15 +254,18 @@ def main():
     # Constants
     csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_parallel.csv')
     model_dir = os.path.abspath('data/output/cached_model/BinaryTesting/EmbeddingTesting')
+    num_cores = 8
 
     # Grid search params
-    activation_combos = [[EmbedDegree], [EmbedForman], [EmbedWeight], [EmbedDegree, EmbedForman], [EmbedDegree, EmbedWeight], [EmbedForman, EmbedWeight], [EmbedDegree, EmbedForman, EmbedWeight]]
-    activation_combos_names = ['Degree', 'Forman', 'Weight', 'Degree_Forman', 'Degree_Weight', 'Forman_Weight', 'Degree_Forman_Weight']
+    activation_combos = [[EmbedForman], [EmbedForman, EmbedWeight], [EmbedDegree], [EmbedDegree, EmbedForman, EmbedWeight], [EmbedDegree, EmbedForman], [EmbedWeight], [EmbedDegree, EmbedWeight], ]
+    activation_combos_names = ['Forman', 'Forman_Weight', 'Degree', 'Degree_Forman_Weight', 'Degree_Forman', 'Weight', 'Degree_Weight', ]
+    isolated_combo_names = ['Degree_Weight', 'Weight']
+    isolated_combos = [[EmbedDegree, EmbedWeight], [EmbedWeight]]
     model_combos = [['LSTM', 'MLP', 'Sigmoid'], ['GRU', 'MLP', 'Sigmoid'], ['LSTM', 'FC', 'Sigmoid'], ['GRU', 'FC', 'Sigmoid'], 
-                    ['GRU', 'Attention', 'FC', 'Sigmoid'], ['GRU', 'Attention', 'FC', 'Sigmoid'], ['LSTM', 'GRU', 'FC', 'Sigmoid'], ['LSTM', 'GRU', 'MLP', 'Sigmoid']]
-    datasets = ['networkadex', 'networkaragon', 'networkaoin', 'networkbancor', 'networkcentra', 'networkcoindash', 'networkiconomi', 
-                'CollegeMsg', 'mathoverflow', 'networkaeternity', 'Reddit_B', 'networkcindicator']
-    other_datasets = ['networkdgd']  # These dont work
+                    ['GRU', 'Attention', 'FC', 'Sigmoid'], ['LSTM', 'Attention', 'FC', 'Sigmoid'], ['LSTM', 'GRU', 'FC', 'Sigmoid'], ['LSTM', 'GRU', 'MLP', 'Sigmoid']]
+    datasets = ['networkbancor', 'networkcentra', 'networkcoindash', 'networkiconomi', 
+                'CollegeMsg', 'mathoverflow', 'networkaeternity', 'Reddit_B', 'networkcindicator', 'networkadex', 'networkaragon', ]
+    other_datasets = ['networkaoin', 'networkdgd']  # These dont work
     num_layers = [3, 2]
     dropouts = [0, 0.2, 0.35]
     hidden_dim_1 = [32, 64, 128, 256]
@@ -276,7 +279,10 @@ def main():
 
     # Write the header if the file doesn't already exist
     if not os.path.isfile(csv_file_path):
-        pd.DataFrame(columns=['run_id', 'dataset', 'activatio n', 'seed', 'normalization', 'hidden_size_rnn', 'hidden_size_other', 'learning_rate', 'dropout', 'l2_regularization', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'train_aucroc', 'valid_aucroc', 'train_aucpr', 'valid_aucpr', 'train_accuracy', 'valid_accuracy', 'test_loss', 'test_aucroc', 'test_aucpr', 'test_accuracy']).to_csv(csv_file_path, index=False)
+        pd.DataFrame(columns=['run_id', 'dataset', 'activation', 'seed', 'normalization', 'hidden_size_rnn', 'hidden_size_other', 'learning_rate', 'dropout', 'l2_regularization', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'train_aucroc', 'valid_aucroc', 'train_aucpr', 'valid_aucpr', 'train_accuracy', 'valid_accuracy', 'test_loss', 'test_aucroc', 'test_aucpr', 'test_accuracy']).to_csv(csv_file_path, index=False)
+
+    results_df = pd.read_csv(csv_file_path)
+    completed_runs = results_df['run_id'].values
 
     # Prepare a list of all combinations of parameters
     models_params = []
@@ -294,10 +300,22 @@ def main():
                                     for l2_val in l2_regularizations:
                                         for combo in model_combos:
                                             counter += 1  # Increment for run identifier
+                                            run_ident = dataset + '_' + activation_name + '_' + str(counter)
+                                            if run_ident in completed_runs:
+                                                continue
+                                            '''if norm == True:
+                                                continue'''
+                                            if hidden_2 == 256:
+                                                continue
+                                            # Since it seems to need l2 reg
+                                            if l2_val == 0:
+                                                continue
+                                            if activation_name in isolated_combo_names:
+                                                continue
                                             models_params.append((dataset, activation_name, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, combo, counter, seed, csv_file_path, model_dir))
 
     # Limit processes to a lower number than the number of physical cores (e.g., 8)
-    num_processes = min(6, multiprocessing.cpu_count())
+    num_processes = min(num_cores, multiprocessing.cpu_count())
     
     # Use multiprocessing Pool to train models in parallel
     with multiprocessing.Pool(processes=num_processes) as pool:
