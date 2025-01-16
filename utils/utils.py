@@ -70,7 +70,7 @@ class Utils:
             old_embedding.extend(curr_embedding)
             
         return prev_embeddings
-    
+        
     
     def get_activation_name(self, activation):
         """

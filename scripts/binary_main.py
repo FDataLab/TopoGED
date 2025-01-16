@@ -79,7 +79,7 @@ for dataset in datasets:
         if dataset=='Reddit_B' and activation_name == 'Forman':
             continue
         data, labels = my_loader.load_data(dataset, activation_name)  # Load embeddings and labels
-        
+                
         # Split data 70/15/15
         X_train, X_tmp, y_train, y_tmp = train_test_split(data, labels, test_size=0.3, shuffle=False)
         X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, shuffle=False)

@@ -15,7 +15,7 @@ from nn.lstmgru_mlp import LSTMGRU_MLP
 from nn.custom_model import Decoder
 
 from utils.utils import Utils
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, average_precision_score
 
 # Import all embedding methods
 from utils.embedding_methods.betweenness import EmbedBetweenness
@@ -59,10 +59,15 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
         embeddings = my_utils.concat_embeddings(embeddings, data)  # Add the new data
         
         input_dim += 30  # To account for changing embeddings
-    
-     # Split data 70/15/15
-    X_train, X_tmp, y_train, y_tmp = train_test_split(embeddings, labels, test_size=0.3, shuffle=False)
-    X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, shuffle=False)
+    # Split data 70/15/15
+    n = len(embeddings)
+
+    # Calculate split indices
+    train_end = int(0.7 * n)  # 70% for training
+    val_end = int(0.85 * n)   # Next 15% for validation (70% + 15% = 85%)
+    X_train, y_train = embeddings[:train_end], labels[:train_end]
+    X_val, y_val = embeddings[train_end:val_end], labels[train_end:val_end]
+    X_test, y_test = embeddings[val_end:], labels[val_end:]
         
     print(f'Running on {dataset} with activation {activation_name}')
             
@@ -137,7 +142,7 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
     
     # Initialize wandb
     run = wandb.init(
-        project="best_parallel_testing", 
+        project="parallel_testing_new", 
         name = run_name, 
         config={
         'dataset': dataset,
@@ -160,27 +165,119 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
     criterion = nn.BCELoss()  
         
     for epoch in range(num_epochs):
+        # Training
+        #train_loss, train_aucroc, train_aucpr, train_accuracy = model.train_model_binary(model, train_loader, optimizer, criterion)
         model.train()
-        train_loss, train_aucroc, train_aucpr, train_accuracy = model.train_model_binary(model, train_loader, optimizer, criterion)
+        epoch_loss = 0
+        predictions = []
+        train_labels = []
+        for x, y in train_loader:
+            optimizer.zero_grad()
+            output = model(x)
+            output = output.squeeze()
+            y = y.squeeze().float()
+            loss = criterion(output, y)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+            
+            predictions.append(output.detach().cpu().numpy())
+            train_labels.append(y.detach().cpu().numpy())
+            
+        predictions = np.concatenate(predictions)
+        train_labels = np.concatenate(train_labels)
+        
+        # Compute metrics
+        train_aucroc = roc_auc_score(train_labels, predictions)
+        train_aucpr = average_precision_score(train_labels, predictions)
+        train_pred_labels = [1 if prob >= 0.5 else 0 for prob in predictions]  # Since accuracy needs exact labels
+        train_accuracy = accuracy_score(train_labels, train_pred_labels)
+        train_loss = (epoch_loss / len(train_loader))
+        
+        # Validation
+        model.eval()
+        valid_loss = 0
+        val_preds = []
+        val_labels = []
 
-        valid_loss, valid_aucroc, valid_aucpr, valid_accuracy = model.test_model_binary(model, valid_loader, criterion, y_val)
-                
+        with torch.no_grad():
+            for x, y in valid_loader:
+                output = model(x)  # Maintain hidden state across time steps
+                output = output.squeeze()
+                val_preds.append(output.detach().numpy())
+                y = y.squeeze().float()
+                loss = criterion(output, y)
+                valid_loss += loss.item()
+                val_labels.append(y.detach().cpu().numpy())
+
+        val_preds = np.concatenate(val_preds, axis=0)  # Ensure val_preds is a flat array  # Flatten if it's a list
+        val_preds = np.array(val_preds)
+        val_labels = np.array(val_labels)
+        valid_loss /= len(valid_loader)
+        
+        # Compute metrics
+        valid_aucroc = roc_auc_score(val_labels, val_preds)
+        valid_aucpr = average_precision_score(val_labels, val_preds)
+        val_pred_labels = [1 if prob >= 0.5 else 0 for prob in val_preds]
+        valid_accuracy = accuracy_score(val_labels, val_pred_labels)
+        
+        # Testing        
+        model.eval()
+        test_loss = 0
+        test_preds = []
+        test_labels = []
+
+        with torch.no_grad():
+            for x, y in test_loader:
+                output = model(x)  # Maintain hidden state across time steps
+                output = output.squeeze()
+                test_preds.append(output.detach().numpy())
+                y = y.squeeze().float()
+                loss = criterion(output, y)
+                test_loss += loss.item()
+                test_labels.append(y.detach().cpu().numpy())
+
+        test_preds = np.concatenate(test_preds, axis=0)  # Ensure val_preds is a flat array  # Flatten if it's a list
+        test_preds = np.array(test_preds)
+        test_labels = np.array(test_labels)
+        test_loss /= len(test_loader)
+        
+        # Compute metrics
+        test_aucroc = roc_auc_score(test_labels, test_preds)
+        test_aucpr = average_precision_score(test_labels, test_preds)
+        test_pred_labels = [1 if prob >= 0.5 else 0 for prob in test_preds]
+        test_accuracy = accuracy_score(test_labels, test_pred_labels)
+    
+            
         # Log each epoch results
         wandb.log({
             'epoch': epoch,
             'train_loss': train_loss,
             'valid_loss': valid_loss,
+            'test_loss': test_loss,
             'train_aucroc': train_aucroc,
             'valid_aucroc': valid_aucroc,
+            'test_aucroc': test_aucroc,
             'train_aucpr': train_aucpr,
             'valid_aucpr': valid_aucpr,
+            'test_aucpr': test_aucpr,
             'train_accuracy': train_accuracy,
-            'valid_accuracy': valid_accuracy
+            'valid_accuracy': valid_accuracy,
+            'test_accuracy': test_accuracy
         })
+        
+        if ((epoch % 10 == 0)):
+            wandb.log({
+                f'Train Preds {epoch}': wandb.Histogram(np_histogram=np.histogram(predictions, bins=20)),
+                f'Val Preds {epoch}': wandb.Histogram(np_histogram=np.histogram(val_preds, bins=20)),
+                f'Test Preds {epoch}': wandb.Histogram(np_histogram=np.histogram(test_preds, bins=20)),
+                } 
+            )
 
         # Optimize for the best aucroc
         if valid_aucroc >= curr_batch_best_aucroc:
-            best_model_run = model  # For testing as we go
+            #best_model_run = model  # For testing as we go  # UPDATE
+            # ToDo: update this to be saving the param dict and then reload the dict
             
             # Save for dataframe
             best_moment_row = {
@@ -199,20 +296,21 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
                 'trained_epochs': epoch + 1,
                 'train_loss': train_loss,
                 'valid_loss': valid_loss,
+                'test_loss': test_loss,
                 'train_aucroc': train_aucroc,
                 'valid_aucroc': valid_aucroc,
+                'test_aucroc': test_aucroc,
                 'train_aucpr': train_aucpr,
                 'valid_aucpr': valid_aucpr,
+                'test_aucpr': test_aucpr,
                 'train_accuracy': train_accuracy,
-                'valid_accuracy': valid_accuracy
+                'valid_accuracy': valid_accuracy,
+                'test_accuracy': test_accuracy
             }
-            
-            curr_batch_best_aucroc = valid_aucroc
-        
-        # See how long training takes before using
-        '''
+                    
+                            
         # Early stopping only after 50 epochs
-        if epoch >= 50:
+        if epoch >= 100:
             if valid_aucroc >= curr_batch_best_aucroc:
                 no_improvement_counter = 0
                 curr_batch_best_aucroc = valid_aucroc
@@ -221,26 +319,7 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
                 
             if no_improvement_counter == patience:
                 print(f'Training ending at epoch number: {epoch + 1}')
-                break'''
-        '''    
-        # Display current results
-        if epoch % 10 - 9 == 0:
-            print(f"""
-                Epoch {epoch+1}/{num_epochs}:\n\tTrain Loss: {train_loss}, Validation Loss: {valid_loss}\n\tTrain AUCROC: {train_aucroc}, Validation AUCROC: {valid_aucroc}\n\tTrain AUCPR: {train_aucpr}, Validation AUCPR: {valid_aucpr}\n\tTrain Accuracy: {train_accuracy}, Validation Accuracy: {valid_accuracy}\n
-            """)
-        '''
-    
-    test_loss, test_aucroc, test_aucpr, test_accuracy = best_model_run.test_model_binary(best_model_run, test_loader, criterion, y_test, display_confusion=False)
-    
-    best_moment_row['test_loss'] = test_loss
-    best_moment_row['test_aucroc'] = test_aucroc
-    best_moment_row['test_aucpr'] = test_aucpr
-    best_moment_row['test_accuracy'] = test_accuracy
-    
-    print(f'\tTest Loss: {test_loss}')
-    print(f'\tTest AUCROC: {test_aucroc}')
-    print(f'\tTest AUCPR: {test_aucpr}')
-    print(f'\tTest Accuracy: {test_accuracy}')
+                break
     
     # Save the best moment from this training
     pd.DataFrame([best_moment_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
@@ -253,17 +332,20 @@ def main():
 
     # Constants
     csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_best_parallel.csv')
-    logged_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_parallel.csv')
+    logged_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_parallel_new.csv')
     model_dir = os.path.abspath('data/output/cached_model/BinaryTesting/EmbeddingTesting')
-    num_cores = 7
+    num_cores = 1
 
     # Grid search params
-    datasets = ['networkbancor', 'networkcentra', 'networkcoindash', 'networkiconomi', 
-                'mathoverflow', 'networkaeternity', 'Reddit_B', 'networkcindicator', 'networkadex', 'networkaragon', ]
-    other_datasets = ['CollegeMsg', 'networkaoin', 'networkdgd']  # These dont work
-    seeds = [42, 10, 99999, 1000, 1, 2, 0, 1234, 10000]
-    
+    datasets = ['networkbancor', 'networkcentra', 'networkcoindash',  
+                'mathoverflow', 'networkaeternity', 'Reddit_B', 'networkadex', 'networkaragon', ]
+    other_datasets = ['networkcindicator', 'networkiconomi', 'CollegeMsg', 'networkaoin', 'networkdgd']  # These dont work
+    #seeds = [42, 10, 99999, 1000, 1, 2, 0, 1234, 10000]
+    seeds = [42]
     embedding_map = {
+        'Betweenness': [EmbedBetweenness],
+        'Closeness': [EmbedCloseness],
+        'Betweenness_Closeness': [EmbedBetweenness, EmbedCloseness],
         'Degree': [EmbedDegree],
         'Degree_Forman_Weight': [EmbedDegree, EmbedForman, EmbedWeight],
         'Degree_Forman': [EmbedDegree, EmbedForman],
@@ -292,11 +374,15 @@ def main():
     completed_runs = results_df['run_id'].values
 
     # Get models to test
-    test_run_ids = ['networkadex_Degree_804', 'networkbancor_Degree_Forman_Weight_200', 
+    curr_ids = ['networkadex_Degree_Forman_Weight_657',]
+    '''test_run_ids = ['networkadex_Degree_804', 'networkbancor_Degree_Forman_Weight_200', 
                     'networkbancor_Degree_Forman_Weight_1034', 'networkadex_Degree_Forman_Weight_6248', 
                     'networkadex_Degree_Forman_Weight_6704', 'networkadex_Degree_Forman_Weight_6199', 
                     'networkadex_Degree_Forman_Weight_6158', 'networkadex_Degree_Forman_Weight_6191', 
-                    'networkadex_Degree_103', 'networkadex_Degree_231', 'networkaragon_Degree_Forman_Weight_1052']  # A list of handselected models to test
+                    'networkadex_Degree_103', 'networkadex_Degree_231', 'networkaragon_Degree_Forman_Weight_1052',
+                    'networkadex_Forman_Weight_2580', 'networkadex_Degree_Forman_Weight_657', 'networkadex_Degree_103']'''  # A list of handselected models to test
+    test_run_ids = ['networkbancor_Betweenness_Closeness_13', 'networkbancor_Betweenness_Closeness_6', 'networkbancor_Betweenness_Closeness_1']
+    
     to_test_df = pd.read_csv(logged_file_path)
     model_results = to_test_df[to_test_df['run_id'].isin(test_run_ids)]
 
@@ -314,9 +400,12 @@ def main():
                 combo = combo_map[params['combo']]
                 
                 counter += 1  # Increment for run identifier
-                run_ident = dataset + '_' + params['activation'] + '_' + str(counter)
-                if run_ident in completed_runs:
+                if dataset == 'networkbancor':
                     continue
+                if(params['run_id'] != 'networkadex_Degree_Forman_Weight_657'):
+                    run_ident = dataset + '_' + params['activation'] + '_' + str(counter)
+                    if run_ident in completed_runs:
+                        continue
                 models_params.append((dataset, params['activation'], activations, params['normalization'], int(params['num_layers']), params['dropout'], int(params['hidden_size_rnn']), int(params['hidden_size_other']), params['learning_rate'], params['l2_regularization'], combo, counter, seed, csv_file_path, model_dir))
 
     # Limit processes to a lower number than the number of physical cores (e.g., 8)

@@ -160,11 +160,12 @@ class Decoder(nn.Module):
             nn.Linear(hidden_size, out_features, bias=bias)
         )
     
+    
     def forward(self, x):
         for layer in self.decoder:
             # Since logic is different
             if isinstance(layer, nn.MultiheadAttention):
-                x, _ = layer(x, x, x)  # query, key, value
+                x, _ = layer(x, x, x)  # query, key, value (k can equal v, q should be changed)
             
             elif isinstance(layer, (nn.LSTM, nn.GRU, nn.RNN)):
                 x, _ = layer(x)

@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pickle
 import networkx as nx
+import time
 
 # Update path for imports
 import os
@@ -11,15 +12,46 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.embedding_methods.betweenness import EmbedBetweenness
 from utils.embedding_methods.closeness import EmbedCloseness
+from utils.embedding_methods.incremental_closeness import EmbedIncrementalCloseness
 from utils.embedding_methods.degree import EmbedDegree
 from utils.embedding_methods.forman_ricci import EmbedForman
 from utils.embedding_methods.weight import EmbedWeight
+
+from multiprocessing import Pool
 
 class Loader():
     # File paths
     output_dir = os.path.abspath('data/input/cached')
     edgelist_dir = os.path.abspath('data/input/raw/edgelist')
     label_dir = os.path.abspath('data/input/raw/labels')
+
+    def verify_embeddings(self, embeddings, activation, dataset):
+        print(f'Verifying {activation} on dataset {dataset}')
+        if activation == EmbedForman and dataset == 'Reddit_B':
+            return 
+        
+        graphs = self.read_edges_directed(dataset)
+        for embedding, graph in zip(embeddings, graphs):
+            total_nodes = graph.number_of_nodes()
+            total_edges = graph.number_of_edges()
+            total_weight = sum(data['value'] for _, _, data in graph.edges(data=True))
+            
+            embedding_nodes = embedding[-3]
+            embedding_edges = embedding[-2]
+            embedding_weight = embedding[-1]
+            
+            if total_nodes != embedding_nodes:
+                print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF NODES')
+                print(f'TRUE VAL: {total_nodes}; EMBEDDING VAL: {embedding_nodes}')
+            
+            if total_edges != embedding_edges:
+                print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF EDGES')
+                print(f'TRUE VAL: {total_edges}; EMBEDDING VAL: {embedding_edges}')
+                
+            if total_weight != embedding_weight:
+                print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF WEIGHT')
+                print(f'TRUE VAL: {total_weight}; EMBEDDING VAL: {embedding_weight}')
+
 
     # Process all data
     def load_all_data(self):
@@ -129,8 +161,8 @@ class Loader():
         edgelist_df = pd.read_csv(edgelist_rawfile)
         
         # Filter out edges where 'value' is greater than 10^20 (this is a hacking attempt in blockchain)
-        edgelist_df = edgelist_df[edgelist_df['value'] <= 10**20]
-        
+        # edgelist_df = edgelist_df[edgelist_df['value'] <= 10**20]
+                
         uniq_ts_list = np.unique(edgelist_df['Snapshot'])
 
         # Loop over snapshot ids
@@ -141,7 +173,7 @@ class Loader():
         
         return data
 
-
+    
     # Get the data folders into respective cached pkl files
     def to_cached(self):
         """
@@ -158,8 +190,8 @@ class Loader():
         cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
         # Betweenness and Closeness take too long to process and are deemed not feasible 
-        activations = [EmbedDegree, EmbedForman, EmbedWeight]  # All activation functions to use
-        activation_names = ['Degree', 'Forman', 'Weight']
+        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedCloseness, EmbedIncrementalCloseness]  # All activation functions to use
+        activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness', 'IncrementalCloseness']
         
         missing_cached = []
         for dataset in raw_data:
@@ -196,8 +228,9 @@ class Loader():
 
                 data_dir = self.output_dir + '/' + file
                 os.makedirs(data_dir, exist_ok=True)
-                print('sending to ' + data_dir + '/' + file + '.pkl')
-                with open(data_dir + '/' + file + '.pkl', "wb") as f:
+                base_graph_dir = data_dir + '/' + file + '.pkl'
+                print(f'sending to {base_graph_dir}')
+                with open(base_graph_dir, "wb") as f:
                     pickle.dump(data, f)
                     
                 # Generate data with embeddings, labels
@@ -205,18 +238,27 @@ class Loader():
                     print(f'Generating for {file} with activation {activation_name}')
                     my_activation = activation(num_buckets=10)    
         
+                    start_time = time.time()
+        
                     # Since Forman Ricci requires directed edges
                     if activation==EmbedForman:
                         embeddings = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
                     else:
                         embeddings = my_activation.process_graphs_for_embeddings(graphs)
                         
+                    end_time = time.time()
+                    
+                    print(f'Activation {activation_name} on dataset {file} took time {end_time - start_time}')
+                        
+                    self.verify_embeddings(embeddings, activation, file)    
+                        
                     data = list(zip(embeddings, labels))
 
                     data_dir = self.output_dir + '/' + file
                     os.makedirs(data_dir, exist_ok=True)
-                    print('sending to ' + data_dir + '/' + file + '_' + activation_name + '.pkl')
-                    with open(data_dir + '/' + file + '_' + activation_name  + '.pkl', "wb") as f:
+                    activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}.pkl')
+                    print(f'sending to {activation_file_path}')
+                    with open(activation_file_path, "wb") as f:
                         pickle.dump(data, f)
 
 
