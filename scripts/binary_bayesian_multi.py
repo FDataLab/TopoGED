@@ -3,6 +3,8 @@ import numpy as np
 import os
 import torch
 import torch.nn as nn
+import optuna
+import sqlite3
 
 # Update path for imports
 import sys
@@ -11,11 +13,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.loader import Loader
 from utils.dataset import BinaryDataset
 from torch.utils.data import DataLoader
-from nn.lstmgru_mlp import LSTMGRU_MLP
 from nn.custom_model import Decoder
 
 from utils.utils import Utils
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, average_precision_score
 
 
@@ -28,22 +28,57 @@ from utils.embedding_methods.weight import EmbedWeight
 
 import wandb
 
-import multiprocessing
-import time
-import logging
+# Constants
+csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_bayesian_individual_dataset.csv')
+model_dir = os.path.abspath('data/output/cached_model/BinaryTesting/EmbeddingTesting')
+seed = 42  # Can change
 
-def parallel_train_wrapper(model_params):
-    """Wrapper to handle parameters for multiprocessing."""
-    try:
-        print(f'Starting training for: {model_params}')
-        dataset, activation_name, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path, model_dir = model_params
-        train_and_eval(dataset, activation_name, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path, model_dir)
-        print(f'Finished training for: {model_params}')
-    except Exception as e:
-        print(f'Encountered error during training model with params {model_params}: {e}')
+# Write the header if the file doesn't already exist
+if not os.path.isfile(csv_file_path):
+    pd.DataFrame(columns=['run_id', 'dataset', 'activation', 'seed', 'normalization', 'hidden_size_rnn', 'hidden_size_other', 'learning_rate', 'dropout', 'l2_regularization', 'batch_size', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'test_loss', 'train_aucroc', 'valid_aucroc', 'test_aucroc', 'train_aucpr', 'valid_aucpr', 'test_aucpr', 'train_accuracy', 'valid_accuracy', 'test_accuracy']).to_csv(csv_file_path, index=False)
 
 
-def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path, model_dir):
+# Activation name map
+activation_map = {
+    "[Degree]": ['Degree'],
+    "[Betweenness]": ['Betweenness'],
+    "[Forman]": ['Forman'],
+    "[Closeness]": ['Closeness'],
+    "[Weight]": ['Weight'],
+    "['Betweenness', 'Closeness']": ['Betweenness', 'Closeness'], 
+    "['Degree', 'Forman', 'Weight']": ['Degree', 'Forman', 'Weight'], 
+    "['Degree', 'Betweenness', 'Closeness']": ['Degree', 'Betweenness', 'Closeness'], 
+    "['Betweenness', 'Forman']": ['Betweenness', 'Forman'], 
+    "['Closeness', 'Forman']": ['Closeness', 'Forman'], 
+    "['Degree', 'Betweenness', 'Closeness', 'Forman']": ['Degree', 'Betweenness', 'Closeness', 'Forman'], 
+    "['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']": ['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight'],
+}
+
+embedding_map = {
+    'Betweenness': [EmbedBetweenness],
+    'Closeness': [EmbedCloseness],
+    'Betweenness_Closeness': [EmbedBetweenness, EmbedCloseness],
+    'Degree': [EmbedDegree],
+    'Degree_Forman_Weight': [EmbedDegree, EmbedForman, EmbedWeight],
+    'Degree_Forman': [EmbedDegree, EmbedForman],
+    'Forman': [EmbedForman],
+    'Weight': [EmbedWeight],
+    'Degree_Weight': [EmbedDegree, EmbedWeight],
+    'Forman_Weight': [EmbedForman, EmbedWeight],
+}
+
+combo_map = {
+    "['LSTM', 'MLP', 'Sigmoid']": ['LSTM', 'MLP', 'Sigmoid'], 
+    "['GRU', 'MLP', 'Sigmoid']": ['GRU', 'MLP', 'Sigmoid'], 
+    "['LSTM', 'FC', 'Sigmoid']": ['LSTM', 'FC', 'Sigmoid'], 
+    "['GRU', 'FC', 'Sigmoid']": ['GRU', 'FC', 'Sigmoid'], 
+    "['GRU', 'Attention', 'FC', 'Sigmoid']": ['GRU', 'Attention', 'FC', 'Sigmoid'], 
+    "['LSTM', 'Attention', 'FC', 'Sigmoid']": ['LSTM', 'Attention', 'FC', 'Sigmoid'], 
+    "['LSTM', 'GRU', 'FC', 'Sigmoid']": ['LSTM', 'GRU', 'FC', 'Sigmoid'], 
+    "['LSTM', 'GRU', 'MLP', 'Sigmoid']": ['LSTM', 'GRU', 'MLP', 'Sigmoid']
+}
+
+def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path):
     # Setup
     my_loader = Loader()
     my_utils = Utils()
@@ -53,79 +88,32 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
     patience = 25  # Early stopping patience
     num_epochs = 500  # Max epochs to train
     
+    run_name = dataset
+    activation_name = ""
+    
     # Set up embeddings
     embeddings = None  # Init
     for activation in activations:
-        tmp_activation_name = my_utils.get_activation_name(activation)
-        data, labels = my_loader.load_data(dataset, tmp_activation_name)  # Load embeddings and labels
+        data, labels = my_loader.load_data(dataset, activation)  # Load embeddings and labels
         embeddings = my_utils.concat_embeddings(embeddings, data)  # Add the new data
+        activation_name += activation + '_'
         
-        input_dim += 30  # To account for changing embeddings
+    input_dim = 30 * len(activations)
+        
+    run_name = run_name + '_'+ activation_name + str(counter)    
         
     # Split data 70/15/15
     n = len(embeddings)
 
     # Calculate split indices
     train_end = int(0.7 * n)  # 70% for training
-    val_end = int(0.85 * n)   # Next 15% for validation (70% + 15% = 85%)
+    val_end = int(0.80 * n)   # Next 10% for validation (70% + 10% = 80%)
     X_train, y_train = embeddings[:train_end], labels[:train_end]
     X_val, y_val = embeddings[train_end:val_end], labels[train_end:val_end]
     X_test, y_test = embeddings[val_end:], labels[val_end:]
-        
-    print(f'Running on {dataset} with activation {activation_name}')
-            
+                    
     if norm:
-        max_weight = float('-inf')
-        max_edges = float('-inf')
-        max_nodes = float('-inf')
-        
-        for embedding in X_train:
-            weight = embedding[-1]
-            edges = embedding[-2]
-            nodes = embedding[-3]
-            
-            if weight > max_weight:
-                max_weight = weight
-            if edges > max_edges:
-                max_edges = edges
-            if nodes > max_nodes:
-                max_nodes = nodes
-            
-        # So that we don't overwrite the original embeddings
-        X_train_scaled = []
-        X_val_scaled = []
-        X_test_scaled = []
-            
-        for embedding in X_train:
-            tmp_embedding = []
-            for i in range(0, len(embedding), 3):
-                tmp_embedding.append(embedding[i] / max_nodes)
-                tmp_embedding.append(embedding[i + 1] / max_edges)
-                tmp_embedding.append(embedding[i + 2] / max_weight)
-            
-            X_train_scaled.append(tmp_embedding)
-            
-        for embedding in X_val:
-            tmp_embedding = []
-            for i in range(0, len(embedding), 3):
-                tmp_embedding.append(embedding[i] / max_nodes)
-                tmp_embedding.append(embedding[i + 1] / max_edges)
-                tmp_embedding.append(embedding[i + 2] / max_weight)
-            
-            X_val_scaled.append(tmp_embedding)
-                
-        for embedding in X_test:
-            tmp_embedding = []
-            for i in range(0, len(embedding), 3):
-                tmp_embedding.append(embedding[i] / max_nodes)
-                tmp_embedding.append(embedding[i + 1] / max_edges)
-                tmp_embedding.append(embedding[i + 2] / max_weight)
-            
-            X_test_scaled.append(tmp_embedding)
-        
-        X_train_scaled = np.array(X_train_scaled)
-        X_val_scaled = np.array(X_val_scaled)
-        X_test_scaled = np.array(X_test_scaled)
+        X_train_scaled, X_val_scaled, X_test_scaled = my_utils.normalize_embeddings(X_train, X_val, X_test)
         
     else:
         X_train_scaled, X_val_scaled, X_test_scaled = X_train, X_val, X_test
@@ -135,16 +123,13 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
     valid_dataset = BinaryDataset(X_val_scaled, y_val)
     test_dataset = BinaryDataset(X_test_scaled, y_test)
 
-    # ToDo: Maybe add a batch size param here (try with 1 and None)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-    
-    run_name = dataset + '_' + activation_name + '_' + str(counter)
-                                    
+                                        
     # Initialize wandb
     run = wandb.init(
-        project="parallel_testing_new2", 
+        project="bayesian_testing_individual_dataset", 
         name = run_name, 
         config={
         'dataset': dataset,
@@ -181,8 +166,6 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
                 x = x.unsqueeze(0)  # Shape: (1, seq_len) for batch_size=1
             optimizer.zero_grad()
             output = model(x)
-            if torch.any(torch.isinf(x)) or torch.any(torch.isnan(x)):
-                print(x)
             output = output.squeeze()
             y = y.squeeze().float()
             loss = criterion(output, y)
@@ -357,81 +340,113 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
     
     # Save the best moment from this training
     pd.DataFrame([best_moment_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
+    
+    return best_moment_row['train_aucroc'], best_moment_row['valid_aucroc']
+    
 
+def objective(trial, dataset):
+    # Suggest hyperparameters
+    dropout = trial.suggest_float('dropout', 0.1, 0.5)
+    hidden_1 = trial.suggest_categorical('hidden_1', [32, 64, 128, 256, 512, 1024, 2048])
+    hidden_2 = trial.suggest_categorical('hidden_2', [32, 64, 128, 256, 512, 1024, 2048])
+    num_layers = trial.suggest_int('num_layers', 2, 4)
+    lr_val = trial.suggest_float('lr_val', 1e-4, 1e-2, log=True)
+    l2_val = trial.suggest_float('l2_val', 1e-5, 1e-1, log=True)
+    batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
+    activation = trial.suggest_categorical('activation', [
+        "[Degree]",
+        "[Betweenness]",
+        "[Forman]",
+        "[Closeness]",
+        "[Weight]",
+        "['Betweenness', 'Closeness']", 
+        "['Degree', 'Forman', 'Weight']", 
+        "['Degree', 'Betweenness', 'Closeness']", 
+        "['Betweenness', 'Forman']", 
+        "['Closeness', 'Forman']", 
+        "['Degree', 'Betweenness', 'Closeness', 'Forman']", 
+        "['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']",
+    ])
+    activations = activation_map[activation]
+    model = trial.suggest_categorical('combo', [
+        "['LSTM', 'MLP', 'Sigmoid']", 
+        "['GRU', 'MLP', 'Sigmoid']", 
+        "['LSTM', 'FC', 'Sigmoid']", 
+        "['GRU', 'Attention', 'FC', 'Sigmoid']", 
+        "['LSTM', 'GRU', 'FC', 'Sigmoid']", 
+        "['LSTM', 'GRU', 'MLP', 'Sigmoid']"
+    ])   
+    model = combo_map[model]
+    norm = False
 
+    # Evaluate on all datasets
+    if dataset == 'Reddit_B' and 'Forman' in activations:
+        raise optuna.TrialPruned("Forman-based activation not supported for Reddit_B.")
+    
+    # Call your train_and_eval function for each dataset
+    train_auc, val_auc = train_and_eval(
+        dataset=dataset,
+        activations=activations,
+        norm=norm,
+        num_layer=num_layers,
+        dropout=dropout,
+        hidden_1=hidden_1,
+        hidden_2=hidden_2,
+        lr_val=lr_val,
+        l2_val=l2_val,
+        batch_size=batch_size,
+        combo=model,
+        counter=trial.number,
+        seed=42,
+        csv_file_path=csv_file_path,
+    )
+    auc_score = (train_auc * 0.3 + val_auc * 0.7)
+    
+    return auc_score
+    
+    
 def main():
-    # Setup
     os.environ["WANDB_API_KEY"] = "6a5ccf040a6c90944032e58878e46c19d673cdb0"
-    wandb.init(project="Binary", name="parallel_testing_new2")
+    wandb.init(project="Binary", name="bayesian_testing_individual_dataset")
+    
+    datasets = ['networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', ]
+    other_datasets = ['networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd']  # These dont work
+    
+    
+    # Dictionary to store best results for each dataset
+    best_results = {}
 
-    # Constants
-    csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_parallel_new2.csv')
-    model_dir = os.path.abspath('data/output/cached_model/BinaryTesting/EmbeddingTesting')
-    num_cores = 1
-
-    # Grid search params
-    activation_combos = [[EmbedBetweenness, EmbedCloseness, EmbedDegree, EmbedForman, EmbedWeight], [EmbedBetweenness, EmbedCloseness], [EmbedBetweenness], [EmbedCloseness],  [EmbedDegree, EmbedBetweenness], [EmbedForman, EmbedBetweenness], [EmbedDegree, EmbedCloseness], [EmbedForman, EmbedCloseness], [EmbedDegree, EmbedForman, EmbedWeight],[EmbedForman], [EmbedForman, EmbedWeight], [EmbedDegree],  [EmbedDegree, EmbedForman], [EmbedWeight], [EmbedDegree, EmbedWeight], [EmbedWeight], ]
-    activation_combos_names = ['Betweenness_Closeness_Degree_Forman_Weight', 'Betweenness_Closeness', 'Betweenness', 'Closeness',  'Degree_Betweenness', 'Forman_Betweenness', 'Degree_Closeness', 'Forman_Closeness', 'Degree_Forman_Weight', 'Forman', 'Forman_Weight', 'Degree',  'Degree_Forman', 'Weight', 'Degree_Weight' ]
-    new_combos = []
-    isolated_combo_names = []
-    isolated_combos = []
-    model_combos = [['LSTM', 'MLP', 'Sigmoid'], ['GRU', 'MLP', 'Sigmoid'], ['LSTM', 'FC', 'Sigmoid'], ['GRU', 'FC', 'Sigmoid'], 
-                    ['GRU', 'Attention', 'FC', 'Sigmoid'], ['LSTM', 'Attention', 'FC', 'Sigmoid'], ['LSTM', 'GRU', 'FC', 'Sigmoid'], ['LSTM', 'GRU', 'MLP', 'Sigmoid']]
-    isolated_models = []
-    datasets = ['networkdgd', 'networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow',  'Reddit_B',  'networkaragon', ]
-    other_datasets = ['networkaeternity', 'networkiconomi', 'networkcindicator', 'CollegeMsg', ]  # These dont work
-    num_layers = [3, 2]
-    dropouts = [0, 0.2, 0.35]
-    hidden_dim_1 = [1000, 2500, 4000, 8000, 32, 128, 256, ]
-    hidden_dim_2 = [1000, 2500, 4000, 8000, 32, 128, 256, ]
-    learning_rates = [0.0001, 0.001]
-    l2_regularizations = [0.00001, 0.0001, 0.001]
-    norm_status = [False]  # Normalization doesnt help
-    batch_sizes = [1, 16, 32, 64]
-
-    # Prep objects and variables
-    seed = 42  # Can change
-
-    # Write the header if the file doesn't already exist
-    if not os.path.isfile(csv_file_path):
-        pd.DataFrame(columns=['run_id', 'dataset', 'activation', 'seed', 'normalization', 'hidden_size_rnn', 'hidden_size_other', 'learning_rate', 'dropout', 'l2_regularization', 'batch_size', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'test_loss', 'train_aucroc', 'valid_aucroc', 'test_aucroc', 'train_aucpr', 'valid_aucpr', 'test_aucpr', 'train_accuracy', 'valid_accuracy', 'test_accuracy']).to_csv(csv_file_path, index=False)
-
-    results_df = pd.read_csv(csv_file_path)
-    completed_runs = results_df['run_id'].values
-
-    # Prepare a list of all combinations of parameters
-    models_params = []
     for dataset in datasets:
-        for activations, activation_name in zip(activation_combos, activation_combos_names):
-            if dataset == 'Reddit_B' and EmbedForman in activations:
-                continue
-            counter = -1  # Counter for run identifier
-            for norm in norm_status:
-                for num_layer in num_layers:
-                    for dropout in dropouts:
-                        for hidden_1 in hidden_dim_1:
-                            for hidden_2 in hidden_dim_2:
-                                for lr_val in learning_rates:
-                                    for l2_val in l2_regularizations:
-                                        for combo in model_combos:
-                                            for batch_size in batch_sizes:
-                                                counter += 1  # Increment for run identifier
-                                                run_ident = dataset + '_' + activation_name + '_' + str(counter)
-                                                if run_ident in completed_runs:
-                                                    continue
-                                                # Just to see some stuff
-                                                if hidden_1 >= 1000 or hidden_2 >= 1000:
-                                                    continue
-                                                
-                                                models_params.append((dataset, activation_name, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path, model_dir))
+        if dataset == 'networkaion':
+            continue
+        STORAGE = f"sqlite:///./output/cached_model/BinaryTesting/bayesianSave/model_selection_{dataset}.db"  # Where we save the study
+        os.makedirs(os.path.dirname(f'output/cached_model/BinaryTesting/bayesianSave/model_selection_{dataset}.db'), exist_ok=True)
+        print(f"Optimizing for dataset: {dataset}")
+        
+        study_name = f"model_selection_{dataset}"  # Unique study name for each dataset
+        
+        #optuna.delete_study(study_name=study_name, storage=STORAGE)
+        
+        study = optuna.create_study(
+            study_name=study_name, 
+            storage=STORAGE, 
+            direction="maximize", 
+            load_if_exists=True
+        )
+        
+        # Pass dataset to the objective function
+        study.optimize(lambda trial: objective(trial, dataset), n_trials=500)
+        
+        # Save the best trial for the current dataset
+        best_results[dataset] = study.best_trial
 
-    # Limit processes to a lower number than the number of physical cores (e.g., 8)
-    num_processes = min(num_cores, multiprocessing.cpu_count())
-    print(f'There are {len(models_params)} models to train')
-    # Use multiprocessing Pool to train models in parallel
-    with multiprocessing.Pool(processes=num_processes) as pool:
-        pool.map(parallel_train_wrapper, models_params, chunksize=8)
+        print(f"Best trial for {dataset}: {study.best_trial}")
 
-
+    # Print all results
+    print("\nBest results for each dataset:")
+    for dataset, trial in best_results.items():
+        print(f"{dataset}: {trial}")
+    
+    
 if __name__ == "__main__":
     main()

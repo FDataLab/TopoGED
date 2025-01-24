@@ -100,6 +100,10 @@ class Loader():
             print(f'Dataset {dataset} not found in files, please check available datasets and try again')
             print(f'Available data: \t{data_files}')
 
+    
+    def clean_data(self):
+        pass
+
 
     # Read labels from file
     def read_labels(self, dataset):
@@ -192,6 +196,7 @@ class Loader():
         # Betweenness and Closeness take too long to process and are deemed not feasible 
         activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedCloseness, EmbedIncrementalCloseness]  # All activation functions to use
         activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness', 'IncrementalCloseness']
+        # Need to do IncrementalBetweenness still
         
         missing_cached = []
         for dataset in raw_data:

@@ -71,6 +71,61 @@ class Utils:
             
         return prev_embeddings
         
+    def normalize_embeddings(self, X_train, X_val, X_test):
+        max_weight = float('-inf')
+        max_edges = float('-inf')
+        max_nodes = float('-inf')
+        
+        for embedding in X_train:
+            weight = embedding[-1]
+            edges = embedding[-2]
+            nodes = embedding[-3]
+            
+            if weight > max_weight:
+                max_weight = weight
+            if edges > max_edges:
+                max_edges = edges
+            if nodes > max_nodes:
+                max_nodes = nodes
+            
+        # So that we don't overwrite the original embeddings
+        X_train_scaled = []
+        X_val_scaled = []
+        X_test_scaled = []
+            
+        for embedding in X_train:
+            tmp_embedding = []
+            for i in range(0, len(embedding), 3):
+                tmp_embedding.append(embedding[i] / max_nodes)
+                tmp_embedding.append(embedding[i + 1] / max_edges)
+                tmp_embedding.append(embedding[i + 2] / max_weight)
+            
+            X_train_scaled.append(tmp_embedding)
+            
+        for embedding in X_val:
+            tmp_embedding = []
+            for i in range(0, len(embedding), 3):
+                tmp_embedding.append(embedding[i] / max_nodes)
+                tmp_embedding.append(embedding[i + 1] / max_edges)
+                tmp_embedding.append(embedding[i + 2] / max_weight)
+            
+            X_val_scaled.append(tmp_embedding)
+                
+        for embedding in X_test:
+            tmp_embedding = []
+            for i in range(0, len(embedding), 3):
+                tmp_embedding.append(embedding[i] / max_nodes)
+                tmp_embedding.append(embedding[i + 1] / max_edges)
+                tmp_embedding.append(embedding[i + 2] / max_weight)
+            
+            X_test_scaled.append(tmp_embedding)
+        
+        X_train_scaled = np.array(X_train_scaled)
+        X_val_scaled = np.array(X_val_scaled)
+        X_test_scaled = np.array(X_test_scaled)
+        
+        return X_train_scaled, X_val_scaled, X_test_scaled
+    
     
     def get_activation_name(self, activation):
         """

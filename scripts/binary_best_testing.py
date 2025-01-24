@@ -306,8 +306,7 @@ def train_and_eval(dataset, activation_name, activations, norm, num_layer, dropo
                 'train_accuracy': train_accuracy,
                 'valid_accuracy': valid_accuracy,
                 'test_accuracy': test_accuracy
-            }
-                    
+            }    
                             
         # Early stopping only after 50 epochs
         if epoch >= 100:
