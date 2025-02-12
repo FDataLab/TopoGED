@@ -25,32 +25,33 @@ class Loader():
     edgelist_dir = os.path.abspath('data/input/raw/edgelist')
     label_dir = os.path.abspath('data/input/raw/labels')
 
-    def verify_embeddings(self, embeddings, activation, dataset):
+    def verify_embeddings(self, embeddings, activation, dataset, norm=False):
         print(f'Verifying {activation} on dataset {dataset}')
         if activation == EmbedForman and dataset == 'Reddit_B':
             return 
         
-        graphs = self.read_edges_directed(dataset)
-        for embedding, graph in zip(embeddings, graphs):
-            total_nodes = graph.number_of_nodes()
-            total_edges = graph.number_of_edges()
-            total_weight = sum(data['value'] for _, _, data in graph.edges(data=True))
-            
-            embedding_nodes = embedding[-3]
-            embedding_edges = embedding[-2]
-            embedding_weight = embedding[-1]
-            
-            if total_nodes != embedding_nodes:
-                print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF NODES')
-                print(f'TRUE VAL: {total_nodes}; EMBEDDING VAL: {embedding_nodes}')
-            
-            if total_edges != embedding_edges:
-                print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF EDGES')
-                print(f'TRUE VAL: {total_edges}; EMBEDDING VAL: {embedding_edges}')
+        if not norm:
+            graphs = self.read_edges_directed(dataset)
+            for embedding, graph in zip(embeddings, graphs):
+                total_nodes = graph.number_of_nodes()
+                total_edges = graph.number_of_edges()
+                total_weight = sum(data['value'] for _, _, data in graph.edges(data=True))
                 
-            if total_weight != embedding_weight:
-                print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF WEIGHT')
-                print(f'TRUE VAL: {total_weight}; EMBEDDING VAL: {embedding_weight}')
+                embedding_nodes = embedding[-3]
+                embedding_edges = embedding[-2]
+                embedding_weight = embedding[-1]
+                
+                if total_nodes != embedding_nodes:
+                    print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF NODES')
+                    print(f'TRUE VAL: {total_nodes}; EMBEDDING VAL: {embedding_nodes}')
+                
+                if total_edges != embedding_edges:
+                    print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF EDGES')
+                    print(f'TRUE VAL: {total_edges}; EMBEDDING VAL: {embedding_edges}')
+                    
+                if total_weight != embedding_weight:
+                    print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF WEIGHT')
+                    print(f'TRUE VAL: {total_weight}; EMBEDDING VAL: {embedding_weight}')
 
 
     # Process all data
@@ -149,7 +150,7 @@ class Loader():
         return data
     
     
-    def read_edges_directed(self, dataset):
+    def read_edges_directed(self, dataset, norm=False):
         """
         Read the edgelists a file for later processing
         
@@ -164,8 +165,13 @@ class Loader():
         edgelist_rawfile = self.edgelist_dir + '/{}.txt'.format(dataset)
         edgelist_df = pd.read_csv(edgelist_rawfile)
         
+        if norm:
+            edgelist_df = self.normalize_edge_weights(edgelist_df)
+        
         # Filter out edges where 'value' is greater than 10^20 (this is a hacking attempt in blockchain)
         # edgelist_df = edgelist_df[edgelist_df['value'] <= 10**20]
+
+        
                 
         uniq_ts_list = np.unique(edgelist_df['Snapshot'])
 
@@ -173,9 +179,26 @@ class Loader():
         for ts in uniq_ts_list:
             ts_edges = edgelist_df.loc[edgelist_df['Snapshot'] == ts, ['from', 'to', 'value']]
             ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to', edge_attr=True, create_using=nx.DiGraph())
+            
+            # Reddit requires special processing (apply sigmoid)
+            if dataset == 'Reddit_B':
+                for u, v, graph_data in ts_G.edges(data=True):
+                    graph_data['value'] = 1 / (1 + np.exp(-graph_data['value']))
+            
             data.append(ts_G)
         
         return data
+
+
+    def normalize_edge_weights(self, edges_df):
+        INT_MAX = 2**31 - 1  # Maximum 32-bit integer value
+        edges_df["value"].replace([np.inf, -np.inf], INT_MAX, inplace=True)  # In case there are inf values
+        
+        # Using log scaling
+        
+        edges_df['value'] = np.log1p(edges_df['value'])
+        
+        return edges_df
 
     
     # Get the data folders into respective cached pkl files
@@ -189,13 +212,15 @@ class Loader():
         Returns:
             None
         """
+        normalization_datasets = ['networkaeternity', 'networkiconomi', 'networkcindicator', 'networkdgd']
+        
         raw_data = [file for file in os.listdir(self.edgelist_dir)]
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
         cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
         # Betweenness and Closeness take too long to process and are deemed not feasible 
-        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedCloseness, EmbedIncrementalCloseness]  # All activation functions to use
-        activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness', 'IncrementalCloseness']
+        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
+        activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
         # Need to do IncrementalBetweenness still
         
         missing_cached = []
@@ -227,7 +252,13 @@ class Loader():
 
             for file in missing_cached:
                 # Generate base data with graphs, labels
-                graphs = self.read_edges_directed(file)
+                if file in normalization_datasets:
+                    norm = True
+                else:
+                    norm = False
+                    
+                graphs = self.read_edges_directed(file, norm=norm)
+                
                 labels = self.read_labels(file)
                 data = list(zip(graphs, labels))
 
@@ -255,7 +286,7 @@ class Loader():
                     
                     print(f'Activation {activation_name} on dataset {file} took time {end_time - start_time}')
                         
-                    self.verify_embeddings(embeddings, activation, file)    
+                    self.verify_embeddings(embeddings, activation, file, norm=norm)    
                         
                     data = list(zip(embeddings, labels))
 

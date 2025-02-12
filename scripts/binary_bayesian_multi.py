@@ -29,7 +29,7 @@ from utils.embedding_methods.weight import EmbedWeight
 import wandb
 
 # Constants
-csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_bayesian_individual_dataset.csv')
+csv_file_path = os.path.abspath('data/output/results/BinaryTesting/data/embedding_testing_bayesian_individual_dataset_4060.csv')
 model_dir = os.path.abspath('data/output/cached_model/BinaryTesting/EmbeddingTesting')
 seed = 42  # Can change
 
@@ -74,6 +74,8 @@ combo_map = {
     "['GRU', 'FC', 'Sigmoid']": ['GRU', 'FC', 'Sigmoid'], 
     "['GRU', 'Attention', 'FC', 'Sigmoid']": ['GRU', 'Attention', 'FC', 'Sigmoid'], 
     "['LSTM', 'Attention', 'FC', 'Sigmoid']": ['LSTM', 'Attention', 'FC', 'Sigmoid'], 
+    "['GRU', 'Attention', 'MLP', 'Sigmoid']": ['GRU', 'Attention', 'MLP', 'Sigmoid'], 
+    "['LSTM', 'Attention', 'MLP', 'Sigmoid']": ['LSTM', 'Attention', 'MLP', 'Sigmoid'], 
     "['LSTM', 'GRU', 'FC', 'Sigmoid']": ['LSTM', 'GRU', 'FC', 'Sigmoid'], 
     "['LSTM', 'GRU', 'MLP', 'Sigmoid']": ['LSTM', 'GRU', 'MLP', 'Sigmoid']
 }
@@ -107,7 +109,7 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, hid
 
     # Calculate split indices
     train_end = int(0.7 * n)  # 70% for training
-    val_end = int(0.80 * n)   # Next 10% for validation (70% + 10% = 80%)
+    val_end = int(0.80 * n)   # Next 10% for validation (70% + 10% = 80%) (OLD WAS 15/15)
     X_train, y_train = embeddings[:train_end], labels[:train_end]
     X_val, y_val = embeddings[train_end:val_end], labels[train_end:val_end]
     X_test, y_test = embeddings[val_end:], labels[val_end:]
@@ -129,7 +131,7 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, hid
                                         
     # Initialize wandb
     run = wandb.init(
-        project="bayesian_testing_individual_dataset", 
+        project="bayesian_testing_individual_dataset_4060", 
         name = run_name, 
         config={
         'dataset': dataset,
@@ -346,9 +348,9 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, hid
 
 def objective(trial, dataset):
     # Suggest hyperparameters
-    dropout = trial.suggest_float('dropout', 0.1, 0.5)
-    hidden_1 = trial.suggest_categorical('hidden_1', [32, 64, 128, 256, 512, 1024, 2048])
-    hidden_2 = trial.suggest_categorical('hidden_2', [32, 64, 128, 256, 512, 1024, 2048])
+    dropout = trial.suggest_float('dropout', 0.01, 0.5)
+    hidden_1 = trial.suggest_categorical('hidden_1', [32, 64, 128, 256, 512])
+    hidden_2 = trial.suggest_categorical('hidden_2', [32, 64, 128, 256, 512])
     num_layers = trial.suggest_int('num_layers', 2, 4)
     lr_val = trial.suggest_float('lr_val', 1e-4, 1e-2, log=True)
     l2_val = trial.suggest_float('l2_val', 1e-5, 1e-1, log=True)
@@ -371,9 +373,11 @@ def objective(trial, dataset):
     model = trial.suggest_categorical('combo', [
         "['LSTM', 'MLP', 'Sigmoid']", 
         "['GRU', 'MLP', 'Sigmoid']", 
-        "['LSTM', 'FC', 'Sigmoid']", 
-        "['GRU', 'Attention', 'FC', 'Sigmoid']", 
-        "['LSTM', 'GRU', 'FC', 'Sigmoid']", 
+        #"['LSTM', 'FC', 'Sigmoid']", 
+        #"['GRU', 'Attention', 'FC', 'Sigmoid']", 
+        "['GRU', 'Attention', 'MLP', 'Sigmoid']", 
+        "['LSTM', 'Attention', 'MLP', 'Sigmoid']",
+        #"['LSTM', 'GRU', 'FC', 'Sigmoid']", 
         "['LSTM', 'GRU', 'MLP', 'Sigmoid']"
     ])   
     model = combo_map[model]
@@ -400,30 +404,29 @@ def objective(trial, dataset):
         seed=42,
         csv_file_path=csv_file_path,
     )
-    auc_score = (train_auc * 0.3 + val_auc * 0.7)
+    auc_score = (train_auc * 0.4 + val_auc * 0.6)  # Play with these numbers a bit, (0.2, 0.8), (0.3, 0.7) and (0.4, 0.6)
     
     return auc_score
     
     
 def main():
     os.environ["WANDB_API_KEY"] = "6a5ccf040a6c90944032e58878e46c19d673cdb0"
-    wandb.init(project="Binary", name="bayesian_testing_individual_dataset")
+    wandb.init(project="Binary", name="bayesian_testing_individual_dataset_4060")
     
-    datasets = ['networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', ]
-    other_datasets = ['networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd']  # These dont work
+    datasets = ['networkbancor', 'cosine', 'CollegeMsg', 'mathoverflow', 'networkaragon', 'networkaion', 'networkadex', 'networkcentra', 'networkcoindash', ]  # Edit reddit when i have time, and other datasets
+    other_datasets = ['Reddit_B', 'networkaeternity', 'networkiconomi', 'networkcindicator', 'networkdgd']  # These dont work
     
     
     # Dictionary to store best results for each dataset
     best_results = {}
 
+    # _4060 SIGNIFIES THAT WE ARE USING 40% TRAIN AND 60% VAL IN OUR BAYESIAN SCORING
     for dataset in datasets:
-        if dataset == 'networkaion':
-            continue
-        STORAGE = f"sqlite:///./output/cached_model/BinaryTesting/bayesianSave/model_selection_{dataset}.db"  # Where we save the study
-        os.makedirs(os.path.dirname(f'output/cached_model/BinaryTesting/bayesianSave/model_selection_{dataset}.db'), exist_ok=True)
+        STORAGE = f"sqlite:///./output/cached_model/BinaryTesting/bayesianSave/model_selection_{dataset}_4060.db"  # Where we save the study
+        os.makedirs(os.path.dirname(f'output/cached_model/BinaryTesting/bayesianSave/model_selection_{dataset}_4060.db'), exist_ok=True)
         print(f"Optimizing for dataset: {dataset}")
         
-        study_name = f"model_selection_{dataset}"  # Unique study name for each dataset
+        study_name = f"model_selection_{dataset}_4060"  # Unique study name for each dataset
         
         #optuna.delete_study(study_name=study_name, storage=STORAGE)
         
@@ -435,7 +438,7 @@ def main():
         )
         
         # Pass dataset to the objective function
-        study.optimize(lambda trial: objective(trial, dataset), n_trials=500)
+        study.optimize(lambda trial: objective(trial, dataset), n_trials=2500)
         
         # Save the best trial for the current dataset
         best_results[dataset] = study.best_trial
@@ -449,4 +452,22 @@ def main():
     
     
 if __name__ == "__main__":
-    main()
+    hidden_1 = 64
+    hidden_2 = 256
+    combo = combo_map["['LSTM', 'MLP', 'Sigmoid']"]
+    activations = activation_map["['Closeness', 'Forman']"]
+    lr_val = 0.00017784170446487205
+    dropout = 0.12205751433404172
+    l2_val = 0.000503243731133889
+    batch_size = 64
+    num_layer = 2
+    seed = 42
+    
+    os.environ["WANDB_API_KEY"] = "6a5ccf040a6c90944032e58878e46c19d673cdb0"
+    wandb.init(project="Binary", name="bayesian_testing_individual_dataset_4060")
+    
+    dataset = 'networkaion'
+    norm=False
+    
+    
+    train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, 99999, seed, csv_file_path)

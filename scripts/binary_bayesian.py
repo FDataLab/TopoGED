@@ -379,6 +379,8 @@ def objective(trial):
         "['GRU', 'MLP', 'Sigmoid']", 
         "['LSTM', 'FC', 'Sigmoid']", 
         "['GRU', 'Attention', 'FC', 'Sigmoid']", 
+        "['GRU', 'Attention', 'MLP', 'Sigmoid']", 
+        "['LSTM', 'Attention', 'MLP', 'Sigmoid']",
         "['LSTM', 'GRU', 'FC', 'Sigmoid']", 
         "['LSTM', 'GRU', 'MLP', 'Sigmoid']"
     ])   
@@ -412,7 +414,7 @@ def objective(trial):
             seed=42,
             csv_file_path=csv_file_path,
         )
-        auc_score = (train_auc * 0.3 + val_auc * 0.7)
+        auc_score = (train_auc * 0.3 + val_auc * 0.7)  # Play with these numbers a bit, (0.2, 0.8) and (0.4, 0.6)
         results.append(auc_score)
 
     # Return the mean AUC across datasets
