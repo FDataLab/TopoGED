@@ -74,7 +74,7 @@ class Decoder(nn.Module):
         assert len(bias) == num_modules or len(bias) == 1, "Number of bias should be defined for each models or defined once"
         assert len(dropout) == num_modules or len(dropout) == 1, "Number of drop out values should be defined for each models or defined once"
         assert layers[0] not in ['ReLU', 'Sigmoid', 'Dropout'], "First layer of the model must not be an activation or dropout layer"
-        assert layers[-1] in ['MLP', 'FC', 'Sigmoid'], "Last layer must be MLP Fully Connected, or Sigmoid for output"
+        assert layers[-1] in ['MLP', 'FC', 'Sigmoid', 'LSTM', 'GRU', 'RNN', 'ReLU'], "Last layer must be MLP Fully Connected, Sigmoid, or RNN-based for output"
         
         # Set up parameter lists if they are not appropriate size
         hids_size_rnn = self._repeat(hids_size_rnn, num_modules)
@@ -111,7 +111,7 @@ class Decoder(nn.Module):
                 current_in_channels = out_channels if i >= num_modules - 2 else hids_size_other[i]
             else:
                 self.decoder.append(
-                    self._init_layer(layer_name, current_in_channels, out_channels if i == num_modules - 2 else hids_size_rnn[i], num_layers[i], dropout[i], bias[i])
+                    self._init_layer(layer_name, current_in_channels, out_channels if i >= num_modules - 2 else hids_size_rnn[i], num_layers[i], dropout[i], bias[i])
                 )
                 if layer_name != 'Dropout':  # Only update channels if not dropout
                     current_in_channels = out_channels if i >= num_modules - 2 else hids_size_rnn[i]
@@ -126,9 +126,10 @@ class Decoder(nn.Module):
                     bias: bool):
         
         #print(f'Making {layer} with input_size: {in_channel} and output_size: {hidden_size}')
-        
-        if layer in ['LSTM', 'GRU', 'RNN']:
-            return self.layer_map[layer](input_size=in_channel, hidden_size=hidden_size, num_layers=num_layers, bias=bias, dropout=dropout_prob)
+        if layer in ['RNN']:
+            return self.layer_map[layer](input_size=in_channel, hidden_size=hidden_size, num_layers=num_layers, bias=bias, dropout=dropout_prob, nonlinearity="relu")  # SWITCH BACK FOR BINARY
+        elif layer in ['LSTM', 'GRU']:
+            return self.layer_map[layer](input_size=in_channel, hidden_size=hidden_size, num_layers=num_layers, bias=bias, dropout=dropout_prob)  # SWITCH BACK FOR BINARY
         elif layer in ['ReLU', 'Sigmoid']:
             return self.layer_map[layer]()
         elif layer == 'Dropout':
