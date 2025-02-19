@@ -31,7 +31,7 @@ class Probs():
         num_edges_in_target = target_graph.number_of_edges()
         count = 0  # Our numerator, the number of instances an edge reappearing
 
-        prev_edges = set().intersection(*(graph.edges() for graph in prev_graphs))
+        prev_edges = set().union(*(graph.edges() for graph in prev_graphs))
 
         for edge in target_graph.edges():
             if edge in prev_edges:
@@ -46,10 +46,9 @@ class Probs():
         count = 0  # Our numerator, the number of instances of a new edge because of one new node
 
         # Not sure if i want to use intersection or union here when considering multiple graphs
-        prev_nodes = set().intersection(*(graph.nodes() for graph in prev_graphs))
+        prev_nodes = set().union(*(graph.nodes() for graph in prev_graphs))
         nodes_in_curr_graph = set(target_graph.nodes())
         new_nodes = nodes_in_curr_graph - prev_nodes
-
 
         for edge in target_graph.edges():
             # Get nodes
@@ -68,8 +67,9 @@ class Probs():
         count = 0  # Our numerator, the number of instances of a new edge between existing nodes
 
         # Get all nodes and edges that previously existed
-        prev_nodes = set().intersection(*(graph.nodes() for graph in prev_graphs))
+        prev_nodes = set().union(*(graph.nodes() for graph in prev_graphs))
         prev_edges = set().union(*(graph.edges() for graph in prev_graphs))
+
 
         for edge in target_graph.edges():
             # Get nodes
