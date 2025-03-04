@@ -2,8 +2,9 @@ import numpy as np
 
 
 class EmbedDegree:
-    def __init__(self, num_buckets=10):
+    def __init__(self, num_buckets=10, include_weights=True):
         self.num_buckets = num_buckets
+        self.weight_flag = include_weights
 
 
     def degree_activation(self, threshold, graph):
@@ -57,12 +58,16 @@ class EmbedDegree:
             # In-degree: count edges directed towards active nodes (edges where the target is active)
             edges = sum(1 for edge in active_edges if edge[1] in active_node_set and edge[0] in active_node_set)
             
-            # Weight calculations:
-            # In-weight: sum the weights of edges directed towards active nodes (edges where target is active)
-            weight = sum(graph[edge[0]][edge[1]].get('value', 1) for edge in active_edges if edge[1] in active_node_set and edge[0] in active_node_set)
+            # If we decide to include weight in the vectors
+            if self.weight_flag:
+                # Weight calculations:
+                # In-weight: sum the weights of edges directed towards active nodes (edges where target is active)
+                weight = sum(graph[edge[0]][edge[1]].get('value', 1) for edge in active_edges if edge[1] in active_node_set and edge[0] in active_node_set)
+                
+                # Append the features for this threshold
+                active_data.extend([node_count, edges, weight])
             
-            
-            # Append the features for this threshold
-            active_data.extend([node_count, edges, weight])
+            else:
+                active_data.extend([node_count, edges])
 
         return active_data  # Returns a vector with features for all thresholds

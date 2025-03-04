@@ -11,6 +11,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.embedding_methods.betweenness import EmbedBetweenness
+from utils.embedding_methods.incremental_betwenness import EmbedIncrementalBetweenness
 from utils.embedding_methods.closeness import EmbedCloseness
 from utils.embedding_methods.incremental_closeness import EmbedIncrementalCloseness
 from utils.embedding_methods.degree import EmbedDegree
@@ -25,7 +26,7 @@ class Loader():
     edgelist_dir = os.path.abspath('data/input/raw/edgelist')
     label_dir = os.path.abspath('data/input/raw/labels')
 
-    def verify_embeddings(self, embeddings, activation, dataset, norm=False):
+    def verify_embeddings(self, embeddings, activation, dataset, norm=False, include_weights=True):
         print(f'Verifying {activation} on dataset {dataset}')
         if activation == EmbedForman and dataset == 'Reddit_B':
             return 
@@ -37,21 +38,33 @@ class Loader():
                 total_edges = graph.number_of_edges()
                 total_weight = sum(data['value'] for _, _, data in graph.edges(data=True))
                 
-                embedding_nodes = embedding[-3]
-                embedding_edges = embedding[-2]
-                embedding_weight = embedding[-1]
-                
-                if total_nodes != embedding_nodes:
-                    print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF NODES')
-                    print(f'TRUE VAL: {total_nodes}; EMBEDDING VAL: {embedding_nodes}')
-                
-                if total_edges != embedding_edges:
-                    print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF EDGES')
-                    print(f'TRUE VAL: {total_edges}; EMBEDDING VAL: {embedding_edges}')
+                if include_weights == True:
+                    embedding_nodes = embedding[-3]
+                    embedding_edges = embedding[-2]
+                    embedding_weight = embedding[-1]
                     
-                if total_weight != embedding_weight:
-                    print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF WEIGHT')
-                    print(f'TRUE VAL: {total_weight}; EMBEDDING VAL: {embedding_weight}')
+                    if total_nodes != embedding_nodes:
+                        print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF NODES')
+                        print(f'TRUE VAL: {total_nodes}; EMBEDDING VAL: {embedding_nodes}')
+                    
+                    if total_edges != embedding_edges:
+                        print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF EDGES')
+                        print(f'TRUE VAL: {total_edges}; EMBEDDING VAL: {embedding_edges}')
+                        
+                    if total_weight != embedding_weight:
+                        print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF WEIGHT')
+                        print(f'TRUE VAL: {total_weight}; EMBEDDING VAL: {embedding_weight}')
+                else:
+                    embedding_nodes = embedding[-2]
+                    embedding_edges = embedding[-1]
+                    
+                    if total_nodes != embedding_nodes:
+                        print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF NODES')
+                        print(f'TRUE VAL: {total_nodes}; EMBEDDING VAL: {embedding_nodes}')
+                    
+                    if total_edges != embedding_edges:
+                        print(f'A GRAPH FROM {dataset} WITH ACTIVATION {activation} HAS THE WRONG NUMBER OF EDGES')
+                        print(f'TRUE VAL: {total_edges}; EMBEDDING VAL: {embedding_edges}')
 
 
     # Process all data
@@ -76,7 +89,7 @@ class Loader():
         
         return all_data
 
-    def load_data(self, dataset, activation):
+    def load_data(self, dataset, activation, include_weights=True):
         """
         Load a single, specified dataset that exists
         
@@ -88,8 +101,13 @@ class Loader():
             labels (list): The associated labels for each graph
         """
         self.to_cached()
-        seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
-        dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+        if include_weights == True:
+            seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
+            dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+        else:
+            seek_file = dataset + '_' + activation + '_no_weight' + '.pkl'  # Based on dataset and activation combination
+            dataset_folder = os.path.join(self.output_dir + 'no_weight', dataset)  # Target folder path
+            
         data_files = os.listdir(dataset_folder)
         
         if seek_file in data_files:
@@ -244,7 +262,13 @@ class Loader():
                 if not os.path.exists(activation_file):
                     missing_cached.append(dataset)
                     break  # Skip to the next dataset if any activation file is missing
-
+                
+            # Check for no weight embeddings 
+            for activation_name in activation_names:
+                activation_file = os.path.join(dataset_folder + '/no_weight', f'{dataset}_{activation_name}_no_weight.pkl')
+                if not os.path.exists(activation_file):
+                    missing_cached.append(dataset)
+                    break  # Skip to the next dataset if any activation file is missing
                 
         # If we are missing files, generate them
         if missing_cached:
@@ -271,31 +295,42 @@ class Loader():
                     
                 # Generate data with embeddings, labels
                 for activation, activation_name in zip(activations, activation_names):
-                    print(f'Generating for {file} with activation {activation_name}')
-                    my_activation = activation(num_buckets=10)    
-        
-                    start_time = time.time()
-        
-                    # Since Forman Ricci requires directed edges
-                    if activation==EmbedForman:
-                        embeddings = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
-                    else:
-                        embeddings = my_activation.process_graphs_for_embeddings(graphs)
+                    for weight_flag in [True, False]:
+                        print(f'Generating for {file} with activation {activation_name} with include_weights={weight_flag}')
+                        my_activation = activation(num_buckets=10, include_weights=weight_flag)    
+            
+                        start_time = time.time()
+            
+                        # Since Forman Ricci requires directed edges
+                        if activation==EmbedForman:
+                            embeddings = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
+                        else:
+                            embeddings = my_activation.process_graphs_for_embeddings(graphs)
+                            
+                        end_time = time.time()
                         
-                    end_time = time.time()
-                    
-                    print(f'Activation {activation_name} on dataset {file} took time {end_time - start_time}')
-                        
-                    self.verify_embeddings(embeddings, activation, file, norm=norm)    
-                        
-                    data = list(zip(embeddings, labels))
+                        print(f'Activation {activation_name} on dataset {file} took time {end_time - start_time}')
+                            
+                        self.verify_embeddings(embeddings, activation, file, norm=norm, include_weights=weight_flag)    
+                            
+                        data = list(zip(embeddings, labels))
 
-                    data_dir = self.output_dir + '/' + file
-                    os.makedirs(data_dir, exist_ok=True)
-                    activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}.pkl')
-                    print(f'sending to {activation_file_path}')
-                    with open(activation_file_path, "wb") as f:
-                        pickle.dump(data, f)
+                        # Different processing directory
+                        if weight_flag == True:
+                            data_dir = self.output_dir + '/' + file
+                            os.makedirs(data_dir, exist_ok=True)
+                            activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}.pkl')
+                            print(f'sending to {activation_file_path}')
+                            with open(activation_file_path, "wb") as f:
+                                pickle.dump(data, f)
+                                
+                        else:
+                            data_dir = self.output_dir + '/' + file + '/no_weight'
+                            os.makedirs(data_dir, exist_ok=True)
+                            activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_no_weight.pkl')
+                            print(f'sending to {activation_file_path}')
+                            with open(activation_file_path, "wb") as f:
+                                pickle.dump(data, f)
 
 
     # Load from the pkl file
