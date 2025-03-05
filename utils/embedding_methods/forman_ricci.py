@@ -57,6 +57,7 @@ class EmbedForman:
 
     def process_graphs_for_embeddings(self, graphs, is_directed=True):
         all_embeddings = []
+        all_subgraphs = []
         
         if not is_directed:
             new_graphs = []
@@ -68,8 +69,9 @@ class EmbedForman:
         thresholds = self.compute_forman_ricci_thresholds(graphs)
         
         for graph in graphs: 
-            active_data = self.graph_filtration(graph, thresholds)   
+            active_data, subgraphs = self.graph_filtration(graph, thresholds)   
             all_embeddings.append(active_data)  # 20-dimensional embedding
+            all_subgraphs.append(subgraphs)  # Subgraphs at each threshold
         
         # To account for making the directional edges
         if not is_directed:
@@ -78,12 +80,13 @@ class EmbedForman:
                     all_embeddings[j][i + 1] /= 2
                     all_embeddings[j][i + 2] /= 2
         
-        return all_embeddings
+        return all_embeddings, all_subgraphs
 
 
     # Filtration function for generating embeddings (50-dimensional active data)
     def graph_filtration(self, graph, thresholds):
         active_data = []
+        subgraphs = []  # The subgraphs for each threshold
 
         for threshold in thresholds:
             # Get active node set based on the activation function
@@ -92,6 +95,10 @@ class EmbedForman:
             # Filter edges to include only those between active nodes
             active_edges = {edge for edge in graph.edges(data=False) 
                             if edge[0] in active_node_set and edge[1] in active_node_set}
+            
+            # Get a subgraph to add
+            subgraph = graph.subgraph(active_node_set).copy()
+            subgraphs.append(subgraph)
             
             # Compute features:
             node_count = len(active_node_set)  # Number of active nodes
@@ -111,4 +118,4 @@ class EmbedForman:
             else:
                 active_data.extend([node_count, edges])
 
-        return active_data  # Returns a vector with features for all thresholds
+        return active_data, subgraphs  # Returns a vector with features for all thresholds

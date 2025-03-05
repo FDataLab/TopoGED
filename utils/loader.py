@@ -89,7 +89,8 @@ class Loader():
         
         return all_data
 
-    def load_data(self, dataset, activation, include_weights=True):
+
+    def load_data(self, dataset, activation, subgraphs=False, include_weights=True):
         """
         Load a single, specified dataset that exists
         
@@ -101,16 +102,27 @@ class Loader():
             labels (list): The associated labels for each graph
         """
         self.to_cached()
-        if include_weights == True:
+        if subgraphs == True:
+            seek_file = dataset + '_' + activation + '_subgraphs.pkl'
+            dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+            dataset_folder = os.path.join(dataset_folder, 'subgraphs')  # Target folder path
+        elif include_weights == True:
             seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
         else:
             seek_file = dataset + '_' + activation + '_no_weight' + '.pkl'  # Based on dataset and activation combination
-            dataset_folder = os.path.join(self.output_dir + 'no_weight', dataset)  # Target folder path
+            dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+            dataset_folder = os.path.join(dataset_folder, 'no_weight')  # Target folder path
             
         data_files = os.listdir(dataset_folder)
         
         if seek_file in data_files:
+            # Different processing logic
+            if subgraphs == True:
+                seek_file_path = os.path.join(dataset_folder, seek_file)
+                graphs = self.from_cached(seek_file_path)  # Load data
+                return graphs
+            
             seek_file_path = os.path.join(dataset_folder, seek_file)
             graphs, labels = self.from_cached(seek_file_path)  # Load data
             return graphs, labels
@@ -237,8 +249,10 @@ class Loader():
         cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
         # Betweenness and Closeness take too long to process and are deemed not feasible 
-        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
-        activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
+        #activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
+        #activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
+        activations = [EmbedBetweenness]  # All activation functions to use
+        activation_names = ['Betweenness']
         # Need to do IncrementalBetweenness still
         
         missing_cached = []
@@ -270,6 +284,14 @@ class Loader():
                     missing_cached.append(dataset)
                     break  # Skip to the next dataset if any activation file is missing
                 
+                # Check for subgraphs
+                activation_file = os.path.join(dataset_folder + '/subgraphs', f'{dataset}_{activation_name}_subgraphs.pkl')
+                if not os.path.exists(activation_file):
+                    missing_cached.append(dataset)
+                    break  # Skip to the next dataset if any activation file is missing
+                
+        
+                
         # If we are missing files, generate them
         if missing_cached:
             print(f'Generating pkl files for the following datasets: {missing_cached}')
@@ -295,7 +317,7 @@ class Loader():
                     
                 # Generate data with embeddings, labels
                 for activation, activation_name in zip(activations, activation_names):
-                    for weight_flag in [True, False]:
+                    for weight_flag in [False]:  # Need to go back with only weight = True
                         print(f'Generating for {file} with activation {activation_name} with include_weights={weight_flag}')
                         my_activation = activation(num_buckets=10, include_weights=weight_flag)    
             
@@ -303,9 +325,9 @@ class Loader():
             
                         # Since Forman Ricci requires directed edges
                         if activation==EmbedForman:
-                            embeddings = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
+                            embeddings, subgraphs = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
                         else:
-                            embeddings = my_activation.process_graphs_for_embeddings(graphs)
+                            embeddings, subgraphs = my_activation.process_graphs_for_embeddings(graphs)
                             
                         end_time = time.time()
                         
@@ -331,6 +353,13 @@ class Loader():
                             print(f'sending to {activation_file_path}')
                             with open(activation_file_path, "wb") as f:
                                 pickle.dump(data, f)
+                        
+                        data_dir = self.output_dir + '/' + file + '/subgraphs'
+                        os.makedirs(data_dir, exist_ok=True)
+                        activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_subgraphs.pkl')
+                        print(f'sending subgraphs to {activation_file_path}')
+                        with open(activation_file_path, "wb") as f:
+                            pickle.dump(subgraphs, f)
 
 
     # Load from the pkl file
