@@ -21,17 +21,32 @@ class Probs():
         """
         probabilities = []
 
+        # All new nodes and new edges
+        for i in range(num_graphs_back):
+            target_graph = graphs[i]
+            probs = [
+                0,
+                target_graph.number_of_nodes(),
+                0,
+                target_graph.number_of_edges(),
+                0,
+                0
+            ]
+            probabilities.append(probs)
+            
+
         for i in range(num_graphs_back, len(graphs)):
             curr_graphs = graphs[i - num_graphs_back : i]  # Get groups of size num_graphs_back
             target_graph = graphs[i]
 
             # Generate our probabilities
             probs = [
-                self.prob_1(target_graph, curr_graphs),
-                self.prob_2(target_graph, curr_graphs),
-                self.prob_3(target_graph, curr_graphs),
-                self.prob_4(target_graph, curr_graphs),
-                self.prob_5(target_graph, curr_graphs)
+                self.prob_old_nodes(target_graph, curr_graphs),
+                self.prob_new_nodes(target_graph, curr_graphs),
+                self.prob_oo(target_graph, curr_graphs),
+                self.prob_nn(target_graph, curr_graphs),
+                self.prob_on(target_graph, curr_graphs),
+                self.prob_oon(target_graph, curr_graphs)
             ]
             
             probabilities.append(probs)
@@ -40,7 +55,7 @@ class Probs():
 
 
     # Edges that already existed in previous graphs
-    def prob_1(self, target_graph, prev_graphs: list):
+    def prob_oo(self, target_graph, prev_graphs: list):
         """
         Compute the percentage of edges that exist in this graph, that existed in the previous graphs
         
@@ -62,11 +77,11 @@ class Probs():
 
         prob_1 = count / num_edges_in_target  # Compute probability
 
-        return prob_1
+        return count  # No longer using a probability, now a discrete count
 
 
     # New edge between already existing nodes that did not previously have an edge
-    def prob_2(self, target_graph, prev_graphs: list):
+    def prob_oon(self, target_graph, prev_graphs: list):
         """
         Compute the percentage of edges that exist in this graph, that had two previously seen nodes that did not previously have an edge
         
@@ -96,11 +111,11 @@ class Probs():
                 
         prob_2 = count / num_edges_in_target  # Compute probability 
         
-        return prob_2
+        return count  # No longer using a probability, now a discrete count
 
 
     # New edge because of one new node
-    def prob_3(self, target_graph, prev_graphs: list):
+    def prob_on(self, target_graph, prev_graphs: list):
         """
         Compute the percentage of edges that exist in this graph, that have one old node and one new node
         
@@ -129,11 +144,11 @@ class Probs():
         
         prob_3 = count / num_edges_in_target  # Compute probability 
         
-        return prob_3
+        return count  # No longer using a probability, now a discrete count
 
 
     # New edge between two new nodes
-    def prob_4(self, target_graph, prev_graphs: list):
+    def prob_nn(self, target_graph, prev_graphs: list):
         """
         Compute the percentage of edges that exist in this graph, that formed because of two entirely new nodes
         
@@ -156,11 +171,11 @@ class Probs():
 
         prob_4 = count / num_edges_in_target  # Compute probability
         
-        return prob_4
+        return count  # No longer using a probability, now a discrete count
 
     
     # Number of reappearing nodes
-    def prob_5(self, target_graph, prev_graphs: list):
+    def prob_old_nodes(self, target_graph, prev_graphs: list):
         """
         Compute the percentage of nodes that exist in this graph that were previously seen
         
@@ -180,7 +195,30 @@ class Probs():
         
         prob_5 = count / num_nodes_in_target  # Compute probability
         
-        return prob_5
+        return count  # No longer using a probability, now a discrete count
+    
+
+    def prob_new_nodes(self, target_graph, prev_graphs: list):
+        """
+        Compute the percentage of nodes that exist in this graph that were not previously seen
+        
+        inputs:
+            target_graph (nx.DiGraph()): The graph we are computing probabilities for
+            prev_graphs(list[nx.DiGraph()]): The previous graphs to look at for their nodes
+        
+        returns:
+            prob_5 (float): The number of nodes that exist in this graph, that were seen in previous graphs
+        """
+        num_nodes_in_target = target_graph.number_of_nodes()
+        
+        prev_nodes = set().union(*[graph.nodes() for graph in prev_graphs])
+        curr_nodes = set(target_graph.nodes())
+        
+        count = len(curr_nodes - prev_nodes)
+        
+        prob_5 = count / num_nodes_in_target  # Compute probability
+        
+        return count  # No longer using a probability, now a discrete count
     
     
 # Generate the probability files based on number of graphs to look back
@@ -194,5 +232,5 @@ if __name__ == "__main__":
     for dataset in datasets:
         graphs = my_loader.read_edges_directed(dataset)
         probs = my_probs.gen_probs(num_graphs_back=num_graphs_back, graphs=graphs)
-        df = pd.DataFrame(probs, columns=["Prob 1", "Prob 2", "Prob 3", "Prob 4", "Prob 5"])
+        df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
         df.to_csv(f'ReinforcementLearning/output/probabilities/{dataset}_{num_graphs_back}back.csv')
