@@ -11,7 +11,6 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.embedding_methods.betweenness import EmbedBetweenness
-from utils.embedding_methods.incremental_betwenness import EmbedIncrementalBetweenness
 from utils.embedding_methods.closeness import EmbedCloseness
 from utils.embedding_methods.incremental_closeness import EmbedIncrementalCloseness
 from utils.embedding_methods.degree import EmbedDegree
@@ -90,7 +89,7 @@ class Loader():
         return all_data
 
 
-    def load_data(self, dataset, activation, subgraphs=False, include_weights=True):
+    def load_data(self, dataset, activation, type='features', include_weights=True):
         """
         Load a single, specified dataset that exists
         
@@ -102,11 +101,15 @@ class Loader():
             labels (list): The associated labels for each graph
         """
         self.to_cached()
-        if subgraphs == True:
+        if type == 'subgraphs':
             seek_file = dataset + '_' + activation + '_subgraphs.pkl'
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
             dataset_folder = os.path.join(dataset_folder, 'subgraphs')  # Target folder path
-        elif include_weights == True:
+        elif type == 'thresholds':
+            seek_file = dataset + '_' + activation + '_thresholds.pkl'
+            dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+            dataset_folder = os.path.join(dataset_folder, 'thresholds')  # Target folder path
+        elif type == 'features' and include_weights == True:
             seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
         else:
@@ -118,14 +121,18 @@ class Loader():
         
         if seek_file in data_files:
             # Different processing logic
-            if subgraphs == True:
+            if type == 'subgraphs':
                 seek_file_path = os.path.join(dataset_folder, seek_file)
-                graphs = self.from_cached(seek_file_path)  # Load data
+                graphs = self.from_cached(seek_file_path, type)  # Load data
                 return graphs
-            
-            seek_file_path = os.path.join(dataset_folder, seek_file)
-            graphs, labels = self.from_cached(seek_file_path)  # Load data
-            return graphs, labels
+            elif type == 'thresholds':
+                seek_file_path = os.path.join(dataset_folder, seek_file)
+                thresholds = self.from_cached(seek_file_path, type)  # Load data
+                return thresholds
+            elif type == 'features':
+                seek_file_path = os.path.join(dataset_folder, seek_file)
+                graphs, labels = self.from_cached(seek_file_path, type)  # Load data
+                return graphs, labels
         
         else:
             print(f'Dataset {dataset} not found in files, please check available datasets and try again')
@@ -249,11 +256,12 @@ class Loader():
         cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
         # Betweenness and Closeness take too long to process and are deemed not feasible 
-        #activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
-        #activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
-        activations = [EmbedBetweenness]  # All activation functions to use
-        activation_names = ['Betweenness']
-        # Need to do IncrementalBetweenness still
+        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
+        activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
+        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedIncrementalCloseness]  # All activation functions to use
+        activation_names = ['Degree', 'Forman', 'Weight', 'Closeness']
+        # activations = [EmbedBetweenness]  # All activation functions to use
+        # activation_names = ['Betweenness']
         
         missing_cached = []
         for dataset in raw_data:
@@ -286,6 +294,12 @@ class Loader():
                 
                 # Check for subgraphs
                 activation_file = os.path.join(dataset_folder + '/subgraphs', f'{dataset}_{activation_name}_subgraphs.pkl')
+                if not os.path.exists(activation_file):
+                    missing_cached.append(dataset)
+                    break  # Skip to the next dataset if any activation file is missing
+                
+                # Check for thresholds
+                activation_file = os.path.join(dataset_folder + '/thresholds', f'{dataset}_{activation_name}_thresholds.pkl')
                 if not os.path.exists(activation_file):
                     missing_cached.append(dataset)
                     break  # Skip to the next dataset if any activation file is missing
@@ -325,9 +339,9 @@ class Loader():
             
                         # Since Forman Ricci requires directed edges
                         if activation==EmbedForman:
-                            embeddings, subgraphs = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
+                            embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
                         else:
-                            embeddings, subgraphs = my_activation.process_graphs_for_embeddings(graphs)
+                            embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs)
                             
                         end_time = time.time()
                         
@@ -360,10 +374,17 @@ class Loader():
                         print(f'sending subgraphs to {activation_file_path}')
                         with open(activation_file_path, "wb") as f:
                             pickle.dump(subgraphs, f)
+                            
+                        data_dir = self.output_dir + '/' + file + '/thresholds'
+                        os.makedirs(data_dir, exist_ok=True)
+                        activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_thresholds.pkl')
+                        print(f'sending thresholds to {activation_file_path}')
+                        with open(activation_file_path, "wb") as f:
+                            pickle.dump(thresholds, f)
 
 
     # Load from the pkl file
-    def from_cached(self, file_name):
+    def from_cached(self, file_name, type):
         """
         Load the specified file, if it exists, from the pkl file
 
@@ -377,5 +398,9 @@ class Loader():
         with open(file_name, "rb") as f:
             data = pickle.load(f)
 
-        graphs, labels = zip(*data)
-        return graphs, labels
+        if type == 'features':
+            graphs, labels = zip(*data)
+            return graphs, labels
+        
+        else:
+            return data
