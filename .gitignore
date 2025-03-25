@@ -58,3 +58,4 @@ venv.bak/
 
 # Other
 wandb/
+ReinforcementLearning/output/textOut/

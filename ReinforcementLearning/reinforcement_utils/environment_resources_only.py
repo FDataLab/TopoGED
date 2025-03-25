@@ -8,10 +8,10 @@ from sympy import Q
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-class GraphReconstructionEnvAdjMat(gym.Env):
+class GraphReconstructionEnvResources(gym.Env):
     
     def __init__(self, feature_vectors, filtration_thresholds, probabilities, target_graphs, max_steps_per_graph = 1250, expert_trajectories= None):
-        super(GraphReconstructionEnvAdjMat, self).__init__()
+        super(GraphReconstructionEnvResources, self).__init__()
 
         # For guiding construction and comparing to a target
         self.curr_graph = -1  # For tracking which graph we are working on (updated in reset()) (for some reason we need to start with -2)
@@ -46,7 +46,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         self.activated_nodes = set()
 
         # For imitation learning
-        self.use_expert = expert_trajectories is not None
+        self.use_expert = expert_trajectories is not None  # Updated once completed
         self.expert_trajectories = expert_trajectories
         self.current_expert_index = 0
         
@@ -59,7 +59,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
             self.feature_vectors[0][18]   # Second node ID (sometimes unused)
         ))  # A three-tuple of (action, node1, node2)
         self.feature_dim = len(filtration_thresholds) + len(probabilities[0]) + len(feature_vectors[0])  # Should be 36
-        obs_size = self.max_num_nodes * self.max_num_nodes + self.feature_dim
+        obs_size = self.feature_dim
         self.observation_space = spaces.Box(low=0, high=2**62, shape=(obs_size,), dtype=np.float32)  # Observation space: Flattened adjacency matrix + thresholds + filtration vector + resources (Updated on each reset)
 
         # For visualization afterward
@@ -491,7 +491,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         """Return the flattened adjacency matrix concatenated with the feature vector."""
         amt_to_pad = self.max_num_nodes - self.num_nodes
         tmp_graph = np.pad(np.array(self.graph), ((0, amt_to_pad), (0, amt_to_pad)), mode='constant', constant_values=0)  # Since it needs to be a specific size
-        return np.concatenate([tmp_graph.flatten(), self.filtration_thresholds, self.filtration_vector, self.resources])
+        return np.concatenate([self.filtration_thresholds, self.filtration_vector, self.resources])
 
 
     def _update_action_space(self):
@@ -630,6 +630,64 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         
         return adj_matrix_collection
                 
+
+    '''
+        def gen_expert_decisions(self, target_graphs, probs):
+            - Use a previously seen edge
+            - Make an edge between two new nodes
+            - Make an edge between one new and one old node
+            - Make an edge between two old nodes that did not previously have an edge
+            - Remove an edge
+            - Activate old node
+            - Activate new node
+            - Remove node (in reverse activation order)
+            pass  # I honestly don't know how I'd make this right now
+            
+            from probabilities import Probs
+            
+            my_probs_gen = Probs()  # We can probably use this on the subgraphs
+            
+            decision_map = {
+                'edge_oo': 0,
+                'edge_on': 1,
+                'edge_nn': 2,
+                'edge_oon': 3,
+                'edge_remove': 4,  # Not needed
+                'add_old_node': 5,
+                'add_new_node': 6,
+                'remove_node': 7  # Not needed
+            }
+            
+            # Set the node ids to work better with our adjacency matrices
+            
+            
+            decisions = []  # We will append our decisions to here
+            curr_graph = 0
+            
+            # Handle the first graph
+            for subgraph in target_graphs[0]:
+                # All new nodes and new edges
+                # Activate the nodes first:
+                for node in subgraph.nodes():
+                    decisions.append((decision_map['add_new_node'], 0, 0))  # The second two numbers (node1, node2) don't matter
+                
+                for edge in subgraph.edges():
+                    decisions.append((decision_map['edge_nn'], edge[0], edge[1]))
+            
+            # Loop over all graphs
+            for graphs in target_graphs[1:]:
+                curr_graph += 1  # Move to the next graph
+                for subgraph in graphs:
+                    # We want to add nodes, then edges
+                    
+                    # Take the old final graph, make the node ids into a set
+                    #
+                    
+                    # We need to figure out how many of each are needed, we can apply probabilities for this
+                    
+                    
+                    
+            return decisions'''
 
     # Get the states to animate
     def get_all_states(self):

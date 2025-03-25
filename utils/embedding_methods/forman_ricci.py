@@ -80,7 +80,7 @@ class EmbedForman:
                     all_embeddings[j][i + 1] /= 2
                     all_embeddings[j][i + 2] /= 2
         
-        return all_embeddings, all_subgraphs
+        return all_embeddings, all_subgraphs, thresholds
 
 
     # Filtration function for generating embeddings (50-dimensional active data)

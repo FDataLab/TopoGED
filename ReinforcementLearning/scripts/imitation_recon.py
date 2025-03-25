@@ -10,14 +10,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from ReinforcementLearning.reinforcement_utils.environment_adj_noremoval import GraphReconstructionEnvAdjMatNoRemoval
 from ReinforcementLearning.reinforcement_utils.environment_adj import GraphReconstructionEnvAdjMat
 from ReinforcementLearning.reinforcement_utils.environment_adj_p2 import GraphReconstructionEnvAdjMatGrouped
-from ReinforcementLearning.reinforcement_utils.environment_resources_only import GraphReconstructionEnvResources
 
 
 from ReinforcementLearning.reinforcement_utils.visualizer import GraphVisualizer
 from utils.loader import Loader
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--strategy", type=str, required=True, choices=['base', 'grouped', 'no_removal', 'no_removal_grouped', 'no_matrix'])
+parser.add_argument("--strategy", type=str, required=True, choices=['base', 'grouped', 'no_removal', 'no_removal_grouped'])
 args = parser.parse_args()
 
 dataset = 'CollegeMsg'
@@ -32,13 +31,18 @@ target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraph
 
 print('Data Loaded Successfully')
 
-# Split the features (85% train/15% test)ss
-split_idx = int(len(features) * 0.85)
-features_train = features[:split_idx]
-probabilities_train = probabilities[:split_idx]
-target_graphs_train = target_graphs[:split_idx]
-# Since thresholds are the same across all graphs, we ignore
+# Split the features (10% demo/80% train/10% test)
+split_idx_demo = int(len(features) * 0.10)
+split_idx_train = int(len(features) * 0.9)
 
+features_demo = features[:split_idx_demo]
+probabilities_demo = probabilities[:split_idx_demo]
+target_graphs_demo = target_graphs[:split_idx_demo]
+
+features_train = features[split_idx_demo :split_idx_train]
+probabilities_train = probabilities[split_idx_demo : split_idx_train]
+target_graphs_train = target_graphs[split_idx_demo : split_idx_train]
+# Since thresholds are the same across all graphs, we ignore
 
 if args.strategy == 'base':
     train_env = GraphReconstructionEnvAdjMat(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train)
@@ -51,10 +55,6 @@ elif args.strategy == 'grouped':
 elif args.strategy == 'no_removal':
     train_env = GraphReconstructionEnvAdjMatNoRemoval(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train)
     test_env = GraphReconstructionEnvAdjMatNoRemoval(features, thresholds, probabilities, target_graphs)
-    
-elif args.strategy == 'no_matrix':
-    train_env = GraphReconstructionEnvResources(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train)
-    test_env = GraphReconstructionEnvResources(features, thresholds, probabilities, target_graphs)
     
 #train_env.reset()
 num_graphs = len(features)  # The number of graphs we will train on

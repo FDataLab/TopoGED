@@ -39,7 +39,7 @@ class EmbedDegree:
             all_embeddings.append(active_data)  # 20-dimensional embedding
             all_subgraphs.append(subgraphs)  # Subgraphs at each threshold
         
-        return all_embeddings, all_subgraphs
+        return all_embeddings, all_subgraphs, thresholds
 
 
     # Filtration function for generating embeddings (50-dimensional active data)

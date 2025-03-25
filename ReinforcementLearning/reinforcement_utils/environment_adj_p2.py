@@ -8,10 +8,10 @@ from sympy import Q
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-class GraphReconstructionEnvAdjMat(gym.Env):
+class GraphReconstructionEnvAdjMatGrouped(gym.Env):
     
     def __init__(self, feature_vectors, filtration_thresholds, probabilities, target_graphs, max_steps_per_graph = 1250, expert_trajectories= None):
-        super(GraphReconstructionEnvAdjMat, self).__init__()
+        super(GraphReconstructionEnvAdjMatGrouped, self).__init__()
 
         # For guiding construction and comparing to a target
         self.curr_graph = -1  # For tracking which graph we are working on (updated in reset()) (for some reason we need to start with -2)
@@ -54,7 +54,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         self.max_num_nodes = max(row[18] for row in self.feature_vectors)  # Figure out the maximum number of nodes for the observation space
         # The following will be dynamically assigned based on each graph on each reset
         self.action_space = self.action_space = spaces.MultiDiscrete((
-            8,  # Action type (0-7)
+            5,  # Action type (0-4)
             self.feature_vectors[0][18],  # First node ID (sometimes unused)
             self.feature_vectors[0][18]   # Second node ID (sometimes unused)
         ))  # A three-tuple of (action, node1, node2)
@@ -72,138 +72,74 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         Take an action
         
         Available Actions:
-            - Use a previously seen edge
-            - Make an edge between two new nodes
-            - Make an edge between one new and one old node
-            - Make an edge between two old nodes that did not previously have an edge
+            - Grouped:
+                - Use a previously seen edge
+                - Make an edge between two new nodes
+                - Make an edge between one new and one old node
+                - Make an edge between two old nodes that did not previously have an edge
             - Remove an edge
             - Activate old node
             - Activate new node
             - Remove node (in reverse activation order)
         """
-        # If we are using imitation learning
-        if self.use_expert:
-            action = self.expert_trajectories[self.current_expert_index]
-            self.current_expert_index += 1
-            
         action_type, node1, node2 = action  # Unpack our action tuple
-        print(action_type)
+        print(f'Action: {action_type}')
         # Ensure node1 != node2 to avoid self-loops (only checked if we are placing a node)
-        if action_type < 4 and node1 == node2:
+        if action_type == 0 and node1 == node2:
             #print('self loop attempted')
             return self._get_observation(), -2, False, False, {}
 
         reward = -1  # Default penalty for invalid moves
 
-        # Edge type 0: Use a previously seen edge
-        if action_type == 0:  
-            #print('attempting to add a previously seen edge')
-            # We have seen this edge before and it is not already in this graph
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and node1 in self.old_nodes and node2 in self.old_nodes and (tuple(sorted([self.old_node_map[node1], self.old_node_map[node2]]))) in self.edge_bank and self.graph[node1][node2] == 0:
-                if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[2] > 0 and self.edges_to_place > 0:
-                    # Take away from the budgets
-                    self.capacities[node1] -= 1
-                    self.capacities[node2] -= 1
-                    self.resources[2] -= 1
-                    self.edges_to_place -= 1
-                    
-                    self.last_n_actions.append(action_type)  # Add to last successful actions
-
-                    # Add to the graph
-                    self.graph[node1][node2] = 1
-                    self.graph[node2][node1] = 1  # Undirected graph
-                    self.curr_edges.add(tuple(sorted([node1, node2])))
-
-                    reward = 2
-                    #print('add a previously seen edge success')
-
-
-        # Edge type 1: New -> New
-        elif action_type == 1:  
-            #print(f'attempting to add an edge between two new nodes with node {node1} and {node2}')
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and node1 not in self.old_nodes and node2 not in self.old_nodes and self.graph[node1][node2] == 0:
-                if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[3] > 0 and self.edges_to_place > 0:
-                    # Take away from the budgets
-                    self.capacities[node1] -= 1
-                    self.capacities[node2] -= 1
-                    self.resources[3] -= 1
-                    self.edges_to_place -= 1
-                    
-                    self.last_n_actions.append(action_type)  # Add to last successful actions
-
-                    # Add to the graph
-                    self.graph[node1][node2] = 1
-                    self.graph[node2][node1] = 1
-                    self.curr_edges.add(tuple(sorted([node1, node2])))
-                    
-                    reward = 2
-                    #print('add an edge between two new nodes success')
-
-
-        # Edge type 2: Old -> New
-        elif action_type == 2:  
-            #print('attempting to add an edge between one new and one old node')
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and (node1 in self.old_nodes and node2 not in self.old_nodes) and self.graph[node1][node2] == 0:
-                if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[4] > 0 and self.edges_to_place > 0:
-                    # Take away from the budgets
-                    self.capacities[node1] -= 1
-                    self.capacities[node2] -= 1
-                    self.resources[4] -= 1
-                    self.edges_to_place -= 1
-                    
-                    self.last_n_actions.append(action_type)  # Add to last successful actions
-
-                    # Add to the graph
-                    self.graph[node1][node2] = 1
-                    self.graph[node2][node1] = 1
-                    self.curr_edges.add(tuple(sorted([node1, node2])))
-
-                    reward = 2
-                    #print('add an edge between one new and one old node success')
-
-            elif (node1 in self.activated_nodes and node2 in self.activated_nodes) and (node2 in self.old_nodes and node1 not in self.old_nodes) and self.graph[node1][node2] == 0:
-                if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[4] > 0 and self.edges_to_place > 0:
-                    # Take away from the budgets
-                    self.capacities[node1] -= 1
-                    self.capacities[node2] -= 1
-                    self.resources[4] -= 1
-                    self.edges_to_place -= 1
-                    
-                    self.last_n_actions.append(action_type)  # Add to last successful actions
-
-                    # Add to the graph
-                    self.graph[node1][node2] = 1
-                    self.graph[node2][node1] = 1
-                    self.curr_edges.add(tuple(sorted([node1, node2])))
-
-                    reward = 2
-                    #print('add an edge between one new and one old node success')
-
-
-        # Edge type 3: Old -> Old (new edge)
-        elif action_type == 3:  
-            #print('attempting to add an edge between two old nodes that havent had an edge')
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and node1 in self.old_nodes and node2 in self.old_nodes and ((self.old_node_map.get(node1, -1), self.old_node_map.get(node2, -1)) not in self.edge_bank) and self.graph[node1][node2] == 0:
-                if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[5] > 0 and self.edges_to_place > 0:
-                    # Take away from the budgets
-                    self.capacities[node1] -= 1
-                    self.capacities[node2] -= 1
-                    self.resources[5] -= 1
-                    self.edges_to_place -= 1
-                    
-                    self.last_n_actions.append(action_type)  # Add to last successful actions
-
-                    # Add to the graph
-                    self.graph[node1][node2] = 1
-                    self.graph[node2][node1] = 1
-                    self.curr_edges.add(tuple(sorted([node1, node2])))
-
-                    reward = 2
-                    #print('add an edge between two old nodes that havent had an edge success')
+        if action_type == 0:
+            # Check if the nodes are available to use and if we need edges
+            if(node1 in self.activated_nodes and node2 in self.activated_nodes) and (self.capacities[node1] > 0 and self.capacities[node2] > 0) and self.edges_to_place > 0 and self.graph[node1][node2] == 0:
+                placed_edge = False  # A flag for if we place an edge
+                # Figure out the edge type:
                 
+                # Edge oo
+                if self.resources[2] > 0 and node1 in self.old_nodes and node2 in self.old_nodes and (tuple(sorted([self.old_node_map[node1], self.old_node_map[node2]]))) in self.edge_bank:
+                    self.resources[2] -= 1  # Take away from the budgets
+                    placed_edge = True  # Mark that we can place the edge
+                    
+                # Edge nn
+                elif self.resources[3] > 0 and node1 not in self.old_nodes and node2 not in self.old_nodes:
+                    self.resources[3] -= 1  # Take away from the budgets
+                    placed_edge = True  # Mark that we can place the edge
+                
+                # Edge on
+                elif self.resources[4] > 0 and (node1 in self.old_nodes and node2 not in self.old_nodes):
+                    self.resources[4] -= 1  # Take away from the budgets
+                    placed_edge = True  # Mark that we can place the edge
+                elif self.resources[4] > 0 and (node2 in self.old_nodes and node1 not in self.old_nodes):
+                    self.resources[4] -= 1  # Take away from the budgets
+                    placed_edge = True  # Mark that we can place the edge
+                        
+                # Edge oon
+                elif self.resources[5] > 0 and node1 in self.old_nodes and node2 in self.old_nodes and ((self.old_node_map.get(node1, -1), self.old_node_map.get(node2, -1)) not in self.edge_bank) and self.graph[node1][node2] == 0:
+                    self.resources[5] -= 1  # Take away from the budgets
+                    placed_edge = True  # Mark that we can place the edge
+
+
+                # If we were successful
+                if placed_edge:
+                    # Take away from the budgets
+                    self.capacities[node1] -= 1
+                    self.capacities[node2] -= 1
+                    self.edges_to_place -= 1
+                    
+                    self.last_n_actions.append(action_type)  # Add to last successful actions
+
+                    # Add to the graph
+                    self.graph[node1][node2] = 1
+                    self.graph[node2][node1] = 1
+                    self.curr_edges.add(tuple(sorted([node1, node2])))
+
+                    reward = 5
+                    
 
         # Remove an edge
-        elif action_type == 4:
+        elif action_type == 1:
             #print('attempting to remove an edge')
             if self.graph[node1][node2] == 1:
                 self.graph[node1][node2] = 0
@@ -235,7 +171,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
 
 
         # Activate a node we have previously seen
-        elif action_type == 5:
+        elif action_type == 2:
             #print('attempting to activate an old node')
              # Check if node1 is an old node, then map the id of the activated node to it for the edge bank
             if self.nodes_to_place > 0 and self.resources[0] > 0 and node1 in self.old_nodes and (node1 not in self.old_node_map.values()) and self.count_old_nodes + 1 < self.new_nodes_start_idx:  # Make sure we have space and havent already mapped this node
@@ -260,7 +196,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
             
         
         # Activate a brand new node
-        elif action_type == 6:
+        elif action_type == 3:
             #print('attempting to add a brand new node')
             if self.nodes_to_place > 0 and self.resources[1] > 0 and self.new_nodes_start_idx + self.count_new_nodes + 1 < self.num_nodes:
                 #print(f'Attempting to place a node when new nodes start at index {self.new_nodes_start_idx}')
@@ -283,7 +219,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
 
         # Remove the most recently activated node
         # NOTE If using a networkx graph, it can remove any node with ease. However for my design of the adjacency matrix, it can only remove the most recently activated
-        elif action_type == 7:
+        elif action_type == 4:
             #print('attempting to remove node')
             # Check if any nodes have been activated
             if len(self.activation_order) > 0:
@@ -292,12 +228,10 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                 
                 reward = 0  # If done strategically, this is a good move
                 self.last_n_actions.append(action_type)  # Add to last successful actions
-                if (5 in self.last_n_actions or 6 in self.last_n_actions):
-                    reward -= 2
+                if (2 in self.last_n_actions or 3 in self.last_n_actions):
+                    reward -= 5
                 
                 self.activated_nodes.remove(node_to_remove)
-                
-                
 
                 # Check node type to add back to our budget
                 if(node_to_remove < self.new_nodes_start_idx):
@@ -369,10 +303,6 @@ class GraphReconstructionEnvAdjMat(gym.Env):
 
                 obs = self.reset()
 
-                # No rewards given for expert moves
-                if self.use_expert:
-                    reward = 0
-
                 return self._get_observation(), reward, self.done, False, {}
 
         # Add to storage for later animation
@@ -381,10 +311,6 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         
         if(len(self.last_n_actions) > 3):
             self.last_n_actions.pop(0)
-        
-        # No rewards given for expert moves
-        if self.use_expert:
-            reward = 0
         
         if reward >= 0:
             print(f'On graph number {self.curr_graph} at stage number {self.curr_stage} with resources: {self.resources} and {self.nodes_to_place} nodes and {self.edges_to_place} edges to place')
@@ -426,7 +352,6 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         reward = similarity * 25  # Higher similarity yields higher rewards (25 is our scalar since this is important)
 
         return reward
-    
     
 
     def compute_reward_edge_oo(self):
@@ -497,7 +422,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
     def _update_action_space(self):
         """Update the action space when the number of nodes changes."""
         self.action_space = spaces.MultiDiscrete((
-            8,  # Action type (0-7)
+            5,  # Action type (0-4)
             self.num_nodes,  # First node ID (sometimes unused)
             self.num_nodes   # Second node ID (sometimes unused)
         )) 
