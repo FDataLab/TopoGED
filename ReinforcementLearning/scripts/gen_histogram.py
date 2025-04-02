@@ -48,7 +48,7 @@ def plot_histogram(counter, number_mapping, out_path, title):
     plt.savefig(out_path)
     plt.clf()
 
-filename = 'ReinforcementLearning/output/actionHistory/textOut/recon_res_base-434689.out'
+filename = 'ReinforcementLearning/output/actionHistory/textOut/recon_res_noremoval-437668.out'
 number_mapping = {
     0: 'Edge_oo',
     1: 'Edge_nn',
@@ -60,9 +60,25 @@ number_mapping = {
     7: 'Remove Node'
     }  # Define external mapping here
 counter = count_numbers(filename)
-out_path = 'ReinforcementLearning/output/actionHistory/histograms/recon_res_base-434689.png'
-title = 'Base Testing'
+out_path = 'ReinforcementLearning/output/actionHistory/histograms/recon_res_noresources-437668.png'
+title = 'No Resources Testing'
 plot_histogram(counter, number_mapping, out_path, title)
+
+# filename = 'ReinforcementLearning/output/actionHistory/textOut/recon_res_base-434689.out'
+# number_mapping = {
+#     0: 'Edge_oo',
+#     1: 'Edge_nn',
+#     2: 'Edge_on',
+#     3: 'Edge_oon',
+#     4: 'Remove Edge',
+#     5: 'Add Old Node',
+#     6: 'Add New Node',
+#     7: 'Remove Node'
+#     }  # Define external mapping here
+# counter = count_numbers(filename)
+# out_path = 'ReinforcementLearning/output/actionHistory/histograms/recon_res_base-434689.png'
+# title = 'Base Testing'
+# plot_histogram(counter, number_mapping, out_path, title)
 
 '''filename = 'ReinforcementLearning/output/actionHistory/textOut/recon_res_base-434689.out'
 number_mapping = {}  # Define external mapping here
@@ -71,15 +87,15 @@ out_path = 'ReinforcementLearning/output/actionHistory/histograms/recon_res_base
 title = 'No Removal Allowed Testing'
 plot_histogram(counter, number_mapping, out_path, title)'''
 
-filename = 'ReinforcementLearning/output/actionHistory/textOut/recon_res_grouped-434687.out'
-number_mapping = {
-    0: 'Add Edge',
-    1: 'Remove Edge',
-    2: 'Add Old Node',
-    3: 'Add New Node',
-    4: 'Remove Node'
-    }  # Define external mapping here
-counter = count_numbers_modified(filename)
-out_path = 'ReinforcementLearning/output/actionHistory/histograms/recon_res_grouped-434687.png'
-title = 'Grouped Testing'
-plot_histogram(counter, number_mapping, out_path, title)
+# filename = 'ReinforcementLearning/output/actionHistory/textOut/recon_res_grouped-434687.out'
+# number_mapping = {
+#     0: 'Add Edge',
+#     1: 'Remove Edge',
+#     2: 'Add Old Node',
+#     3: 'Add New Node',
+#     4: 'Remove Node'
+#     }  # Define external mapping here
+# counter = count_numbers_modified(filename)
+# out_path = 'ReinforcementLearning/output/actionHistory/histograms/recon_res_grouped-434687.png'
+# title = 'Grouped Testing'
+# plot_histogram(counter, number_mapping, out_path, title)

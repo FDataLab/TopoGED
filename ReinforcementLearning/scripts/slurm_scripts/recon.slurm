@@ -18,7 +18,4 @@ module load anaconda/anaconda-2023.09
 # Activate the environment
 conda activate temporal_env_rl
 
-cd ..
-cd scripts
-
-python3 reconstruction.py --strategy 'base'
+python3 ReinforcementLearning/scripts/reconstruction.py --strategy 'base' --imitation True

@@ -21,4 +21,4 @@ conda activate temporal_env_rl
 cd ..
 cd scripts
 
-python3 reconstruction.py --strategy 'grouped'
+python3 reconstruction.py --strategy 'grouped' --imitation True

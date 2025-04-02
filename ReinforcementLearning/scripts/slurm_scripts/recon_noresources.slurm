@@ -21,4 +21,4 @@ conda activate temporal_env_rl
 cd ..
 cd scripts
 
-python3 reconstruction.py --strategy 'no_matrix'
+python3 reconstruction.py --strategy 'no_matrix' --imitation True

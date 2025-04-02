@@ -516,6 +516,105 @@ class GraphReconstructionEnvAdjMatNoRemoval(gym.Env):
         
         return adj_matrix_collection
                 
+    def gen_expert_decisions(self, target_graphs):
+        # - Make an edge between two new nodes
+        # - Make an edge between one new and one old node
+        # - Make an edge between two old nodes that did not previously have an edge
+        # - Remove an edge
+        # - Activate old node
+        # - Activate new node
+        # - Remove node (in reverse activation order)
+        # I honestly don't know how I'd make this right now
+        
+        decision_map = {
+            'edge_oo': 0,
+            'edge_on': 1,
+            'edge_nn': 2,
+            'edge_oon': 3,
+            'add_old_node': 4,
+            'add_new_node': 5,
+        }
+                
+        
+        decisions = []  # We will append our decisions to here
+        curr_graph = 0
+        
+        # Handle the first graph
+        for subgraph in target_graphs[0]:
+            # All new nodes and new edges
+            # Activate the nodes first:
+            for node in subgraph.nodes():
+                decisions.append((decision_map['add_new_node'], 0, 0))  # The second two numbers (node1, node2) don't matter
+            
+            for edge in subgraph.edges():
+                first, second = tuple(sorted([edge[0], edge[1]]))
+                decisions.append((decision_map['edge_nn'], first, second))
+        
+        # Loop over all graphs
+        for graph_idx in range(1, len(target_graphs)):
+            curr_graph += 1  # Move to the next graph
+            old_graph = target_graphs[graph_idx - 1][-1]
+            old_graph_nodes = set(old_graph.nodes())
+            old_graph_edges = set(old_graph.edges())
+            old_graph_node_map = {}
+            old_node_idx = 0
+            # Expecting error here
+            new_node_idx = len(set(target_graphs[graph_idx][-1].nodes()).intersection(old_graph_nodes))   # Calculate where the new nodes start
+            
+            existing_nodes = set()
+            existing_edges = set()
+            
+            for subgraph in target_graphs[graph_idx]:
+                # We want to add nodes, then edges
+                
+                # Take the old final graph, make the node ids into a set
+                #
+                
+                # We need to figure out how many of each are needed, we can apply probabilities for this
+            
+                for node in subgraph.nodes():
+                    if(node in existing_nodes):
+                        continue
+                    else:
+                        if(node in old_graph_nodes):
+                            decisions.append((decision_map['add_old_node'], 0, 0))
+                            old_graph_node_map[node] = old_node_idx  # assign the mapping
+                            old_node_idx += 1
+                        else:
+                            decisions.append((decision_map['add_new_node'], 0, 0))
+                            old_graph_node_map[node] = new_node_idx  # assign the mapping
+                            new_node_idx += 1
+                        
+                        # Map the node to an id
+                        existing_nodes.add(node)
+                            
+                            
+                for edge in subgraph.edges():
+                    if edge in existing_edges:
+                        continue
+                    else:
+                        node1, node2 = edge  # Unpack the edge
+                        # Gotta figure out what X, X will be
+                        if(edge in old_graph_edges):
+                            first, second = tuple(sorted([old_graph_node_map[node1], old_graph_node_map[node2]]))  # since i have it sorted in impelmentation
+                            decisions.append((decision_map['edge_oo'], first, second))
+                        elif node1 in old_graph_nodes and node2 in old_graph_nodes and edge not in old_graph_edges:
+                            first, second = tuple(sorted([old_graph_node_map[node1], old_graph_node_map[node2]]))  # since i have it sorted in impelmentation
+                            decisions.append((decision_map['edge_oon'], first, second))
+                        elif node1 not in old_graph_nodes and node2 not in old_graph_nodes:
+                            first, second = tuple(sorted([old_graph_node_map[node1], old_graph_node_map[node2]]))  # since i have it sorted in impelmentation
+                            decisions.append((decision_map['edge_nn'], first, second))
+                        else:
+                            first, second = tuple(sorted([old_graph_node_map[node1], old_graph_node_map[node2]]))  # since i have it sorted in impelmentation
+                            decisions.append((decision_map['edge_on'], first, second))
+                        
+                        existing_edges.add(edge)  # Error potentially here
+                
+                
+                # I dont expect this to work perfectly, but it should work alright
+
+        return decisions
+
 
     # Get the states to animate
     def get_all_states(self):
