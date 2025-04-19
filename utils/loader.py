@@ -159,7 +159,19 @@ class Loader():
         labels = labels.squeeze().tolist()
         return labels
     
-
+    
+    def gen_labels(self, graphs):
+        """
+        The labels are wrong, use this
+        """
+        print('Generating labels')
+        labels = [1]
+        for i in range(1, len(graphs)):
+            labels.append(1 if graphs[i].number_of_edges() > graphs[i - 1].number_of_edges() else 0)
+            
+        return labels
+        
+    
     # Load the data from edge list txt file
     def read_edges(self, dataset):
         """
@@ -319,7 +331,7 @@ class Loader():
                     
                 graphs = self.read_edges_directed(file, norm=norm)
                 
-                labels = self.read_labels(file)
+                labels = self.gen_labels(graphs)
                 data = list(zip(graphs, labels))
 
                 data_dir = self.output_dir + '/' + file
@@ -331,7 +343,7 @@ class Loader():
                     
                 # Generate data with embeddings, labels
                 for activation, activation_name in zip(activations, activation_names):
-                    for weight_flag in [False]:  # Need to go back with only weight = True
+                    for weight_flag in [False, True]:  # Need to go back with only weight = True
                         print(f'Generating for {file} with activation {activation_name} with include_weights={weight_flag}')
                         my_activation = activation(num_buckets=10, include_weights=weight_flag)    
             
