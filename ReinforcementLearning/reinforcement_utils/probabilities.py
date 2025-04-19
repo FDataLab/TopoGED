@@ -8,7 +8,7 @@ import pandas as pd
 
 
 class Probs():
-    def gen_probs(self, num_graphs_back: int, graphs: list):
+    def gen_probs(self, num_graphs_back: int, graphs: list, from_start=True):
         """
         Generate the probabilities for each graph snapshot, for a number of snapshots back
         
@@ -36,6 +36,8 @@ class Probs():
             
 
         for i in range(num_graphs_back, len(graphs)):
+            if(from_start):
+                num_graphs_back = i
             curr_graphs = graphs[i - num_graphs_back : i]  # Get groups of size num_graphs_back
             target_graph = graphs[i]
 
@@ -226,11 +228,15 @@ if __name__ == "__main__":
     my_loader = Loader()
     my_probs = Probs()
     num_graphs_back = 1  # Number of graphs to look back
-
+    from_start = True
+    
     datasets = ['CollegeMsg', 'mathoverflow', 'networkadex', 'networkaeternity', 'networkaion', 'networkaragon', 'networkbancor', 'networkcentra', 'networkcindicator', 'networkcoindash', 'networkdgd', 'networkiconomi', 'Reddit_B']
 
     for dataset in datasets:
         graphs = my_loader.read_edges_directed(dataset)
-        probs = my_probs.gen_probs(num_graphs_back=num_graphs_back, graphs=graphs)
+        probs = my_probs.gen_probs(num_graphs_back=num_graphs_back, graphs=graphs, from_start=from_start)
         df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
-        df.to_csv(f'ReinforcementLearning/output/probabilities/{dataset}_{num_graphs_back}back.csv')
+        if from_start:
+            df.to_csv(f'ReinforcementLearning/output/probabilities/all_back/{dataset}_from_start.csv')
+        else:
+            df.to_csv(f'ReinforcementLearning/output/probabilities/{dataset}_{num_graphs_back}back.csv')

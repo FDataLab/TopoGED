@@ -5,9 +5,9 @@ import torch.nn.functional as F
 class ImitationPolicyMLP(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, action_dim)
+        self.fc1 = nn.Linear(state_dim, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, action_dim)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))

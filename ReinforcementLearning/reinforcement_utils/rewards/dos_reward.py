@@ -3,10 +3,10 @@
 import numpy as np
 from numpy import linalg as LA
 
-from dos_utils.rescale_matrix import rescale_matrix
-from dos_utils.moment_comp import moments_cheb_dos
-from dos_utils.moment_filter import filter_jackson
-from dos_utils.plot_cheb import plot_chebhist
+from ReinforcementLearning.reinforcement_utils.rewards.dos_utils.rescale_matrix import rescale_matrix
+from ReinforcementLearning.reinforcement_utils.rewards.dos_utils.moment_comp import moments_cheb_dos
+from ReinforcementLearning.reinforcement_utils.rewards.dos_utils.moment_filter import filter_jackson
+from ReinforcementLearning.reinforcement_utils.rewards.dos_utils.plot_cheb import plot_chebhist
 
 
 def get_dos(L, Nmoment=50, nZ=100, outname="none", npts=20, maxsize=-1, compute_range=False, adj=False):

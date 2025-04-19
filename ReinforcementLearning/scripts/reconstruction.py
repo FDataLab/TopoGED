@@ -80,6 +80,7 @@ if args.imitation == 'True':
 
     state_dim = len(expert_data[0][0])
     action_dim = len(expert_data[0][-1])
+    print(state_dim, action_dim)
 
     policy = ImitationPolicyMLP(state_dim, action_dim)
     optimizer = optim.Adam(policy.parameters(), lr=1e-3)
@@ -120,7 +121,7 @@ if args.imitation == 'True':
 
 #train_env.reset()
 num_graphs = len(features)  # The number of graphs we will train on
-max_steps_per_graph = 20000
+max_steps_per_graph = 5000
 max_steps_overall = max_steps_per_graph * num_graphs 
 max_steps_train = max_steps_per_graph * len(features_train)
 
@@ -140,9 +141,13 @@ else:
     print("No existing model found. Initializing a new one.")
     model = PPO("MlpPolicy", train_env, verbose=1, gamma=0.99, n_steps=4096)  # Try reducing gamma or increasing entropy_coefficient or increasing gae_lambda or increasing n_steps
     
-    # Start imiation if using
-    model.policy.load_state_dict(policy.state_dict())
-
+    with torch.no_grad():
+        model.policy.mlp_extractor.policy_net[0].weight.copy_(policy.fc1.weight)
+        model.policy.mlp_extractor.policy_net[0].bias.copy_(policy.fc1.bias)
+        model.policy.mlp_extractor.policy_net[2].weight.copy_(policy.fc2.weight)
+        model.policy.mlp_extractor.policy_net[2].bias.copy_(policy.fc2.bias)
+        # model.policy.action_net.weight.copy_(policy.fc3.weight)
+        # model.policy.action_net.bias.copy_(policy.fc3.bias)
 
 try:
     # Start training

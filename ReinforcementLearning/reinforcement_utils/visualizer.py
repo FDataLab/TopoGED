@@ -42,3 +42,4 @@ class GraphVisualizer:
         ani = animation.FuncAnimation(self.fig, self.update, frames=len(self.reconstruction_states), repeat=False)
         writer = animation.FFMpegWriter(fps=8)
         ani.save(self.output_path + file_name, writer=writer)
+        

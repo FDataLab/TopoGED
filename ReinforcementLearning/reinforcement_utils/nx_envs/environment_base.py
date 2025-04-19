@@ -1,6 +1,15 @@
+import os
+import sys
+import argparse
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from models.GCNEmbedder import GCNEmbedder
+
 import gymnasium as gym
 import networkx as nx
 import numpy as np
+import torch
+from torch_geometric.data import Data
 from collections import defaultdict
 from gymnasium import spaces
 from stable_baselines3 import PPO
@@ -8,11 +17,11 @@ from sympy import Q
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-class GraphReconstructionEnvAdjMat(gym.Env):
+class GraphReconstructionNxBase(gym.Env):
     
     def __init__(self, feature_vectors, filtration_thresholds, probabilities, target_graphs, max_steps_per_graph = 1250, expert_trajectories=None, embed_graph=False):
-        super(GraphReconstructionEnvAdjMat, self).__init__()
-
+        super(GraphReconstructionNxBase, self).__init__()
+        
         # For guiding construction and comparing to a target
         self.curr_graph = -1  # For tracking which graph we are working on (updated in reset()) (for some reason we need to start with -2)
         self.feature_vectors = feature_vectors  
@@ -22,14 +31,8 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         
         
         # Other variables to guide construction
-        self.new_nodes_start_idx = 0  # Where the new nodes end and the old nodes start
-        self.count_old_nodes = -1  # Used for indexing the activated nodes and checking if a node is activated
-        self.count_new_nodes = -1  # Used for indexing the activated nodes and checking if a node is activated
-        self.activation_order = []  # Used for checking which node to remove on action 7
-        self.num_nodes = 0  # The number of nodes in the complete graph
         self.resources = np.zeros(6)  # A vector storing [num old nodes, num new nodes, num edges oo, num edges nn, num edges on, num edges oon]
         self.filtration_vector = np.zeros(20)  # The filtration vector guiding construction
-        self.capacities = defaultdict(int)  # Stores a budget for each node based on a filtration vector
         self.curr_edges = set()  # A list of tuples of current edges (becomes the edge bank after construction)
         self.curr_stage = 0  # The current stage of graph filtration (1-10)
         self.nodes_to_place = 0  # Current node budget
@@ -42,26 +45,33 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         # Track old nodes carried over from previous graphs
         self.old_node_map = {}  # Maps the current nodes idx in the matrix to the previous idx it had (used for referencing the edge bank)
         self.old_nodes = set()  # For simplicity, it is the keys of self.old_node_map
-        self.edge_bank = set()  # Will store tuples of edges for reference
-        self.activated_nodes = set()
+        self.edge_bank = {
+            # 1: [2, 3, 4, ...],
+            # 2: [1, 3, 4, ...],
+            # ...
+        }
 
         # For imitation learning
         self.use_expert = expert_trajectories is not None  # Updated once completed
         self.expert_trajectories = expert_trajectories
         self.current_expert_index = 0
         
-        self.graph = np.zeros((1, 1), dtype=np.int8)  # An empty binary matrix
-        self.max_num_nodes = max(row[18] for row in self.feature_vectors)  # Figure out the maximum number of nodes for the observation space
+        self.graph = nx.DiGraph()  # An networkx DiGraph  (node features are {Degree: int, currDegree: int, Type: 'Old'/'New'})
+        self.max_num_nodes = max(row[18] for row in self.feature_vectors)  # Figure out the maximum number of nodes for the observation space if we are not embedding
+        
         # The following will be dynamically assigned based on each graph on each reset
         self.action_space = self.action_space = spaces.MultiDiscrete((
             8,  # Action type (0-7)
-            self.feature_vectors[0][18],  # First node ID (sometimes unused)
-            self.feature_vectors[0][18]   # Second node ID (sometimes unused)
+            1,  # Node 1 to interact with (expands as it adds nodes)
+            1   # Node 2 to interact with (expands as it adds nodes)
         ))  # A three-tuple of (action, node1, node2)
         
+        self.in_channels = 3  # The number of features to embed
+        self.embedding_dim = 128
         if embed_graph:
             self.feature_dim = len(filtration_thresholds) + len(probabilities[0]) + len(feature_vectors[0])  # Should be 36
-            obs_size = self.max_num_nodes * self.max_num_nodes + self.feature_dim
+            obs_size = self.embedding_dim + self.feature_dim
+            self.encoder = GCNEmbedder(in_channels=self.in_channels, hidden_dim=256, out_dim=self.embedding_dim)
             
         else:
             self.feature_dim = len(filtration_thresholds) + len(probabilities[0]) + len(feature_vectors[0])  # Should be 36
@@ -72,7 +82,35 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         self.pred_graph_storage = []
         self.target_graph_storage = []
         
+        
+    #######################################################################
+    # Below functions are for embedding the graph with the GCN
+    def graphToData(self):
+        g = nx.convert_node_labels_to_integers(self.graph)  # Reindex nodes from 0 to N-1
 
+        num_nodes = g.number_of_nodes()
+        
+        # Stack real node features from graph attributes
+        features = [g.nodes[n]['feat'] for n in range(num_nodes)]
+        x = torch.tensor(features, dtype=torch.float)
+
+        # Get directed edge_index
+        edges = list(g.edges())
+        edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
+
+        batch = torch.zeros(num_nodes, dtype=torch.long)
+        return Data(x=x, edge_index=edge_index, batch=batch)
+        
+        
+    # Embed the graph for the GCN
+    def embedGraph(self):
+        graph_data = self.graphToData()
+        graph_embedding = self.encoder(graph_data.x, graph_data.edge_index, graph_data.batch)
+        
+        return graph_embedding
+
+
+    # Take an action
     def step(self, action):
         """
         Take an action
@@ -87,6 +125,14 @@ class GraphReconstructionEnvAdjMat(gym.Env):
             - Activate new node
             - Remove node (in reverse activation order)
         """
+        
+        # For ease of customization
+        node_reward = 1
+        old_edge_reward = 100
+        other_edge_reward = 75
+        removal_reward = 0
+        repeat_removal_reward = -10
+        
         # If we are using imitation learning
         if self.use_expert:
             action = self.expert_trajectories[self.current_expert_index]
@@ -105,7 +151,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         if action_type == 0:  
             #print('attempting to add a previously seen edge')
             # We have seen this edge before and it is not already in this graph
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and node1 in self.old_nodes and node2 in self.old_nodes and (tuple(sorted([self.old_node_map[node1], self.old_node_map[node2]]))) in self.edge_bank and self.graph[node1][node2] == 0:
+            if (node1 in self.graph.nodes(data=False) and node2 in self.graph.nodes(data=False)) and node1 in self.old_nodes and node2 in self.old_nodes and (tuple(sorted([self.old_node_map[node1], self.old_node_map[node2]]))) in self.edge_bank and self.graph[node1][node2] == 0:
                 if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[2] > 0 and self.edges_to_place > 0:
                     # Take away from the budgets
                     self.capacities[node1] -= 1
@@ -120,14 +166,14 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                     self.graph[node2][node1] = 1  # Undirected graph
                     self.curr_edges.add(tuple(sorted([node1, node2])))
 
-                    reward = 2
+                    reward = old_edge_reward
                     #print('add a previously seen edge success')
 
 
         # Edge type 1: New -> New
         elif action_type == 1:  
             #print(f'attempting to add an edge between two new nodes with node {node1} and {node2}')
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and node1 not in self.old_nodes and node2 not in self.old_nodes and self.graph[node1][node2] == 0:
+            if (node1 in self.graph.nodes(data=False) and node2 in self.graph.nodes(data=False)) and node1 not in self.old_nodes and node2 not in self.old_nodes and self.graph[node1][node2] == 0:
                 if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[3] > 0 and self.edges_to_place > 0:
                     # Take away from the budgets
                     self.capacities[node1] -= 1
@@ -142,14 +188,14 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                     self.graph[node2][node1] = 1
                     self.curr_edges.add(tuple(sorted([node1, node2])))
                     
-                    reward = 2  # TODO Up these numbers
+                    reward = other_edge_reward  
                     #print('add an edge between two new nodes success')
 
 
         # Edge type 2: Old -> New
         elif action_type == 2:  
             #print('attempting to add an edge between one new and one old node')
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and (node1 in self.old_nodes and node2 not in self.old_nodes) and self.graph[node1][node2] == 0:
+            if (node1 in self.graph.nodes(data=False) and node2 in self.graph.nodes(data=False)) and (node1 in self.old_nodes and node2 not in self.old_nodes) and self.graph[node1][node2] == 0:
                 if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[4] > 0 and self.edges_to_place > 0:
                     # Take away from the budgets
                     self.capacities[node1] -= 1
@@ -164,10 +210,10 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                     self.graph[node2][node1] = 1
                     self.curr_edges.add(tuple(sorted([node1, node2])))
 
-                    reward = 2
+                    reward = other_edge_reward
                     #print('add an edge between one new and one old node success')
 
-            elif (node1 in self.activated_nodes and node2 in self.activated_nodes) and (node2 in self.old_nodes and node1 not in self.old_nodes) and self.graph[node1][node2] == 0:
+            elif (node1 in self.graph.nodes(data=False) and node2 in self.graph.nodes(data=False)) and (node2 in self.old_nodes and node1 not in self.old_nodes) and self.graph[node1][node2] == 0:
                 if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[4] > 0 and self.edges_to_place > 0:
                     # Take away from the budgets
                     self.capacities[node1] -= 1
@@ -182,14 +228,14 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                     self.graph[node2][node1] = 1
                     self.curr_edges.add(tuple(sorted([node1, node2])))
 
-                    reward = 2
+                    reward = other_edge_reward
                     #print('add an edge between one new and one old node success')
 
 
         # Edge type 3: Old -> Old (new edge)
         elif action_type == 3:  
             #print('attempting to add an edge between two old nodes that havent had an edge')
-            if (node1 in self.activated_nodes and node2 in self.activated_nodes) and node1 in self.old_nodes and node2 in self.old_nodes and ((self.old_node_map.get(node1, -1), self.old_node_map.get(node2, -1)) not in self.edge_bank) and self.graph[node1][node2] == 0:
+            if (node1 in self.graph.nodes(data=False) and node2 in self.graph.nodes(data=False)) and node1 in self.old_nodes and node2 in self.old_nodes and ((self.old_node_map.get(node1, -1), self.old_node_map.get(node2, -1)) not in self.edge_bank) and self.graph[node1][node2] == 0:
                 if self.capacities[node1] > 0 and self.capacities[node2] > 0 and self.resources[5] > 0 and self.edges_to_place > 0:
                     # Take away from the budgets
                     self.capacities[node1] -= 1
@@ -204,16 +250,26 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                     self.graph[node2][node1] = 1
                     self.curr_edges.add(tuple(sorted([node1, node2])))
 
-                    reward = 2
+                    reward = other_edge_reward
                     #print('add an edge between two old nodes that havent had an edge success')
                 
 
         # Remove an edge
         elif action_type == 4:
             #print('attempting to remove an edge')
-            if self.graph[node1][node2] == 1:
-                self.graph[node1][node2] = 0
-                self.graph[node2][node1] = 0
+            if(self.graph.has_edge(i, node_to_remove) or self.graph.has_edge(node_to_remove, i)):
+                # Remove the node
+                removal_status = False
+                try:
+                    self.graph.remove_edge(i, node_to_remove)
+                    removal_status = True
+                except:
+                    pass 
+                if not removal_status:
+                    try:
+                        self.graph.remove_edge(node_to_remove, i)
+                    except:
+                        print('Couldn\'t remove specified edge in action node removal')
                 self.curr_edges.remove(tuple(sorted([node1, node2])))
 
                 # Give them back their degree budget
@@ -236,7 +292,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                 # Both old, no previous edge
                 elif node1 < self.new_nodes_start_idx and node2 < self.new_nodes_start_idx:
                     self.resources[5] += 1
-                reward = 0  # Not necessarily good or bad to remove an edge, if done strategically
+                reward = removal_reward  # Not necessarily good or bad to remove an edge, if done strategically
                 #print('remove an edge success')
 
 
@@ -249,15 +305,19 @@ class GraphReconstructionEnvAdjMat(gym.Env):
                 self.nodes_to_place -= 1
                 self.resources[0] -= 1
                 self.capacities[self.count_old_nodes] = self.filtration_thresholds[self.curr_stage - 1]
-                self.activation_order.append(self.count_old_nodes)
-                self.activated_nodes.add(self.count_old_nodes)
+                
+                self.graph.add_node(node1, feat={
+                    'currDegree': 0,
+                    'maxDegree': self.filtration_thresholds[self.curr_stage - 1],
+                    'Type': 1
+                })
                 
                 self.last_n_actions.append(action_type)  # Add to last successful actions
 
-                self.old_node_map[self.count_old_nodes] = node1 
+                self.old_node_map[node1] = node1  # Do I need this
                 #print(f'mapped slot {self.count_old_nodes} to {node1}')
 
-                reward = 1
+                reward = node_reward
                 #print('activate an old node success')
                 
             elif self.nodes_to_place > 0 and self.resources[0] > 0 and self.count_old_nodes + 1 >= self.new_nodes_start_idx:
@@ -268,20 +328,21 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         # Activate a brand new node
         elif action_type == 6:
             #print('attempting to add a brand new node')
-            if self.nodes_to_place > 0 and self.resources[1] > 0 and self.new_nodes_start_idx + self.count_new_nodes + 1 < self.num_nodes:
+            if self.nodes_to_place > 0 and self.resources[1] > 0 and self.new_nodes_start_idx + self.count_new_nodes + 1 < self.num_nodes and node1 not in self.graph.nodes(data=False):
                 #print(f'Attempting to place a node when new nodes start at index {self.new_nodes_start_idx}')
-                self.count_new_nodes += 1
                 self.nodes_to_place -= 1
                 self.resources[1] -= 1
-                node_id = self.new_nodes_start_idx + self.count_new_nodes
-                self.capacities[node_id] = self.filtration_thresholds[self.curr_stage - 1]
-                self.activation_order.append(node_id)
-                self.activated_nodes.add(node_id)
+                self.graph.add_node(node1, feat={
+                    'currDegree': 0,
+                    'maxDegree': self.filtration_thresholds[self.curr_stage - 1],
+                    'Type': 1
+                })
                 
                 self.last_n_actions.append(action_type)  # Add to last successful actions
                 
-                reward = 1
+                reward = node_reward
                 #print('add a brand new node success')
+                
             elif self.nodes_to_place > 0 and self.resources[1] > 0 and self.new_nodes_start_idx + self.count_new_nodes + 1 >= self.num_nodes:
                 print('TRYING TO ACTIVATE TOO MANY NEW NODES')
                 print(f'need {self.nodes_to_place} nodes and resources are {self.resources}')
@@ -292,17 +353,14 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         elif action_type == 7:
             #print('attempting to remove node')
             # Check if any nodes have been activated
-            if len(self.activation_order) > 0:
+            if len(self.graph.number_of_nodes()) > 0:
                 node_type = ''  # For graph cleanup
-                node_to_remove = self.activation_order.pop()  # Get the most recently activated node
+                node_to_remove = node1 
                 
-                reward = 0  # If done strategically, this is a good move
+                reward = removal_reward  # If done strategically, this is a good move
                 self.last_n_actions.append(action_type)  # Add to last successful actions
                 if (5 in self.last_n_actions or 6 in self.last_n_actions):
-                    reward -= 2
-                
-                self.activated_nodes.remove(node_to_remove)
-                
+                    reward += repeat_removal_reward                
                 
 
                 # Check node type to add back to our budget
@@ -321,10 +379,19 @@ class GraphReconstructionEnvAdjMat(gym.Env):
 
                 # Clean up the edges in the graph
                 for i in range(self.num_nodes):
-                    if(self.graph[i][node_to_remove] == 1):
+                    if(self.graph.has_edge(i, node_to_remove) or self.graph.has_edge(node_to_remove, i)):
                         # Remove the node
-                        self.graph[i][node_to_remove] = 0
-                        self.graph[node_to_remove][i] = 0
+                        removal_status = False
+                        try:
+                            self.graph.remove_edge(i, node_to_remove)
+                            removal_status = True
+                        except:
+                            pass 
+                        if not removal_status:
+                            try:
+                                self.graph.remove_edge(node_to_remove, i)
+                            except:
+                                print('Couldn\'t remove specified edge in action node removal')
                         self.curr_edges.remove(tuple(sorted([i, node_to_remove])))
                         self.edges_to_place += 1
 
@@ -362,7 +429,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
             self.nodes_to_place += self.filtration_vector[self.curr_stage * 2 - 2] - self.filtration_vector[self.curr_stage * 2 - 4]  # Calculate then number of nodes needed now
             self.edges_to_place += self.filtration_vector[self.curr_stage * 2 - 1] - self.filtration_vector[self.curr_stage * 2 - 3]  # Calculate then number of edges needed now
             
-            reward += 5  # Encourage the agent to complete subgraphs
+            reward += 500  # Encourage the agent to complete subgraphs
 
             reward += self.compute_reward()  # Make it happen every single time
 
@@ -464,6 +531,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         
         return reward
     
+    
     def kiarash_reward(self):
         pass 
 
@@ -477,7 +545,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
 
 
     def is_graph_complete(self):
-        reward = 10  # Base reward amount for completing a graph
+        reward = 1000  # Base reward amount for completing a graph
 
         # Check if all resources used
         if (self.edges_to_place == 0 and self.nodes_to_place == 0):
@@ -486,7 +554,7 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         # If we have timed out
         elif (self.steps > self.max_steps_per_graph):
             # Remove reward for each missing node or edge
-            reward -= (self.num_nodes - len(self.activation_order))  # First the nodes
+            reward -= (self.num_nodes)  # First the nodes
             reward -= (self.filtration_vector[19] - self.len(self.curr_edges))  # Subtract the necessary edges from the amount of existing edges
 
             return True, reward
@@ -496,17 +564,16 @@ class GraphReconstructionEnvAdjMat(gym.Env):
 
     def _get_observation(self):
         """Return the flattened adjacency matrix concatenated with the feature vector."""
-        amt_to_pad = self.max_num_nodes - self.num_nodes
-        tmp_graph = np.pad(np.array(self.graph), ((0, amt_to_pad), (0, amt_to_pad)), mode='constant', constant_values=0)  # Since it needs to be a specific size
-        return np.concatenate([tmp_graph.flatten(), self.filtration_thresholds, self.filtration_vector, self.resources])
+        embedded_graph = self.embedding_dim()
+        return np.concatenate([embedded_graph, self.filtration_thresholds, self.filtration_vector, self.resources])
 
 
     def _update_action_space(self):
         """Update the action space when the number of nodes changes."""
         self.action_space = spaces.MultiDiscrete((
             8,  # Action type (0-7)
-            self.num_nodes,  # First node ID (sometimes unused)
-            self.num_nodes   # Second node ID (sometimes unused)
+            self.graph.number_of_nodes(),  # First node ID (sometimes unused)
+            self.graph.number_of_nodes()   # Second node ID (sometimes unused)
         )) 
 
 
@@ -535,8 +602,6 @@ class GraphReconstructionEnvAdjMat(gym.Env):
         self.edge_bank = set(self.curr_edges)  # Store the old edges
         self.curr_edges = set()  # Clear the set of edges
         self.capacities = {i: -1 for i in range(self.num_nodes)}  # Stores a budget for each node based on a filtration vector
-        self.activation_order = []  # No nodes are activated anymore
-        self.activated_nodes = set()  # Track the activated nodes (O(1) lookup)
         self.new_nodes_start_idx = self.resources[0]  # This is the end of the old nodes (aka the amount of existing old nodes)
         self.curr_stage = 1  # Start at the first stage on each reset
         self.count_old_nodes = -1  # Used for indexing the activated nodes and checking if a node is activated
