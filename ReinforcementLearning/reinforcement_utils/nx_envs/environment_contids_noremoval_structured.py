@@ -12,10 +12,10 @@ from gymnasium import spaces
 from ReinforcementLearning.reinforcement_utils.rewards.dos_reward import get_dos, cosine_similarity
 from ReinforcementLearning.reinforcement_utils.models.GCNEmbedder import GCNEmbedder
 
-class GraphReconstructionNxContidsNoRemoval(gym.Env):
+class GraphReconstructionNxContidsNoRemovalStructured(gym.Env):
     
     def __init__(self, feature_vectors, filtration_thresholds, probabilities, target_graphs, max_steps_per_graph = 1250, expert_trajectories=None, embed_graph=False, all_graphs=None):
-        super(GraphReconstructionNxContidsNoRemoval, self).__init__()
+        super(GraphReconstructionNxContidsNoRemovalStructured, self).__init__()
         
         # For guiding construction and comparing to a target
         self.curr_graph = -1  # For tracking which graph we are working on (updated in reset()) (for some reason we need to start with -2)
@@ -543,10 +543,39 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
         
         
     def get_action_mask(self):
+        """
+        Structure actions to add old nodes, then new nodes, then old edges, then oon, then on, then nn
+        """
         mask = []
+        flag = ""  # Which action (for node ids)
         
         first_mask = np.zeros(self.num_unique_ids, dtype=np.int8)
-        first_mask[:6] = 1
+        
+        # Need to add old nodes
+        if(self.resources[0] > 0):
+            first_mask[4] = 1
+            flag = "nodes"
+        # Need to add new nodes
+        elif(self.resources[1] > 0):
+            first_mask[5] = 1
+            flag = "nodes"
+        # Need to add oo edges
+        elif(self.resources[2] > 0):
+            first_mask[1] = 1
+            flag = "oo"
+        # Need to add oon edges
+        elif(self.resources[3] > 0):
+            first_mask[2] = 1
+            flag = "oon"
+        # Need to add on edges
+        elif(self.resources[4] > 0):
+            first_mask[3] = 1
+            flag = "on"
+        # Need to add nn edges
+        elif(self.resources[5] > 0):
+            first_mask[4] = 1
+            flag = "nn"
+
         mask.append(first_mask)
         
         if self.total_nodes > 0:
@@ -561,12 +590,24 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
                 submask[0] = 1
                 mask.append(submask)
                 
-        # Don't bother with complete nodes        
+        # Don't bother with complete nodes or nodes that dont fit the flat       
         for node, data in self.graph.nodes(data=True):
             if(data['feat']['currDegree'] == data['feat']['maxDegree']):
                 mask[1][node] = 0
-                mask[2][node] = 0        
-                
+                mask[2][node] = 0
+
+            if(flag == "oo" or flag == "oon"):
+                if data['feat']['Type'] != 0:
+                    mask[1][node] = 0
+                    mask[2][node] = 0
+            # All nodes are valid here
+            elif(flag == "on"):
+                continue 
+            elif(flag == "nn"):
+                if data['feat']['Type'] != 1:
+                    mask[1][node] = 0
+                    mask[2][node] = 0
+
         return mask        
     
 

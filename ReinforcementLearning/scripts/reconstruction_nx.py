@@ -16,6 +16,7 @@ import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from ReinforcementLearning.reinforcement_utils.nx_envs.environment_contids_noremoval import GraphReconstructionNxContidsNoRemoval
+from ReinforcementLearning.reinforcement_utils.nx_envs.environment_contids_noremoval_structured import GraphReconstructionNxContidsNoRemovalStructured
 from ReinforcementLearning.reinforcement_utils.nx_envs.environment_contids_noremoval_grouped import GraphReconstructionNxContidsNoRemovalGrouped
 from ReinforcementLearning.reinforcement_utils.imitation.policy_mlp import ImitationPolicyMLP
 from ReinforcementLearning.reinforcement_utils.models.EpsilonGreedyPPO import EpsilonGreedyPPO
@@ -32,7 +33,7 @@ def mask_fn(env: gym.Env):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--strategy", type=str, required=True, choices=['base', 'grouped', 'no_removal', 'no_removal_grouped', 'no_matrix'])
+parser.add_argument("--strategy", type=str, required=True, choices=['base', 'grouped', 'no_removal', 'no_removal_grouped', 'no_matrix', 'no_removal_structured'])
 parser.add_argument("--imitation", type=str, required=False, default='False')  # If we should use imitation learning
 parser.add_argument("--model", type=str, required=False, default='PPO', choices=['PPO', 'EpsilonGreedyPPO', 'MaskablePPO'])  # If we should use imitation learning
 parser.add_argument("--cloning", type=str, required=False, default='False')
@@ -91,6 +92,17 @@ if args.strategy == 'no_removal':
         train_env = ActionMasker(GraphReconstructionNxContidsNoRemoval(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train, max_steps_per_graph=max_steps_per_graph, embed_graph=True, all_graphs=target_graphs), mask_fn)
         test_env = ActionMasker(GraphReconstructionNxContidsNoRemoval(features, thresholds, probabilities, target_graphs, max_steps_per_graph=max_steps_per_graph,  embed_graph=True), mask_fn)
         
+if args.strategy == 'no_removal_structured':
+    tmp_env = GraphReconstructionNxContidsNoRemovalStructured(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train, max_steps_per_graph=max_steps_per_graph, embed_graph=True)  # If doing imitation learning, this is needed
+    train_env = GraphReconstructionNxContidsNoRemovalStructured(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train, max_steps_per_graph=max_steps_per_graph, embed_graph=True)
+    test_env = GraphReconstructionNxContidsNoRemovalStructured(features, thresholds, probabilities, target_graphs, max_steps_per_graph=max_steps_per_graph,  embed_graph=True)
+    
+    if args.model == 'MaskablePPO':
+        tmp_env = ActionMasker(GraphReconstructionNxContidsNoRemovalStructured(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train, max_steps_per_graph=max_steps_per_graph, embed_graph=True, all_graphs=target_graphs), mask_fn)  # If doing imitation learning, this is needed
+        train_env = ActionMasker(GraphReconstructionNxContidsNoRemovalStructured(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train, max_steps_per_graph=max_steps_per_graph, embed_graph=True, all_graphs=target_graphs), mask_fn)
+        test_env = ActionMasker(GraphReconstructionNxContidsNoRemovalStructured(features, thresholds, probabilities, target_graphs, max_steps_per_graph=max_steps_per_graph,  embed_graph=True), mask_fn)
+        
+
 elif args.strategy == 'no_removal_grouped':
     # TODO make embedding not constant
     tmp_env = GraphReconstructionNxContidsNoRemovalGrouped(feature_vectors=features_train, filtration_thresholds=thresholds, probabilities=probabilities_train, target_graphs=target_graphs_train, max_steps_per_graph=max_steps_per_graph, embed_graph=True)  # If doing imitation learning, this is needed
