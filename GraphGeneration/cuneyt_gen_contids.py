@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 import random
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, average_precision_score
-
+from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
 
 import os
 import sys
@@ -19,20 +19,24 @@ from utils.embedding_methods.degree import EmbedDegree
 from utils.embedding_methods.forman_ricci import EmbedForman
 from utils.embedding_methods.weight import EmbedWeight
 
-def build_accumulating_filtration_sequence_with_edgebank(embedding, p_old_nodes, E_oo, E_nn, E_on, E_oon, edgebank=None, seed=42):
+def build_accumulating_filtration_sequence_with_edgebank(embedding, p_old_nodes, p_new_nodes, E_oo, E_nn, E_on, E_oon, edgebank=None, existing_nodes=None, seed=42):
     random.seed(seed)
     np.random.seed(seed)
+
+    if existing_nodes is None:
+        existing_nodes = []
 
     V_total = int(embedding[-1][0])
     E_total = int(embedding[-1][1])
     W_total = embedding[-1][2] 
 
-    all_node_ids = [f"v{i}" for i in range(V_total)]
+    # Sample old nodes
+    old_nodes = random.sample(existing_nodes, p_old_nodes)
+    # Create new node IDs
+    new_nodes = [f"v{i}" for i in range(len(existing_nodes), len(existing_nodes) + p_new_nodes)]
 
-    # Deterministic assignment first part is old
-    old_nodes = all_node_ids[:p_old_nodes]
-    new_nodes = all_node_ids[p_old_nodes:]
     all_nodes = old_nodes + new_nodes
+    existing_nodes += new_nodes
 
     edges = set()
     edge_type_map = {}  # For calculating AUC scores later 
@@ -118,44 +122,94 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, p_old_nodes,
         "new_nodes": new_nodes
     }
 
-    return filtration_graphs, node_types, edge_type_map
+    return filtration_graphs, node_types, existing_nodes, edge_type_map
 
 
+def modifyGraphIds(graphs):
+    '''
+    For the target graphs, modify their ids to start at 0 for an instance of a node, then increment throughout the graphs
+    
+    Args:
+        graphs (list(nx.Graph)): A list of graphs to modify
+        
+    Returns:
+        graphs (list(nx.Graph)): The modified graphs (operations performed in-place)       
+    '''
+    # This dictionary will store the mapping of original node IDs to new node IDs
+    node_mapping = {}
+    new_id = 0
 
-# This builds an edge bank for one graph
-def build_edgebank(graph):
-    # Relabel nodes to be 0..n-1
-    mapping = {old_label: f"v{new_label}" for new_label, old_label in enumerate(graph.nodes())}
-    G = nx.relabel_nodes(graph, mapping)
+    # Iterate over all graphs in the list of lists (where each graph is a subgraph in the list)
+    for graph_list in graphs:
+        # Each graph_list contains multiple subgraphs, iterate over the subgraphs
+        for graph in graph_list:
+            # Create a new dictionary to store the relabeled nodes for the current subgraph
+            mapping_for_current_graph = {}
+            
+            # Iterate over all nodes in the current graph
+            for node in graph.nodes:
+                # If the node is already in the node_mapping, use the existing ID
+                if node not in node_mapping:
+                    # If not, assign it a new ID
+                    node_mapping[node] = new_id
+                    new_id += 1
+                
+                # Store the relabeled node ID in the current graph mapping
+                mapping_for_current_graph[node] = node_mapping[node]
+            
+            # Relabel the nodes in the graph using the mapping
+            nx.relabel_nodes(graph, mapping_for_current_graph, copy=True)
+    
+    return graphs, len(node_mapping)
 
-    edgebank = {}
-    for u, v in G.edges():
-        u_key = f"v{u}"
-        v_key = f"v{v}"
-        edgebank.setdefault(u_key, []).append(v_key)
-        # Add reverse edge for undirected graphs
-        if not G.is_directed():
-            edgebank.setdefault(v_key, []).append(u_key)
 
-    return edgebank
+def build_edgebanks_from_start(graphs):
+    edgebanks = [{}]  # First graph has an empty edgebank
 
+    curr_edgebank = {}
 
-def compute_edge_auc(true_edges, pred_edges, possible_edges):
-    y_pred = []
-    y_true = []
+    # Loop over all graphs and add their edges
+    for i in range(1, len(graphs)):
+        for u, v in graphs[i - 1].edges():  # We look one graph back to add from
+            u_key = f"v{u}"
+            v_key = f"v{v}"
+            curr_edgebank.setdefault(u_key, []).append(v_key)  # Directed graphs
 
-    true_edges = set(true_edges)
-    pred_edges = set(pred_edges)
+        edgebanks.append(curr_edgebank)
 
-    for edge in possible_edges:
-        y_true.append(1 if edge in true_edges else 0)
-        y_pred.append(1 if edge in pred_edges else 0)
+    return edgebanks
+    
 
-    # AUC is undefined if all values are same (a precaution)
-    if len(set(y_true)) < 2:
-        return float('inf')
+# Maps node ids by computing a degree cost
+def generate_node_mapping_by_id(pred_graph, true_graph, old_nodes_true, old_nodes_pred, curr_mapping):
+    from scipy.optimize import linear_sum_assignment
 
-    return roc_auc_score(y_true, y_pred), average_precision_score(y_true, y_pred)
+    unmapped_pred = [n for n in old_nodes_pred if n not in curr_mapping]
+
+    # Filter out already mapped true nodes
+    already_mapped_true = set(curr_mapping.values())
+    unmapped_true = [n for n in old_nodes_true if n not in already_mapped_true]
+
+    if not unmapped_pred or not unmapped_true:
+        return curr_mapping
+
+    # Cost matrix based on degree difference
+    cost_matrix = np.zeros((len(unmapped_pred), len(unmapped_true)))
+
+    for i, pred_id in enumerate(unmapped_pred):
+        deg_pred = pred_graph.degree[pred_id]
+        for j, true_id in enumerate(unmapped_true):
+            deg_true = true_graph.degree[true_id]
+            cost_matrix[i, j] = abs(deg_pred - deg_true)
+
+    # Apply Hungarian algorithm
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+    # Add new mappings
+    for i, j in zip(row_ind, col_ind):
+        curr_mapping[unmapped_pred[i]] = unmapped_true[j]
+
+    return curr_mapping
 
 
 # For this, I will assume no self loops
@@ -183,8 +237,27 @@ def create_possible_edges(node_ids, directed=True):
     return edges
 
 
+def compute_edge_auc(true_edges, pred_edges, possible_edges):
+    y_pred = []
+    y_true = []
+
+    true_edges = set(true_edges)
+    pred_edges = set(pred_edges)
+
+    for edge in possible_edges:
+        y_true.append(1 if edge in true_edges else 0)
+        y_pred.append(1 if edge in pred_edges else 0)
+
+    # AUC is undefined if all values are same (a precaution)
+    if len(set(y_true)) < 2:
+        return float('inf')
+
+    return roc_auc_score(y_true, y_pred), average_precision_score(y_true, y_pred)
+
+ 
 def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node_types, edgebank: dict, edge_type_map, graph_num):
     results = []
+    mapping = {}  # For mapping nodes
 
     old_nodes_pred = node_types["old_nodes"]
     new_nodes_pred = node_types["new_nodes"]
@@ -198,7 +271,7 @@ def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node
         #for i, (pred_graph, true_graph) in enumerate(zip(filtration_graphs, true_graphs)):
             # Since just using final graph for now
             pred_graph = filtration_graphs[-1]
-            true_graph = true_graphs[-1]
+            true_graph = true_graphs[-1] 
 
             # Get the nodes and edges in use
             old_nodes_true = set.intersection(true_graph.nodes(), prev_old_nodes_true)
@@ -211,46 +284,61 @@ def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node
             nn_true_edges = [edge for edge in true_graph.edges(data=False) if (edge[0] in new_nodes_true and edge[1] in new_nodes_true)]
 
 
+            # Make a node mapping to compute auc scores
+            mapping = generate_node_mapping_by_id(pred_graph, true_graph, old_nodes_true, old_nodes_pred, mapping)
+            tmp_pred_graph = nx.relabel_nodes(pred_graph, mapping, copy=True)
+
+
             # Compute scores for edge type oo
-            oo_pred_edges = [(u, v) for (u, v) in edge_type_map["o-o-bank"]
-                if u in old_nodes_pred and v in old_nodes_pred and (u, v) in pred_graph.edges()
+            oo_pred_edges = [(mapping[u], mapping[v]) for (u, v) in edge_type_map["o-o-bank"]
+                if u in mapping and v in mapping and (mapping[u], mapping[v]) in tmp_pred_graph.edges()
             ]  # Need to map node ids for the alignment
             oo_possible_edges = create_possible_edges(old_nodes_true, directed=True)
             oo_aucroc, oo_aucpr = compute_edge_auc(oo_true_edges, oo_pred_edges, oo_possible_edges)
             
             # Compute scores for edge type oon
-            oon_pred_edges = [(u, v) for (u, v) in edge_type_map["o-o-nobank"]
-                if u in old_nodes_pred and v in old_nodes_pred and (u, v) in pred_graph.edges()
+            oon_pred_edges = [(mapping[u], mapping[v]) for (u, v) in edge_type_map["o-o-nobank"]
+                if u in mapping and v in mapping and (mapping[u], mapping[v]) in tmp_pred_graph.edges()
             ]  # Need to map node ids for the alignment
             oon_possible_edges = create_possible_edges(old_nodes_true, directed=True)
             oon_aucroc, oon_aucpr = compute_edge_auc(oon_true_edges, oon_pred_edges, oon_possible_edges)
             
             # Compute scores for edge type on
-            on_pred_edges = [(u, v) for (u, v) in edge_type_map["o-n"]
-                if (((u, v)) in pred_graph.edges()) and
-                    ((u in old_nodes_pred and v in new_nodes_pred) or (v in old_nodes_pred and u in new_nodes_pred))
+            on_pred_edges = [(mapping[u], mapping[v]) for (u, v) in edge_type_map["o-n"]
+                if (u in mapping and v in mapping and (mapping[u], mapping[v]) in tmp_pred_graph.edges()) and
+                    (u in old_nodes_pred and v in new_nodes_pred) or (v in old_nodes_pred and u in new_nodes_pred)
             ]  # Need to map node ids for the alignment
             on_possible_edges = create_possible_edges(all_nodes_true, directed=True)
             on_aucroc, on_aucpr = compute_edge_auc(on_true_edges, on_pred_edges, on_possible_edges)
 
             # Compute scores for edge type nn
-            nn_pred_edges = [(u, v) for (u, v) in edge_type_map["n-n"]
-                if u in new_nodes_pred and v in new_nodes_pred and (u, v) in pred_graph.edges()
+            nn_pred_edges = [(mapping[u], mapping[v]) for (u, v) in edge_type_map["n-n"]
+                if u in mapping and v in mapping and (mapping[u], mapping[v]) in tmp_pred_graph.edges()
             ]  # Need to map node ids for the alignment
             nn_possible_edges = create_possible_edges(new_nodes_true, directed=True)  
             nn_aucroc, nn_aucpr = compute_edge_auc(nn_true_edges, nn_pred_edges, nn_possible_edges)
             
             # Compute overall aucroc
             overall_true_edges = true_graph.edges()
-            overall_pred_edges = pred_graph.edges()  # Need to map node ids for the alignment
+            overall_pred_edges = tmp_pred_graph.edges()  # Need to map node ids for the alignment
             overall_possible_edges = create_possible_edges(new_nodes_pred, directed=True)  
             overall_aucroc, overall_aucpr = compute_edge_auc(overall_true_edges, overall_pred_edges, overall_possible_edges)
+           
+
+            # Compute score for correct node ids
+            predicted_node_ids = pred_graph.nodes(data=False)
+            true_node_ids = true_graph.nodes(data=False)
+
+            correct_ids = list(predicted_node_ids & true_node_ids)
+            num_correct_ids = len(correct_ids)
+
+            id_precision = len(correct_ids) / len(predicted_node_ids) if predicted_node_ids else 0
+            id_recall = len(correct_ids) / len(true_node_ids) if true_node_ids else 0
             
 
             curr_results = {
                 "graph_num": graph_num, 
-                #"filtration_num": i,
-                "filtration_num": 10,
+                "filtration_num": i,
 
                 "edge_oo_aucroc": oo_aucroc,
                 "edge_oon_aucroc": oon_aucroc,
@@ -273,6 +361,10 @@ def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node
                 "num_nn_edges_true": len(nn_true_edges),
                 "num_edges_pred": len(overall_pred_edges),
                 "num_edges_true": len(overall_true_edges),
+
+                "node_id_precision": id_precision,
+                "node_id_recall": id_recall,
+                "num_correct_ids": num_correct_ids
             }
 
             results.append(curr_results)
@@ -283,16 +375,13 @@ def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node
         #for i, (pred_graph, true_graph) in enumerate(zip(filtration_graphs, true_graphs)):
             # Since just using final graph for now
             pred_graph = filtration_graphs[-1]
-            true_graph = true_graphs[-1]
-
-            # TODO Check nodes
-            curr_nodes_true = [node for node in true_graph.nodes(data=False)]
+            true_graph = true_graphs[-1] 
 
             # Compute scores for edge type nn
             nn_true_edges = [edge for edge in true_graph.edges(data=False) if (edge[0] in new_nodes_true and edge[1] in new_nodes_true)]
 
             nn_pred_edges = [edge for edge in edge_type_map["n-n"] if edge in pred_graph]  # It is just all edges right now
-            nn_possible_edges = create_possible_edges(curr_nodes_true, directed=True)  
+            nn_possible_edges = create_possible_edges(new_nodes_true, directed=True)  
             nn_aucroc, nn_aucpr = compute_edge_auc(nn_true_edges, nn_pred_edges, nn_possible_edges)
             
             # Compute overall aucroc
@@ -300,6 +389,17 @@ def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node
             overall_pred_edges = pred_graph.edges()  # Need to map node ids for the alignment
             overall_possible_edges = create_possible_edges(new_nodes_pred, directed=True)  
             overall_aucroc, overall_aucpr = compute_edge_auc(overall_true_edges, overall_pred_edges, overall_possible_edges)
+           
+
+            # Compute score for correct node ids
+            predicted_node_ids = pred_graph.nodes(data=False)
+            true_node_ids = true_graph.nodes(data=False)
+
+            correct_ids = list(predicted_node_ids & true_node_ids)
+            num_correct_ids = len(correct_ids)
+
+            id_precision = len(correct_ids) / len(predicted_node_ids) if predicted_node_ids else 0
+            id_recall = len(correct_ids) / len(true_node_ids) if true_node_ids else 0
             
 
             curr_results = {
@@ -326,6 +426,10 @@ def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node
                 "num_on_edges_true": float('inf'),  # Cant compute
                 "num_nn_edges_pred": pred_graph.number_of_edges(),  # All edges are nn
                 "num_nn_edges_true": true_graph.number_of_edges(),  # All edges are nn
+                
+                "node_id_precision": id_precision,
+                "node_id_recall": id_recall,
+                "num_correct_ids": num_correct_ids
             }
 
             results.append(curr_results)
@@ -335,15 +439,17 @@ def compute_auc_scores(filtration_graphs, true_graphs, prev_old_nodes_true, node
 
 
 # Construct csv
-auc_file_path = f'GraphGeneration/output/aucResults/CollegeMsg_cuneyt_gen.csv'
+auc_file_path = f'GraphGeneration/output/aucResults/CollegeMsg_cuneyt_gen_contids.csv'
 
 columns = ["graph_num", "filtration_num", 
            "edge_oo_aucroc", "edge_oon_aucroc", "edge_on_aucroc", "edge_nn_aucroc", 
            "edge_oo_aucpr", "edge_oon_aucpr", "edge_on_aucpr", "edge_nn_aucpr", "edge_overall_aucroc", "edge_overall_aucpr", 
-           "num_oo_edges_pred", "num_oo_edges_true", "num_oon_edges_pred", "num_oon_edges_true", "num_on_edges_pred", "num_on_edges_true", "num_nn_edges_pred", "num_nn_edges_true"]
+           "num_oo_edges_pred", "num_oo_edges_true", "num_oon_edges_pred", "num_oon_edges_true", "num_on_edges_pred", "num_on_edges_true", "num_nn_edges_pred", "num_nn_edges_true", 
+           "node_id_precision", "node_id_recall", "num_correct_ids"]
 
 # Write the header and empty content
 pd.DataFrame(columns=columns).to_csv(auc_file_path, index=False)
+
 
 dataset = 'CollegeMsg'
 my_loader = Loader()
@@ -360,10 +466,10 @@ target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraph
 # Initialize list for predicted graphs
 pred_graphs = []
 
-# For AUC calculations and stuff
-metric_results = []
-oo_edges = []
-oon_edges = []
+# Build the edgebanks for construction
+tmp_target_graphs, _ = modifyGraphIds(target_graphs)
+all_edgebanks = build_edgebanks_from_start(tmp_target_graphs)
+existing_nodes = []  # The current nodes we have seen for continuous id implementation
 
 # Iterate through each graph in the dataset
 for i in range(len(probabilities)):
@@ -375,19 +481,15 @@ for i in range(len(probabilities)):
     p2 = probabilities[i][4]
     p3 = probabilities[i][5]
 
-    # Build the edgebank from the graph one step back (if i == 0, skip or use empty edgebank)
-    if i == 0:
-        edgebank = {}  # or use some empty placeholder
-    else:
-        edgebank = build_edgebank(target_graphs[i - 1][-1])
+    edgebank = all_edgebanks[i]
 
     # Get the embedding and reshape it
     embedding = features[i]
     embedding = list(zip(embedding[0::3], embedding[1::3], embedding[2::3]))
 
     # Build the filtration sequence using the current parameters
-    filtration_sequence, node_types, edge_type_map = build_accumulating_filtration_sequence_with_edgebank(
-        embedding, p_old_nodes=count_old, E_oo=p0, E_nn=p1, E_on=p2, E_oon=p3, edgebank=edgebank
+    filtration_sequence, node_types, existing_nodes, edge_type_map = build_accumulating_filtration_sequence_with_edgebank(
+        embedding, p_old_nodes=count_old, E_oo=p0, E_nn=p1, E_on=p2, E_oon=p3, edgebank=edgebank, existing_nodes=existing_nodes
     )
 
     results  = compute_auc_scores(filtration_sequence, target_graphs[i], target_graphs[i - 1][-1] if i > 0 else nx.Graph(), node_types, edgebank, edge_type_map, graph_num=i)
@@ -398,82 +500,10 @@ for i in range(len(probabilities)):
     pred_graphs.append(filtration_sequence)
 
 
-# dataset = 'CollegeMsg'
-# my_loader = Loader()
-# probabilities_df = pd.read_csv(f'ReinforcementLearning/output/probabilities/{dataset}_1back.csv').iloc[:, 1:]  # Need to make a loader for this
-
-# # Load the features and their subgraphs
-# features, _ = my_loader.load_data(dataset, activation='Degree', type='features', include_weights=True)
-# thresholds = my_loader.load_data(dataset, activation='Degree', type='thresholds', include_weights=True) 
-# probabilities = probabilities_df.values.tolist()
-# target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraphs', include_weights=False)
-
-# count_old = probabilities[-1][0]
-# count_new = probabilities[-1][1]
-# p0 = probabilities[-1][2]
-# p1 = probabilities[-1][3]
-# p2 = probabilities[-1][4]
-# p3 = probabilities[-1][5]
-
-# pred_graphs = []
-
-
-# edgebank = build_edgebank(target_graphs[-2][-1])
-
-# embedding = features[-1]
-# embedding = list(zip(embedding[0::3], embedding[1::3], embedding[2::3]))
-# # run with edgebank
-# filtration_sequence, is_old = build_accumulating_filtration_sequence_with_edgebank(
-#     embedding, p_old_nodes=count_old, p0=p0, p1=p1, p2=p2, p3=p3, edgebank=edgebank
-# )  # First filtration vector
-
-# # Visualize each step
-# fig, axes = plt.subplots(2, 5, figsize=(20, 8))
-# axes = axes.flatten()
-
-# for i, G in enumerate(filtration_sequence):
-#     ax = axes[i]
-#     pos = nx.spring_layout(G, seed=42)
-
-#     old_nodes_vis = [f"v{j}" for j in range(len(is_old)) if is_old[j] == 1 and f"v{j}" in G.nodes]
-#     new_nodes_vis = [f"v{j}" for j in range(len(is_old)) if is_old[j] == 0 and f"v{j}" in G.nodes]
-
-#     nx.draw_networkx_nodes(G, pos, nodelist=old_nodes_vis, node_color='lightblue', ax=ax, label="Old")
-#     nx.draw_networkx_nodes(G, pos, nodelist=new_nodes_vis, node_color='lightgreen', ax=ax, label="New")
-#     nx.draw_networkx_edges(G, pos, ax=ax, arrows=True)
-#     nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)
-
-#     ax.set_title(f"Filtration {i+1}\nNodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
-#     ax.axis('off')
-
-# plt.tight_layout()
-# plt.show()
-
-# My work for analysis
-
-
-import matplotlib.pyplot as plt
-import networkx as nx
-import numpy as np
-from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
-import os
-import sys
-import pandas as pd
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
-from utils.loader import Loader
-
-# Import all embedding methods
-from utils.embedding_methods.betweenness import EmbedBetweenness
-from utils.embedding_methods.closeness import EmbedCloseness
-from utils.embedding_methods.degree import EmbedDegree
-from utils.embedding_methods.forman_ricci import EmbedForman
-from utils.embedding_methods.weight import EmbedWeight
-
+# Analysis
 
 
 def create_animation(predicted_graphs, target_graphs, output_file="graph_animation.gif"):
-    # Check that both lists have the same number of graphs
     # Check that both lists have the same number of graphs
     if len(predicted_graphs) != len(target_graphs):
         raise ValueError("Both lists of graphs must have the same length.")
@@ -577,7 +607,7 @@ aucpr = average_precision_score(labels, predictions)
 print(f'G/S AUCROC: {aucroc}')
 print(f'G/S AUCPR: {aucpr}')
 
-csv_file_path = f'ReinforcementLearning/output/topERComparisons/CollegeMsg_cuneyt_gen.csv'
+csv_file_path = f'GraphGeneration/output/topERComparisons/CollegeMsg_cuneyt_gen_contids.csv'
 
 columns = ['graph_num', 'l2_norm', 'cosine_similarity']
 for i in range(10):
@@ -636,7 +666,7 @@ for idx, (embedding, true_embedding) in enumerate(zip(all_embeddings, true_embed
     pd.DataFrame([result]).to_csv(csv_file_path, mode='a', header=False, index=False)
     
     
-animation_path = f'ReinforcementLearning/output/animations/initial_anim_cuneyt_gen.mp4'
+animation_path = f'GraphGeneration/output/animations/initial_anim_cuneyt_gen_contids.mp4'
 # print('Predicted')
 # print(loaded_predicted)
 # print('Target')
@@ -651,3 +681,5 @@ target_flat = list(chain(*target))
 
 # Call the create_animation function with the flattened lists
 create_animation(predicted_flat, target_flat, output_file=animation_path)
+
+
