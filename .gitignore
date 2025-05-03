@@ -59,3 +59,9 @@ venv.bak/
 # Other
 wandb/
 ReinforcementLearning/output/textOut/
+
+# Ignore large output files
+ReinforcementLearning/output/**/*.out
+ReinforcementLearning/output/**/*.gif
+ReinforcementLearning/output/**/*.mp4
+GraphGeneration/output/animations/*.mp4

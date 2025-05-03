@@ -14,15 +14,16 @@ from torch_geometric.data import Data
 from gymnasium import spaces
 from collections import defaultdict
 from node2vec import Node2Vec
+from gensim.models import Word2Vec
 import random
 from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, average_precision_score
 from ReinforcementLearning.reinforcement_utils.rewards.dos_reward import get_dos, cosine_similarity
 from ReinforcementLearning.reinforcement_utils.models.GCNEmbedder import GCNEmbedder
 
-class GraphReconstructionNxContidsNoRemoval(gym.Env):
+class GraphReconstructionNxNode2Vec(gym.Env):
 
     def __init__(self, feature_vectors, filtration_thresholds, probabilities, target_graphs, max_steps_per_graph = 1250, expert_trajectories=None, embed_graph=False, all_graphs=None):
-        super(GraphReconstructionNxContidsNoRemoval, self).__init__()
+        super(GraphReconstructionNxNode2Vec, self).__init__()
         
         # For guiding construction and comparing to a target
         self.curr_graph = -1  # For tracking which graph we are working on (updated in reset()) (for some reason we need to start with -2)
@@ -63,12 +64,6 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
         self.graph = nx.DiGraph()  # An networkx DiGraph  (node features are {Degree: int, currDegree: int, Type: 'Old'/'New'})
         self.max_num_nodes = max(row[18] for row in self.feature_vectors)  # Figure out the maximum number of nodes for the observation space if we are not embedding
         
-        # The following will be dynamically assigned based on each graph on each reset
-        self.action_space = spaces.MultiDiscrete((
-            self.num_unique_ids,  # Action type (0-5)
-            self.num_unique_ids,  # First node ID (sometimes unused)
-            self.num_unique_ids   # Second node ID (sometimes unused)
-        ))
         
         self.in_channels = 4  # The number of features to embed
         self.embedding_dim = 128
@@ -89,11 +84,18 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
         self.target_graph_storage = []
 
         # For the Node2Vec requirements
-        self.max_available_embeddings = 2500
+        self.max_available_embeddings = 15000
         self.node2vec_dim = 64
         self.successful_edges = 0
-        self.node2vec_mapping = {defaultdict(list)}  # Takes a node2vec embedding id and maps it to available nodes
+        self.node2vec_mapping = defaultdict(list)  # Takes a node2vec embedding id and maps it to available nodes
         self.node2vec_id_mapping = []  # Stores (embedding, key) pairs (could also just hash with a tuple in the above)
+        
+        # The following will be dynamically assigned based on each graph on each reset
+        self.action_space = spaces.MultiDiscrete((
+            self.max_available_embeddings,  # Action type (0-5)
+            self.max_available_embeddings,  # First node ID (sometimes unused)
+            self.max_available_embeddings   # Second node ID (sometimes unused)
+        ))
         
         
     # Transform the graph into torch_geometric Data for embedding with GCN
@@ -305,18 +307,14 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
                 
                 self.last_n_actions.append(action_type)  # Add to last successful actions
                 
-                self.node2vec_mapping[tuple(np.zeros(self.node2vec_dim))].append(node_id)  # Add as a new option
+                self.node2vec_mapping[tuple(np.zeros(self.node2vec_dim))].append(node1)  # Add as a new option
+                self.generate_node_embeddings(self.graph)
                 self._update_action_space()  # Update the action space based on current graph size
+                
                 
                 reward = old_node_reward + self.compute_reward_single_node(node1)
                 print(f'activate an old node success with node_id {node1}')
                 
-            # TODO what?
-            '''    
-            elif self.nodes_to_place > 0 and self.resources[0] > 0 and node1 < self.old_nodes_end:
-                print('TRYING TO ACTIVATE TOO MANY OLD NODES')
-                print(f'need {self.nodes_to_place} nodes and resources are {self.resources}')'''
-            
         
         # Activate a brand new node
         elif action_type == 5:
@@ -337,7 +335,9 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
                 self.last_n_actions.append(action_type)  # Add to last successful actions
                 
                 self.node2vec_mapping[tuple(np.zeros(self.node2vec_dim))].append(node_id)  # Add as a new option
+                self.generate_node_embeddings(self.graph)
                 self._update_action_space()  # Update the action space based on current graph size
+                
                 
                 reward = new_node_reward + self.compute_reward_single_node(node_id)
                 print('add a brand new node success')
@@ -567,7 +567,9 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
 
         node2vec = Node2Vec(tmp_graph, dimensions=self.node2vec_dim, walk_length=walk_length,
                             num_walks=num_walks, workers=workers, p=p, q=q, quiet=True)
-        model = node2vec.fit(window=5, min_count=1)
+        walks = node2vec.walks
+
+        model = Word2Vec(sentences=walks,window=5,min_count=1,sg=1, workers=workers, vector_size=self.node2vec_dim  )
 
         self.node2vec_mapping = defaultdict(list)
 
@@ -601,6 +603,9 @@ class GraphReconstructionNxContidsNoRemoval(gym.Env):
 
         except:
             print('Missing the list to choose nodes from')
+            # print(len(self.node2vec_mapping.keys()))
+            # print(embedding_idx_1)
+            # print(embedding_idx_2, '\n')
 
         return node_1, node_2
         

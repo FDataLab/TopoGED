@@ -14,7 +14,7 @@ from ReinforcementLearning.reinforcement_utils.models.GCNEmbedder import GCNEmbe
 
 class GraphReconstructionNxContidsNoRemovalStructured(gym.Env):
     
-    def __init__(self, feature_vectors, filtration_thresholds, probabilities, target_graphs, max_steps_per_graph = 1250, expert_trajectories=None, embed_graph=False, all_graphs=None):
+    def __init__(self, feature_vectors, filtration_thresholds, probabilities, target_graphs, max_steps_per_graph = 2500, expert_trajectories=None, embed_graph=False, all_graphs=None):
         super(GraphReconstructionNxContidsNoRemovalStructured, self).__init__()
         
         # For guiding construction and comparing to a target
@@ -137,7 +137,6 @@ class GraphReconstructionNxContidsNoRemovalStructured(gym.Env):
             - Activate old node
             - Activate new node
         """
-        
         # For ease of customization
         #node_reward = 5  # Encourage node creation, but it's not as important as edges
         old_edge_reward = 75  # Lower reward for old edges (since they're more frequent)
@@ -370,7 +369,6 @@ class GraphReconstructionNxContidsNoRemovalStructured(gym.Env):
         if reward >= 0:
             print(f'On graph number {self.curr_graph} at stage number {self.curr_stage} with resources: {self.resources} and {self.nodes_to_place} nodes and {self.edges_to_place} edges to place')
         
-        
         return self._get_observation(), reward, self.done, False, {"action_mask": self.get_action_mask()}
     
 
@@ -551,29 +549,29 @@ class GraphReconstructionNxContidsNoRemovalStructured(gym.Env):
         
         first_mask = np.zeros(self.num_unique_ids, dtype=np.int8)
         
-        # Need to add old nodes
-        if(self.resources[0] > 0):
-            first_mask[4] = 1
-            flag = "nodes"
-        # Need to add new nodes
-        elif(self.resources[1] > 0):
-            first_mask[5] = 1
-            flag = "nodes"
+        
+        if(self.nodes_to_place > 0):
+            if(self.resources[0] > 0):
+                first_mask[4] = 1
+                flag = "nodes"
+            if(self.resources[1] > 0):
+                first_mask[5] = 1
+                flag = "nodes"
         # Need to add oo edges
-        elif(self.resources[2] > 0):
-            first_mask[1] = 1
+        elif(self.resources[2] > 0 and self.edges_to_place > 0):
+            first_mask[0] = 1
             flag = "oo"
         # Need to add oon edges
-        elif(self.resources[3] > 0):
-            first_mask[2] = 1
+        elif(self.resources[5] > 0 and self.edges_to_place > 0):
+            first_mask[3] = 1
             flag = "oon"
         # Need to add on edges
-        elif(self.resources[4] > 0):
-            first_mask[3] = 1
+        elif(self.resources[4] > 0 and self.edges_to_place > 0):
+            first_mask[2] = 1
             flag = "on"
         # Need to add nn edges
-        elif(self.resources[5] > 0):
-            first_mask[4] = 1
+        elif(self.resources[3] > 0 and self.edges_to_place > 0):
+            first_mask[1] = 1
             flag = "nn"
 
         mask.append(first_mask)
@@ -582,7 +580,6 @@ class GraphReconstructionNxContidsNoRemovalStructured(gym.Env):
             # Fill node idxs
             for _ in range(2):
                 submask = np.zeros(self.num_unique_ids, dtype=np.int8)
-                submask[:self.total_nodes] = 1
                 mask.append(submask)
         else:
             for _ in range(2):
@@ -600,13 +597,23 @@ class GraphReconstructionNxContidsNoRemovalStructured(gym.Env):
                 if data['feat']['Type'] != 0:
                     mask[1][node] = 0
                     mask[2][node] = 0
+                else:
+                    mask[1][node] = 1
+                    mask[2][node] = 1
             # All nodes are valid here
             elif(flag == "on"):
-                continue 
+                mask[1][node] = 1
+                mask[2][node] = 1 
             elif(flag == "nn"):
                 if data['feat']['Type'] != 1:
                     mask[1][node] = 0
                     mask[2][node] = 0
+                else:
+                    mask[1][node] = 1
+                    mask[2][node] = 1
+            elif(flag == "nodes"):
+                mask[1][node] = 1
+                mask[2][node] = 1
 
         return mask        
     
