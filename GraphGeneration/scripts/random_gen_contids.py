@@ -3,8 +3,7 @@ import networkx as nx
 import pandas as pd 
 import matplotlib.pyplot as plt 
 import random
-from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, average_precision_score
-from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
+from sklearn.metrics import roc_auc_score,average_precision_score
 
 import argparse
 import os
@@ -341,7 +340,7 @@ target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraph
 pred_graphs = []
 
 # Build the edgebanks for construction
-tmp_target_graphs, _ = modifyGraphIds(target_graphs)
+tmp_target_graphs = modifyGraphIds(target_graphs)
 all_edgebanks = build_edgebanks_from_start(tmp_target_graphs)
 existing_nodes = {}  # The current nodes we have seen for continuous id implementation
 old_nodes_true = set()

@@ -12,9 +12,8 @@ from collections import defaultdict
 import numpy as np 
 import networkx as nx
 import pandas as pd 
-import matplotlib.pyplot as plt 
 import random
-from sklearn.metrics import roc_auc_score, confusion_matrix, accuracy_score, average_precision_score
+from sklearn.metrics import roc_auc_score, average_precision_score
 import copy
 import math
 
@@ -34,94 +33,36 @@ from GraphGeneration.models.GCNEmbedder import GCNEmbedder
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch_geometric.utils import from_networkx
 from itertools import product
 
 # Import all embedding methods
 from utils.embedding_methods.degree import EmbedDegree
 
-'''
-python GraphGeneration/scripts/gen_with_model.py --dataset 'mathoverflow' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'MultiheadedMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'Position+NodeType' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Concat' --embedOld 'False' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'True' --oldDegree 'False'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'True'
-python GraphGeneration/scripts/gen_with_model.py --dataset 'CollegeMsg' --strategy 'SingleMLP' --embedding 'None' --mlpEncoding 'Product' --embedOld 'False' --oldDegree 'False'
-'''
-
 # Process arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, required=True, choices=['CollegeMsg', 'mathoverflow', 'networkadex', 'networkaeternity', 'networkaion', 'networkaragon', 'networkbancor', 'networkcentra', 'networkcoindash','Reddit_B'])
-# Other datasets = ['networkcindicator', 'networkiconomi', 'networkdgd', ]
-parser.add_argument("--strategy", type=str, required=True, choices=['MultiheadedMLP', 'SingleMLP'])
-parser.add_argument("--embedding", type=str, required=True, choices=['Position', 'NodeType', 'Position+NodeType', 'None'])
-parser.add_argument("--mlpEncoding", type=str, required=True, choices=['Concat', 'Product'])  # Other options include 'Addition'
-parser.add_argument("--embedOld", type=str, required=True, choices=['True', 'False'])
-parser.add_argument("--oldDegree", type=str, required=True, choices=['True', 'False'])
+parser.add_argument("--dataset", type=str, required=True, choices=['CollegeMsg', 'mathoverflow', 'networkadex', 'networkaeternity', 'networkaion', 'networkaragon', 'networkbancor', 'networkcentra', 'networkcoindash', 'Reddit_B', 'networkcindicator', 'networkiconomi', 'networkdgd'])
+parser.add_argument("--strategy", type=str, required=True, choices=['MultiheadedMLP', 'SingleMLP'], help="The type of MLP NN to use")
+parser.add_argument("--embedding", type=str, required=True, choices=['Position', 'NodeType', 'Position+NodeType', 'None'], help="Allows appending positional encodings or an integer node type onto the end of the embeddings")
+parser.add_argument("--mlpEncoding", type=str, required=True, choices=['Concat', 'Product', 'Addition', 'Subtraction'], help="How you want to input node embeddings to the MLP")  # Product and addition lead to potential noise as we use directed graphs
+parser.add_argument("--embedOld", type=str, required=True, choices=['True', 'False'], help="If you want to let the MLP predict edge type \'o-o-bank\', otherwise these edges are randomly added")
+parser.add_argument("--oldDegree", type=str, required=True, choices=['True', 'False'], help="If you want reappearing nodes to reuse their most recent degree")
 args = parser.parse_args()
 
 
 def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
+    """
+    For training the MLP, we need some negative edges that did not occur in the graph to predict
+    
+    Args:
+        G (nx.DiGraph): The graph we are trying to generate samples on, we use its structure to check what edges dont exist
+        num_samples (int): How many negative samples we want to create (we aim for equal amounts of positive and negative)
+        edge_type (string): The type of edge we are attempting to generate negative samples for
+        edgebank (dict):  A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        
+    Returns:
+        list(negatives) (list): A list of negative edges for training the MLP
+    """
     all_nodes = list(G.nodes())
     negatives = set()
     
@@ -165,6 +106,27 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
 
 
 def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_embeddings=None, degree_clusters=None, graph_num=0):
+    """
+    Train the MLP on a certain state of the subgraph, whether it has no edges or some filled in from the old edge types
+    We build in order of 'o-o-bank', 'o-o-nobank', 'o-n', 'n-n'
+    
+    Args:
+        G (nx.DiGraph): Our current subgraph we are learning on for the MLP
+        gcn (GCN Model): The GCN we are using and updating
+        mlp (MLP NN): The MLP that we are using to predict edges given node embeddings
+        optimizer : The optimizer we are using for learning weights
+        loss_fn : The loss function for calculating train_loss
+        edge_type (string): The type of edge that we are currently working on predicting
+        edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges 
+        prev_embeddings (dict): The embeddings for all nodes up to this point
+        degree_clusters (dict): The degree cluster groupings for all nodes in the starter graph
+        graph_num (int): The current graph number, used for positional embeddings for nodes if needed
+
+    Returns:
+        loss.item() (float): The model's loss from training it
+        prev_embeddings (dict): Our updated node embeddings from the GCN
+        degree_clusters (dict): Our updated degree clusters
+    """
     gcn.train()
     mlp.train()
     
@@ -207,7 +169,6 @@ def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, pr
 
         curr_embeddings[node] = base_embedding
 
-    # print('Filtering edges')
 
     # Filter edges based on the stage type
     if edge_type == 'o-o-bank':
@@ -287,6 +248,19 @@ def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, pr
 
 
 def generate_subgraphs(graph, edgebank: dict, prev_graph=None, thresholds=None):
+    """
+    Generates specific states of graph for training on, these are subgraphs that only contain certain edgetypes
+    Helps simulate actual construction
+    
+    Args:
+        graph (nx.DiGraph): The graph that we are attempting to generate subgraphs for
+        edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges 
+        prev_graph (nx.DiGraph): The previous graph that we use to determine if we are on the first graph or not
+        thresholds (list): The thresholds according to TopER, assigns the maximum degree of nodes
+    
+    Returns: 
+        res (list): Our list of subgraphs, may have None graphs in the middle if this is first graph
+    """
     tmp_graph = nx.DiGraph()
     
     # Assign base features
@@ -366,6 +340,15 @@ def generate_subgraphs(graph, edgebank: dict, prev_graph=None, thresholds=None):
 
 
 def setupMLP():    
+    """
+    Set up the MLP based on the arguments provided in the command line starter
+    
+    Args:
+        None
+    
+    Returns:
+        None
+    """
     input_dim = 64  # Starting input dimension (two 32-dim node embeddings)
     
     # Input size changes if we are doing different methods, this keeps it consistent
@@ -389,6 +372,23 @@ def setupMLP():
 
 
 def train_models(graphs, epochs_per_stage=150, lr=0.001, edgebanks=None, thresholds=None, gcn=None, embeddings=None, degree_clusters=None):
+    """
+    Train the GCN and MLP for later construction over a set list of graphs
+    
+    Args:
+        graphs (list): A list of networkx graphs that we are going to use for initial training
+        epochs_per_stage (int): How many epochs to train for, for each edge type
+        lr (float): The learning rate for the model
+        edgebanks (list): A list of edgebanks; where edgebank is a dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        thresholds (list): The thresholds according to TopER, assigns the maximum degree of nodes
+        gcn (GCN Model): The GCN to train
+        embeddings (dict):  The embeddings for all nodes in the starter graph; updated as we go
+        degree_clusters (dict): The degree cluster groupings for all nodes in the starter graph; updated as we go
+        
+    Returns:
+        gcn (GCN Model): The GCN that we have trained with
+        mlp (MLP NN): The MLP that we have trained
+    """
     # Set up
     if not gcn:
         gcn = GCNEmbedder(in_channels=4, hidden_channels=16, out_channels=32)
@@ -426,6 +426,19 @@ def train_models(graphs, epochs_per_stage=150, lr=0.001, edgebanks=None, thresho
     
     
 def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=None):
+    """
+    Generate all possible edges that we could add (directed)
+    
+    Args:
+        graph (nx.DiGraph): The current graph that we are constructing
+        nodes_1 (list): The set of source node ids
+        flag (string): The edge type that we are making candidates for
+        nodes_2 (list): The set of destination node ids
+        edgebank (dict):  A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+    
+    Returns:
+        candidates (list): A list of tuples for all possible edges that can be added given the nodes
+    """
     candidates = []  # The edges that we could add
     
     # Different processing depending on available nodes for the edge
@@ -445,6 +458,22 @@ def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=
 
 
 def predict_edges(graph, edge_type, node_types, edgebank, mlp, embeddings, top_k, graph_num):
+    """
+    Predict what edges we will see in the graph, this is done by passing the node embeddings into the MLP and selecting the top_k most likely edges
+    
+    Args:
+        graph (nx.DiGraph): The graph that we are currently constructing
+        edge_type (string): The current edge type we are predicting edges for
+        node_types (dict): A dictionary storing the old nodes and new nodes in ['old_nodes'] and ['new_nodes'] respectively
+        edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        mlp (MLP NN): An MLP that predicts the probability of an edge occurring
+        embeddings (dict): The embeddings of all old nodes we have seen up to this point
+        top_k (int): How many edges we are going to select
+        graph_num (int): Used for assigning a positional encoding onto the node embedding
+    
+    Returns:
+        top_edges (list): The top_k edges that we have decided to add here
+    """
     if edge_type == 'o-o-bank' or edge_type == 'o-o-nobank':
         available_nodes = node_types['old_nodes']
         candidate_edges = generate_candidates(graph, nodes_1=available_nodes, nodes_2=None, flag=edge_type, edgebank=edgebank)
@@ -503,6 +532,20 @@ def predict_edges(graph, edge_type, node_types, edgebank, mlp, embeddings, top_k
 
 
 def compute_reappearance_probabilities(nodes, t_curr, decay_factor=3.0, alpha=1.0, epsilon=1e-8):
+    """
+    Compute the probability for each node to reappear given how long ago it was seen and its latest degree
+    Nodes of higher degree, and nodes seen more recently are preferred
+    
+    Args:
+        nodes (dict): A dict of {node_id: (last_seen_timestamp, last_seen_degree)} used for computing probabilities
+        t_curr (int): The current graph number we are on, used to compute probabilities
+        decay_factor (float): How quickly the recency of a node decays. Higher means that the nodes seen long ago decay slower
+        alpha (float): Our decay constant, controls how influential degree is (alpha > 1 means that it prefers degree, alpha < 1 means that it matters less)
+        epsilon (float): Prevents having 0 probabilities for a node, and thus prevents numpy errors later on
+    
+    Returns:
+        probs (dict):  A dictionary of {node_id: percent probability} probabilities for each node in nodes
+    """
     if not nodes:
         return {}
 
@@ -524,6 +567,19 @@ def compute_reappearance_probabilities(nodes, t_curr, decay_factor=3.0, alpha=1.
 
         
 def get_node_features(graph, thresholds, embedding, old_nodes, new_nodes):
+    """
+    Assign the maximum degree of a node, either using its last seen degree (if args.oldDegree == True) or randomly giving it one
+    
+    Args:
+        graph (nx.DiGraph): The Graph we are attempting to construct, we assign node features here
+        thresholds (list): The thresholds according to TopER, assigns the maximum degree of nodes
+        embedding (list): The current TopER graph embedding vector used to figure out how many nodes have a degree
+        old_nodes (list): The list of old nodes that are in the graph
+        new_nodes (list): The list of new nodes that are in the graph
+        
+    Returns:
+        None
+    """
     degree_counts = [embedding[i][0] for i in range(0, len(embedding))]
     
     degree_dict = {thresholds[i]: degree_counts[i] for i in range(len(thresholds))}
@@ -565,18 +621,68 @@ def get_node_features(graph, thresholds, embedding, old_nodes, new_nodes):
  
 
 def update_degrees(graph: nx.DiGraph):
+    """
+    After updating the graph, between edge types, update the nodes current degree feature
+    
+    Args:
+        graph (nx.DiGraph): The current graph in construction
+        
+    Returns:
+        None
+    """
     for node in graph.nodes(data=False):
         graph.nodes[node]['feat']['currDegree'] = graph.degree(node)
         
      
 def update_edgebank(graph, edgebank):
+    """
+    Update the edgebank based on the current graph
+    
+    Args:
+        graph (nx.Graph): The current graph to update based on
+        edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        
+    Returns:
+        edgebank (dict): The updated edgebank; updated in place
+    """
     for u, v in graph.edges():
         edgebank.setdefault(u, []).append(v)
         
     return edgebank
 
-# TODO Need to change       
+
 def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p_old_nodes, p_new_nodes, E_oo, E_nn, E_on, E_oon, thresholds, embeddings=None, degree_clusters=None, edgebank=None, existing_nodes=None, gcn=None, mlp=None, seed=42):
+    """
+    Our main driver function to build graphs, takes in various arguments to guide the graph construction
+    Specifically, this version uses an MLP to assign edges to two nodes based on the probability of them forming an edge
+    
+    Args:
+        embedding (list): The TopER embedding to guide construction of the graph, stores the number of nodes and edges to add to the graph
+        graph_num (int): The current graph number we are on
+        p_old_nodes (int): The number of old nodes that we are going to see in this graph
+        p_new_nodes (int): The number of new nodes that we are going to see in this graph
+        E_oo (int): The number of edges type 'oo' to add (old edges from the edgebank)
+        E_nn (int): The number of edges type 'nn' to add (new edges that involves two new nodes)
+        E_on (int): The number of edges type 'on' to add (new edges between one new node and one old node (either direction))
+        E_oon (int): The number of edges type 'oon' to add (new edges between two old nodes that was not in the edgebank)
+        thresholds (list): The thresholds for node degrees 'maxDegree' as dicted by TopER
+        embeddings (dict): The embeddings of all old nodes we have seen up to this point
+        degree_clusters (dict): A dictionary of {'degree': [nodes with degree]} that we use to compute the embeddings for new nodes
+        edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        existing_nodes (dict): A dict of {node_id: (last_seen_timestamp, last_seen_degree)} used for computing reappearance probabilities
+        gcn (GCN Model): A GCN Model used to embed graphs for node embeddings
+        mlp (MLP NN): An MLP that predicts the probability of an edge occurring
+        seed (int): The seed for reproducibility purposes, controls our randomness in this strategy
+        
+    Returns:
+        filtration_graphs (list(nx.DiGraph)): A list of nx Graphs that we built up from our TopER embedding
+        node_types (dict): A dictionary that stores 'old_nodes' and 'new_nodes' organized into lists
+        existing_nodes (dict): The updated version of existing nodes passed into the function
+        edge_type_map (dict): A dictionary that sorts the types of edges for later analysis
+        edgebank (dict): The updated edgebank given the newly constructed graphs
+        embeddings (dict): Our newly updated embeddings based on the constructed graph
+        degree_clusters (dict): Our newly updated degree clusters
+    """
     random.seed(seed)
     np.random.seed(seed)
 
@@ -738,23 +844,6 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
     # Step 3: Pass through GCN
     new_embeddings = gcn(pyg_data.x, pyg_data.edge_index)
 
-    # Normally, I would add on the extra features here, but the additions can be done before passing into the model with less complexity
-    '''# TODO Change this to consider node type
-    # Add on the numbers as required for the embedding
-    if 'Position' in args.embedding: 
-        position_addition = torch.tensor([math.cos(graph_num)], dtype=torch.float32)
-        position_addition = position_addition.expand(new_embeddings.size(0), 1)  
-
-        new_embeddings = torch.cat([new_embeddings, position_addition], dim=1)
-        
-    elif 'NodeType' in args.embedding: 
-        nodetype_addition = torch.tensor([
-            0 if idx_to_id[i] in old_nodes else 1
-            for i in range(new_embeddings.size(0))
-        ], dtype=torch.float32).unsqueeze(1)  
-        
-        new_embeddings = torch.cat([new_embeddings, nodetype_addition], dim=1)'''
-        
     # Step 4: Map embeddings back to original node IDs
     final_embeddings = {
         idx_to_id[i]: new_embeddings[i].detach()
@@ -769,15 +858,6 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
         degree_clusters.setdefault(degree, []).append(node)
 
     return filtration_graphs, node_types, existing_nodes, edge_type_map, edgebank, embeddings, degree_clusters
-
-
-
-
-
-# TODO Verifying from here up
-
-
-
 
 
 def modifyGraphIds(graphs):
@@ -816,6 +896,15 @@ def modifyGraphIds(graphs):
 
 
 def build_edgebanks_from_start(graphs):
+    """
+    Build the edgebanks for each graph in graphs, stores all edges from graph i-1 in each index i
+    
+    Args:
+        graphs (list(nx.Graph)): A list of nx Graphs that we will build our edgebanks from
+        
+    Returns:
+        edgebanks (list(dict)): A list of dictionary edgebanks that store all edges from the previous graphs in each index
+    """
     edgebanks = [{}]  # Initialize an empty list for edgebanks
 
     # Loop over all graphs (starting from the second graph)
@@ -835,6 +924,15 @@ def build_edgebanks_from_start(graphs):
 
 
 def process_starter_graph(graph: nx.DiGraph, gcn, thresholds):
+    """
+    Process our very first graph, this is our 'primer' used to construct the later graphs
+    We do this since we need some node embeddings and features to start with
+    
+    Args:
+        graph (nx.DiGraph): The first graph in the dataset, which we are embedding the nodes for
+        gcn (GCN Model): The GCN network that we will use to embed our graph
+        thresholds (list): A list of integers, from TopER, used to assign the max degree of a node
+    """
     # Assign base features
     for node in graph.nodes():
         graph.nodes[node]['feat'] = {}  # Set up the dictionary
@@ -873,35 +971,6 @@ def process_starter_graph(graph: nx.DiGraph, gcn, thresholds):
     # GCN forward pass
     new_embeddings = gcn(pyg_data.x, pyg_data.edge_index)
 
-    # I shouldnt need these here
-    '''# Add on the numbers as required for the embedding
-    if args.embedding == 'Position': 
-        position_addition = torch.tensor([math.cos(0)], dtype=torch.float32)
-        position_addition = position_addition.expand(new_embeddings.size(0), 1)  
-
-        new_embeddings = torch.cat([new_embeddings, position_addition], dim=1)
-        
-    elif args.embedding == 'NodeType': 
-        nodetype_addition = torch.tensor([1], dtype=torch.float32)
-        nodetype_addition = nodetype_addition.expand(new_embeddings.size(0), 1)  
-        
-        new_embeddings = torch.cat([new_embeddings, nodetype_addition], dim=1)
-        
-    elif args.embedding == 'Position+NodeType': 
-        position_addition = torch.tensor([math.cos(0)], dtype=torch.float32)
-        position_addition = position_addition.expand(new_embeddings.size(0), 1)  
-
-        new_embeddings = torch.cat([new_embeddings, position_addition], dim=1)
-        
-        nodetype_addition = torch.tensor([1], dtype=torch.float32)
-        nodetype_addition = nodetype_addition.expand(new_embeddings.size(0), 1)  
-        
-        new_embeddings = torch.cat([new_embeddings, nodetype_addition], dim=1)
-        
-    # Do nothing
-    elif args.embedding == 'None': 
-        pass '''
-
     # Map back to node IDs
     final_embeddings = {
         idx_to_id[i]: new_embeddings[i].detach()
@@ -921,18 +990,7 @@ def process_starter_graph(graph: nx.DiGraph, gcn, thresholds):
     return final_embeddings, degree_clusters, existing_nodes, edgebank
 
 
-
-
-
-
-# TODO Verifying from here up
-
-
-
-
-
-
-
+# Data Loading and Prep
 
 dataset = args.dataset
 my_loader = Loader()
@@ -1000,14 +1058,19 @@ print('Starting training')
 gcn = GCNEmbedder(in_channels=4, hidden_channels=16, out_channels=32)
 embeddings, degree_clusters, existing_nodes, curr_edgebank_pred = process_starter_graph(target_graphs[0][-1], gcn, thresholds)  # We need a graph to get things going
 
+# Train the GCN and MLP for later construction
 gcn, mlp = train_models(target_training_graphs, edgebanks=all_edgebanks, thresholds=thresholds, gcn=gcn, embeddings=embeddings, degree_clusters=degree_clusters)
-old_nodes_true = set()
-curr_edgebank_pred = {}
+old_nodes_true = set()  # The old nodes for the true graphs, used for evaluation
+curr_edgebank_pred = {}  # The current edgebank for the predicted graphs; starts empty
 
+
+# Graph Creation
 
 # Iterate through each graph in the dataset
 for i in range(1, len(probabilities)):
     print('Constructing graph number: ', i + 1)
+    
+    # Get the number of resources available for this graph
     count_old = probabilities[i][0]
     count_new = probabilities[i][1]
     p0 = probabilities[i][2]
@@ -1024,14 +1087,16 @@ for i in range(1, len(probabilities)):
         embedding, graph_num=i, p_old_nodes=count_old, p_new_nodes=count_new, E_oo=p0, E_nn=p1, E_on=p2, E_oon=p3, thresholds=thresholds, embeddings=embeddings, degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, existing_nodes=existing_nodes, gcn=gcn, mlp=mlp
     )
     
+    # Evaluate the graphs
     results_diff_structure = my_evaluator.evaluateTwoStructure(filtration_sequence[-1], target_graphs[i][-1], graph_num=i)
     results_edges = my_evaluator.evaluateEdges(filtration_sequence[-1], target_graphs[i][-1], curr_edgebank_pred, all_edgebanks[i], graph_num=i)
     results_true_structure = my_evaluator.evaluateSingleStructure(target_graphs[i][-1], graph_num=i)
     results_pred_structure = my_evaluator.evaluateSingleStructure(filtration_sequence[-1], graph_num=i)
     pred_kernel, true_kernel, distance = my_evaluator.evaluateOrca(filtration_sequence[-1], target_graphs[i][-1])
 
-    results_diff_topo['Kernel Distance'] = distance
+    results_diff_structure['Kernel Distance'] = distance  # The kernel distance will be part of our structure evaluation
 
+    # Store all results
     pd.DataFrame([results_diff_structure]).to_csv(structure_diff_file_path, mode='a', header=False, index=False)
     pd.DataFrame([results_edges]).to_csv(edge_file_path, mode='a', header=False, index=False)
     pd.DataFrame([results_true_structure]).to_csv(structure_true_file_path, mode='a', header=False, index=False)
@@ -1043,20 +1108,25 @@ for i in range(1, len(probabilities)):
     pred_graphs.append(filtration_sequence)
 
 
-# Analysis
+# TopER Comparison and G/S Eval
 
 del target_graphs[0]
 
+# Flatten the graphs to embed them, only take the last graphs so that we don't mess anything up
 embedding_graphs = [inner_list[-1] for inner_list in pred_graphs]
 embedder = EmbedDegree(include_weights=False)
 
+# Load the TopER embeddings and labels for the G/S task and TopER comparisons
 all_embeddings, _, _ = embedder.process_graphs_for_embeddings(embedding_graphs)
 true_embeddings, labels = my_loader.load_data(dataset, 'Degree', include_weights=False)
 labels = np.array(labels)
 
-    
-pred_gs_labels = [1]
 
+# Compute the Growth/Shrink labels for the predicted graphs
+pred_gs_labels = [1]  # First graph is assumed to grow
+
+# Generate predictions for G/S; based on the number of edges in the graph
+# 1 if the current graph has more edges than the previous graph; 0 otherswise
 for i in range(1, len(embedding_graphs)):
     prev_edges = embedding_graphs[i - 1].number_of_edges()
     curr_edges = embedding_graphs[i].number_of_edges()
@@ -1066,14 +1136,16 @@ predictions = np.array(pred_gs_labels)
 
 tmp_labels = labels[1:]  # Since we don't do the first graph
 
-# Compute metrics
+
+# Compute metrics for Growth/Shrink task
 aucroc = roc_auc_score(tmp_labels, predictions)
 aucpr = average_precision_score(tmp_labels, predictions)
 
+# Display results
 print(f'G/S AUCROC: {aucroc}')
 print(f'G/S AUCPR: {aucpr}')
 
-
+# Used to store topER evaluation
 columns = ['graph_num', 'l2_norm', 'cosine_similarity', 'g/s_pred_label', 'g/s_true_label']
 for i in range(10):
     columns.append(f'node_diff_{i+1}')
@@ -1099,11 +1171,13 @@ for idx, (embedding, true_embedding) in enumerate(zip(all_embeddings, true_embed
     pd.DataFrame([result]).to_csv(topER_file_path, mode='a', header=False, index=False)
 
 
+# Animation Creation
+
 from itertools import chain
 
 # Flatten a list of lists into a single list of NetworkX graphs
 predicted_flat = list(chain(*pred_graphs))
 target_flat = list(chain(*target_graphs))
 
-# Call the create_animation function with the flattened lists
+# Call the create_animation function with the flattened lists; it takes a while, so it is commented out for now
 #my_evaluator.create_animation(predicted_flat, target_flat, output_file=animation_path)

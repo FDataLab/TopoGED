@@ -404,7 +404,7 @@ target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraph
 pred_graphs = []
 
 # Build the edgebanks for construction
-tmp_target_graphs, _ = modifyGraphIds(target_graphs)
+tmp_target_graphs = modifyGraphIds(target_graphs)
 all_edgebanks = build_edgebanks_from_start(tmp_target_graphs)
 existing_nodes = {}  # The current nodes we have seen for continuous id implementation
 old_nodes_true = set()  # The old nodes for the true graphs, used in evaluation
@@ -425,11 +425,11 @@ for i in range(len(probabilities)):
     p2 = probabilities[i][4]
     p3 = probabilities[i][5]
 
-    # Get the embedding and reshape it
+    # Get the embedding and reshape it for construction
     embedding = features[i]
     embedding = list(zip(embedding[0::3], embedding[1::3], embedding[2::3]))
 
-    old_bank = curr_edgebank_pred.copy()
+    old_bank = curr_edgebank_pred.copy()  # Used for later evaluation, so we need to save it
 
     # Build the filtration sequence using the current parameters
     filtration_sequence, node_types, existing_nodes, edge_type_map, curr_edgebank_pred = build_accumulating_filtration_sequence_with_edgebank(
@@ -468,13 +468,16 @@ embedder = EmbedDegree(include_weights=False)
 all_embeddings, _, _ = embedder.process_graphs_for_embeddings(embedding_graphs_pred)
 true_embeddings, _, _ = embedder.process_graphs_for_embeddings(embedding_graphs_target)
 
+# The true labels for G/S task
 _, labels = my_loader.load_data(dataset, 'Degree', include_weights=False)
 labels = np.array(labels)
 
 
 # Compute the Growth/Shrink labels for the predicted graphs
-pred_gs_labels = [1]
+pred_gs_labels = [1]  # First graph is assumed to grow
 
+# Generate predictions for G/S; based on the number of edges in the graph
+# 1 if the current graph has more edges than the previous graph; 0 otherswise
 for i in range(1, len(embedding_graphs_pred)):
     prev_edges = embedding_graphs_pred[i - 1].number_of_edges()
     curr_edges = embedding_graphs_pred[i].number_of_edges()
