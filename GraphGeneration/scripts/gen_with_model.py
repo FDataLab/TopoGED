@@ -132,25 +132,18 @@ def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, pr
     
     # Get the current embeddings for the graph
     curr_embeddings = {}
-    MAX_NODES_PER_CLUSTER = 100
-    #print('Processing Embeddings')
+
     # Mimicks how we assign new node ids later
     for node, data in G.nodes(data=True):
         if node in prev_embeddings:
             base_embedding = prev_embeddings[node]
         else:
-            node_ids_in_cluster = degree_clusters.get(data['feat']['maxDegree'], [])
-            # Randomly sample if too many
-            if len(node_ids_in_cluster) > MAX_NODES_PER_CLUSTER:
-                node_ids_in_cluster = random.sample(node_ids_in_cluster, MAX_NODES_PER_CLUSTER)
-                
-            embeddings_to_group = [prev_embeddings[n_id] for n_id in node_ids_in_cluster if n_id in prev_embeddings]
-
-            if not embeddings_to_group:
-                embeddings_to_group = [np.zeros(32)]
+            base_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
             
-            base_embedding = np.mean(np.stack(embeddings_to_group), axis=0)
-
+            # Protects from crashes
+            if base_embedding is None and len(base_embedding) == 0:
+                base_embedding = [np.zeros(32)]
+            
         # Convert to tensor for concatenation
         base_embedding = torch.tensor(base_embedding, dtype=torch.float32)
 
@@ -234,9 +227,20 @@ def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, pr
     
     prev_embeddings.update(final_embeddings)  # Blindly overwrites the previously existing embeddings
     
-    for node in G.nodes():
-        degree = G.degree(node)
-        degree_clusters.setdefault(degree, []).append(node)
+    for node in G.nodes():        
+        degree = G.nodes[node]['feat']['maxDegree']
+        
+        curr_embedding = embeddings[node]
+        old_embedding = degree_clusters.get(degree, [])
+        
+        # Average the embeddings if both exist
+        if old_embedding is not None and len(old_embedding) > 0:
+            new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+        else:
+            new_embedding = curr_embedding
+            
+        degree_clusters[degree] = new_embedding  # Add the embedding
+        
         
     # Update model parameters    
     loss = loss_fn(preds, labels)
@@ -740,16 +744,13 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
         if node in embeddings:
             curr_embeddings[node] = embeddings[node]
         else:
-            node_ids_in_cluster = degree_clusters.get(data['feat']['maxDegree'])
+            new_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
+            
+            # Protects from crashes
+            if new_embedding is None and len(new_embedding) == 0:
+                new_embedding = [np.zeros(32)]
 
-            # Gather embeddings (skip nodes not in embeddings yet)
-            embeddings_to_group = [embeddings[n_id] for n_id in node_ids_in_cluster if n_id in embeddings] if node_ids_in_cluster else []
-
-            # Use zero vector if nothing is found
-            if not embeddings_to_group:
-                embeddings_to_group = [np.zeros(32)]
-
-            curr_embeddings[node] = np.mean(np.stack(embeddings_to_group), axis=0)
+            curr_embeddings[node] = new_embedding
 
 
     def sample_edges(src_list, dst_list, count, edge_type=None):
@@ -852,10 +853,20 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
     
     embeddings.update(final_embeddings)  # Blindly overwrites the previously existing embeddings
     
+    # Generate the embeddings we will assign new nodes by averaging
     for node in tmp_graph.nodes():
-        #degree = tmp_graph.degree(node)
         degree = tmp_graph.nodes[node]['feat']['maxDegree']
-        degree_clusters.setdefault(degree, []).append(node)
+        
+        curr_embedding = embeddings[node]
+        old_embedding = degree_clusters.get(degree, [])
+        
+        # Average the embeddings if both exist
+        if old_embedding is not None and len(old_embedding) > 0:
+            new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+        else:
+            new_embedding = curr_embedding
+            
+        degree_clusters[degree] = new_embedding  # Add the embedding
 
     return filtration_graphs, node_types, existing_nodes, edge_type_map, edgebank, embeddings, degree_clusters
 
@@ -948,10 +959,6 @@ def process_starter_graph(graph: nx.DiGraph, gcn, thresholds):
             graph.nodes[node]['feat']['maxDegree'] = graph.degree(node)
         
         
-    degree_clusters = defaultdict(list)
-    for node in graph.nodes():
-        degree_clusters[graph.degree(node)].append(node)
-        
     original_nodes = list(graph.nodes())
     id_to_idx = {node_id: idx for idx, node_id in enumerate(original_nodes)}
     idx_to_id = {idx: node_id for node_id, idx in id_to_idx.items()}
@@ -986,6 +993,23 @@ def process_starter_graph(graph: nx.DiGraph, gcn, thresholds):
     edgebank = {}
     for u, v in graph.edges():  # Accessing the graph directly
         edgebank.setdefault(u, []).append(v)
+        
+    # Process the degree clusters for generating the embeddings for new nodes
+    degree_clusters = defaultdict(list)
+    for node in graph.nodes():        
+        degree = graph.nodes[node]['feat']['maxDegree']
+        
+        curr_embedding = final_embeddings[node]
+        old_embedding = degree_clusters.get(degree, [])
+        
+        # Average the embeddings if both exist
+        if old_embedding is not None and len(old_embedding) > 0:
+            new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+        else:
+            new_embedding = curr_embedding
+            
+        degree_clusters[degree] = new_embedding  # Add the embedding
+    
     
     return final_embeddings, degree_clusters, existing_nodes, edgebank
 
@@ -1052,7 +1076,7 @@ pred_graphs = []
 tmp_target_graphs, _ = modifyGraphIds(target_graphs)
 all_edgebanks = build_edgebanks_from_start(tmp_target_graphs)
 
-target_training_graphs = [tmp_target_graphs[i][-1] for i in range(int(len(tmp_target_graphs) * 0.25))]  # First 70% of the graphs
+target_training_graphs = [tmp_target_graphs[i][-1] for i in range(int(len(tmp_target_graphs) * 0.050))]  # First 50% of the graphs
 
 print('Starting training')
 gcn = GCNEmbedder(in_channels=4, hidden_channels=16, out_channels=32)
