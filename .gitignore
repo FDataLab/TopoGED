@@ -58,7 +58,9 @@ venv.bak/
 
 # Other
 wandb/
-ReinforcementLearning/output/textOut/
 
 # Ignore large output files
 GraphGeneration/output/
+ReinforcementLearning/output/
+data/output/
+output/
