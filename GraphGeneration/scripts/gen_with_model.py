@@ -6,7 +6,7 @@
 # Cluster nodes together based on expected degree
 # Take the average of their embeddings and use that to compute the expected embedding for new nodes
 # Then plug into MLP
-# Embed GCN at the end of every graph
+# Embed nodes at the end of every graph
 
 from collections import defaultdict
 import numpy as np 
@@ -29,7 +29,6 @@ from GraphGeneration.utils.Evaluator import Evaluator
 # Models in use
 from GraphGeneration.models.MultiHeadedEdgePredictor import MultiHeadedEdgePredictor
 from GraphGeneration.models.EdgePredictor import EdgePredictorMLP
-from GraphGeneration.models.GCNEmbedder import GCNEmbedder
 
 import torch
 import torch.nn as nn
@@ -38,6 +37,7 @@ from itertools import product
 
 # Import all embedding methods
 from utils.embedding_methods.degree import EmbedDegree
+from node2vec import Node2Vec
 
 # Process arguments
 parser = argparse.ArgumentParser()
@@ -48,6 +48,112 @@ parser.add_argument("--mlpEncoding", type=str, required=True, choices=['Concat',
 parser.add_argument("--embedOld", type=str, required=True, choices=['True', 'False'], help="If you want to let the MLP predict edge type \'o-o-bank\', otherwise these edges are randomly added")
 parser.add_argument("--oldDegree", type=str, required=True, choices=['True', 'False'], help="If you want reappearing nodes to reuse their most recent degree")
 args = parser.parse_args()
+
+# Set seeds
+global_seed = 42
+random.seed(global_seed)
+np.random.seed(global_seed)
+
+embedding_testing_flag = 'Linear'  # Options: ['Node2Vec', 'Linear']
+
+# Node2Vec Parameters
+node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features  (TODO scale embeddings to be 60 + 4 and adjust MLP accordingly)
+node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
+node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
+node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node(Higher is less backtracking)
+node2vec_q = 1.0  # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
+node2vec_window = 10  # The context size (Higher is broader learning)
+node2vec_min_count = 1  # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
+node2vec_batch_words = 4  # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
+node2vec_workers = 1  # Number of workers (threads)
+
+# Each of these are (2 * node_embedding_size)
+if embedding_testing_flag == 'Node2Vec':
+    embedding_dim = 128
+elif embedding_testing_flag == 'Linear':
+    embedding_dim = 8  # Must be same as the number of features
+
+
+def compute_linear_gnn_embeddings(G: nx.DiGraph):
+    """
+    An embedding method inspired by LinearGNNs from GraphAny where Z=AX given A is the adjacency matrix and X is the node feature matrix
+    One of two available methods
+    
+    Args:
+        G (nx.DiGraph): The graph to embed
+        
+    Returns:
+        embeddings (dict): The constructed dictionary of {node: [embedding]} pairs
+    """
+    all_nodes = sorted(G.nodes())
+    id_to_idx = {node_id: idx for idx, node_id in enumerate(all_nodes)}
+    idx_to_id = {idx: node_id for node_id, idx in id_to_idx.items()}
+    
+    A = nx.to_numpy_array(G, nodelist=all_nodes, dtype=np.float32)  # The matrix to operate on
+    
+    # Normalize A
+    row_sums = A.sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1  # avoid division by zero
+    A_normalized = A / row_sums
+    
+    X = np.array([list(G.nodes[node]['feat'].values()) for node in all_nodes], dtype=np.float32)
+    
+    Z = A_normalized @ X  # As computed in GraphAny
+    
+    embeddings = {idx_to_id[i]: Z[i] for i in range(Z.shape[0])}
+    
+    return embeddings
+
+
+def compute_node2vec_embeddings(G: nx.DiGraph):
+    """
+    Use Node2Vec to embed nodes in the constructed graph. Appends node features onto the end since Node2Vec does not account for features
+    One of two available methods
+    
+    Args:
+        G (nx.DiGraph): The graph to embed
+        
+    Returns:
+        embeddings (dict): The constructed dictionary of {node: [embedding]} pairs
+    """
+    node2vec = Node2Vec(
+        G,
+        dimensions=node2vec_dimensions,
+        walk_length=node2vec_walk_length,
+        num_walks=node2vec_num_walks,
+        workers=node2vec_workers,
+        p=node2vec_p,
+        q=node2vec_q,
+        quiet=True
+    )
+    
+    model = node2vec.fit(
+        window=node2vec_window, 
+        min_count=node2vec_min_count, 
+        batch_words=node2vec_batch_words
+    )  # Perform Node2Vec
+
+    # Used to generate an embedding for isolated nodes
+    all_vectors = [model.wv[key] for key in model.wv.index_to_key]
+    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32)
+
+    # Get embeddings and concatenate the node features
+    embeddings = {}
+    for node in G.nodes():
+        if node in model.wv:
+            node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32)
+        else:
+            node2vec_emb = mean_vector
+            
+        # Add on features since Node2Vec doesn't account for features
+        feat_dict = G.nodes[node]['feat']
+        sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
+        sorted_values = [feat_dict[k] for k in sorted_keys]
+        node_feat = torch.tensor(sorted_values, dtype=torch.float32)  # Shape of (4,)
+        combined = torch.cat([node2vec_emb, node_feat], dim=0)
+        embeddings[node] = combined
+    
+    return embeddings
 
 
 def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
@@ -105,14 +211,13 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
     return list(negatives)
 
 
-def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_embeddings=None, degree_clusters=None, graph_num=0):
+def train_on_stage(G, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_embeddings=None, degree_clusters=None, graph_num=0):
     """
     Train the MLP on a certain state of the subgraph, whether it has no edges or some filled in from the old edge types
     We build in order of 'o-o-bank', 'o-o-nobank', 'o-n', 'n-n'
     
     Args:
         G (nx.DiGraph): Our current subgraph we are learning on for the MLP
-        gcn (GCN Model): The GCN we are using and updating
         mlp (MLP NN): The MLP that we are using to predict edges given node embeddings
         optimizer : The optimizer we are using for learning weights
         loss_fn : The loss function for calculating train_loss
@@ -124,10 +229,9 @@ def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, pr
 
     Returns:
         loss.item() (float): The model's loss from training it
-        prev_embeddings (dict): Our updated node embeddings from the GCN
+        prev_embeddings (dict): Our updated node embeddings
         degree_clusters (dict): Our updated degree clusters
     """
-    gcn.train()
     mlp.train()
     
     # Get the current embeddings for the graph
@@ -205,26 +309,12 @@ def train_on_stage(G, gcn, mlp, optimizer, loss_fn, edge_type, edgebank=None, pr
     elif args.strategy == 'MultiheadedMLP':
         preds = mlp(src_embed, dst_embed, edge_type).squeeze()
         
+    # Embeddings depend on our strategy
+    if embedding_testing_flag == 'Node2Vec':
+        final_embeddings = compute_node2vec_embeddings(G)
+    elif embedding_testing_flag == 'Linear':
+        final_embeddings = compute_linear_gnn_embeddings(G)
         
-    original_nodes = list(G.nodes())
-    id_to_idx = {node_id: idx for idx, node_id in enumerate(original_nodes)}
-    idx_to_id = {idx: node_id for node_id, idx in id_to_idx.items()}
-    # print('Sending to embeddings in gcn')
-    pyg_data = from_networkx(G)
-
-    # Ensure features are ordered according to original_nodes
-    pyg_data.x = torch.stack([
-        torch.tensor(list(G.nodes[n]['feat'].values()), dtype=torch.float32)
-        for n in original_nodes
-    ])
-
-    new_embeddings = gcn(pyg_data.x, pyg_data.edge_index)
-        
-    final_embeddings = {
-        idx_to_id[i]: new_embeddings[i].detach()
-        for i in range(new_embeddings.shape[0])
-    }
-    
     prev_embeddings.update(final_embeddings)  # Blindly overwrites the previously existing embeddings
     
     for node in G.nodes():        
@@ -353,7 +443,7 @@ def setupMLP():
     Returns:
         None
     """
-    input_dim = 64  # Starting input dimension (two 32-dim node embeddings)
+    input_dim = embedding_dim  # Starting input dimension depends on what method we are using
     
     # Input size changes if we are doing different methods, this keeps it consistent
     if 'Position' in args.embedding:
@@ -375,9 +465,9 @@ def setupMLP():
     return mlp
 
 
-def train_models(graphs, epochs_per_stage=150, lr=0.001, edgebanks=None, thresholds=None, gcn=None, embeddings=None, degree_clusters=None):
+def train_models(graphs, epochs_per_stage=150, lr=0.001, edgebanks=None, thresholds=None, embeddings=None, degree_clusters=None):
     """
-    Train the GCN and MLP for later construction over a set list of graphs
+    Train the MLP for later construction over a set list of graphs
     
     Args:
         graphs (list): A list of networkx graphs that we are going to use for initial training
@@ -385,19 +475,15 @@ def train_models(graphs, epochs_per_stage=150, lr=0.001, edgebanks=None, thresho
         lr (float): The learning rate for the model
         edgebanks (list): A list of edgebanks; where edgebank is a dict of {node_id: [neighbors]} built up over time to store the previously seen edges
         thresholds (list): The thresholds according to TopER, assigns the maximum degree of nodes
-        gcn (GCN Model): The GCN to train
         embeddings (dict):  The embeddings for all nodes in the starter graph; updated as we go
         degree_clusters (dict): The degree cluster groupings for all nodes in the starter graph; updated as we go
         
     Returns:
-        gcn (GCN Model): The GCN that we have trained with
         mlp (MLP NN): The MLP that we have trained
     """
     # Set up
-    if not gcn:
-        gcn = GCNEmbedder(in_channels=4, hidden_channels=16, out_channels=32)
     mlp = setupMLP()
-    optimizer = torch.optim.Adam(list(gcn.parameters()) + list(mlp.parameters()), lr=lr)
+    optimizer = torch.optim.Adam(mlp.parameters(), lr=lr)
     loss_fn = nn.BCELoss()
 
     for graph_num, graph in enumerate(graphs[1:], start=1):
@@ -411,7 +497,7 @@ def train_models(graphs, epochs_per_stage=150, lr=0.001, edgebanks=None, thresho
                 if subgraph is None or len(subgraph.edges()) == 0:
                     continue
                 for epoch in range(epochs_per_stage):
-                    loss, embeddings, degree_clusters = train_on_stage(subgraph, gcn, mlp, optimizer, loss_fn, edge_type=flag, edgebank=edgebanks[graph_num], prev_embeddings=embeddings, degree_clusters=degree_clusters, graph_num=graph_num)
+                    loss, embeddings, degree_clusters = train_on_stage(subgraph, mlp, optimizer, loss_fn, edge_type=flag, edgebank=edgebanks[graph_num], prev_embeddings=embeddings, degree_clusters=degree_clusters, graph_num=graph_num)
                     if (epoch + 1) % 10 == 0: 
                         print(f"  Graph Number {graph_num} Stage {flag} - Epoch {epoch+1}/{epochs_per_stage} | Loss: {loss:.4f}")
                         
@@ -422,11 +508,11 @@ def train_models(graphs, epochs_per_stage=150, lr=0.001, edgebanks=None, thresho
                 if subgraph is None or len(subgraph.edges()) == 0:
                     continue
                 for epoch in range(epochs_per_stage):
-                    loss, embeddings, degree_clusters = train_on_stage(subgraph, gcn, mlp, optimizer, loss_fn, edge_type=flag, edgebank=edgebanks[graph_num], prev_embeddings=embeddings, degree_clusters=degree_clusters, graph_num=graph_num)
+                    loss, embeddings, degree_clusters = train_on_stage(subgraph, mlp, optimizer, loss_fn, edge_type=flag, edgebank=edgebanks[graph_num], prev_embeddings=embeddings, degree_clusters=degree_clusters, graph_num=graph_num)
                     if (epoch + 1) % 10 == 0: 
                         print(f"  Graph Number {graph_num} Stage {i} - Epoch {epoch+1}/{epochs_per_stage} | Loss: {loss:.4f}")
 
-    return gcn, mlp
+    return mlp
     
     
 def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=None):
@@ -655,7 +741,7 @@ def update_edgebank(graph, edgebank):
     return edgebank
 
 
-def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p_old_nodes, p_new_nodes, E_oo, E_nn, E_on, E_oon, thresholds, embeddings=None, degree_clusters=None, edgebank=None, existing_nodes=None, gcn=None, mlp=None, seed=42):
+def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p_old_nodes, p_new_nodes, E_oo, E_nn, E_on, E_oon, thresholds, embeddings=None, degree_clusters=None, edgebank=None, existing_nodes=None, mlp=None, seed=42):
     """
     Our main driver function to build graphs, takes in various arguments to guide the graph construction
     Specifically, this version uses an MLP to assign edges to two nodes based on the probability of them forming an edge
@@ -671,10 +757,9 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
         E_oon (int): The number of edges type 'oon' to add (new edges between two old nodes that was not in the edgebank)
         thresholds (list): The thresholds for node degrees 'maxDegree' as dicted by TopER
         embeddings (dict): The embeddings of all old nodes we have seen up to this point
-        degree_clusters (dict): A dictionary of {'degree': [nodes with degree]} that we use to compute the embeddings for new nodes
+        degree_clusters (dict): A dictionary of {'degree': [created_embedding]} that we use to assign the embeddings for new nodes
         edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
         existing_nodes (dict): A dict of {node_id: (last_seen_timestamp, last_seen_degree)} used for computing reappearance probabilities
-        gcn (GCN Model): A GCN Model used to embed graphs for node embeddings
         mlp (MLP NN): An MLP that predicts the probability of an edge occurring
         seed (int): The seed for reproducibility purposes, controls our randomness in this strategy
         
@@ -823,33 +908,18 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
         filtration_graphs.append(G.copy())
     
     # Update existing nodes for the format
-    for node in G.nodes(data=False):
+    for node in tmp_graph.nodes(data=False):
         if node in new_nodes:
-            existing_nodes[node] = (graph_num, G.degree(node))
+            existing_nodes[node] = (graph_num, tmp_graph.degree(node))
             
     edgebank = update_edgebank(filtration_graphs[-1], edgebank)
 
-    original_nodes = list(tmp_graph.nodes())
-    id_to_idx = {node_id: idx for idx, node_id in enumerate(original_nodes)}
-    idx_to_id = {idx: node_id for node_id, idx in id_to_idx.items()}
-
-    # Step 2: Convert to PyG data with consistent feature ordering
-    pyg_data = from_networkx(tmp_graph)
-
-    # Ensure features are ordered according to original_nodes
-    pyg_data.x = torch.stack([
-        torch.tensor(list(tmp_graph.nodes[n]['feat'].values()), dtype=torch.float32)
-        for n in original_nodes
-    ])
-
-    # Step 3: Pass through GCN
-    new_embeddings = gcn(pyg_data.x, pyg_data.edge_index)
-
-    # Step 4: Map embeddings back to original node IDs
-    final_embeddings = {
-        idx_to_id[i]: new_embeddings[i].detach()
-        for i in range(new_embeddings.shape[0])
-    }
+    # Embeddings depend on our strategy
+    if embedding_testing_flag == 'Node2Vec':
+        final_embeddings = compute_node2vec_embeddings(tmp_graph)
+    elif embedding_testing_flag == 'Linear':
+        final_embeddings = compute_linear_gnn_embeddings(tmp_graph)
+        
     
     embeddings.update(final_embeddings)  # Blindly overwrites the previously existing embeddings
     
@@ -934,14 +1004,13 @@ def build_edgebanks_from_start(graphs):
     return edgebanks
 
 
-def process_starter_graph(graph: nx.DiGraph, gcn, thresholds):
+def process_starter_graph(graph: nx.DiGraph, thresholds):
     """
     Process our very first graph, this is our 'primer' used to construct the later graphs
     We do this since we need some node embeddings and features to start with
     
     Args:
         graph (nx.DiGraph): The first graph in the dataset, which we are embedding the nodes for
-        gcn (GCN Model): The GCN network that we will use to embed our graph
         thresholds (list): A list of integers, from TopER, used to assign the max degree of a node
     """
     # Assign base features
@@ -958,31 +1027,12 @@ def process_starter_graph(graph: nx.DiGraph, gcn, thresholds):
             graph.nodes[node]['feat']['currDegree'] = node_degree
             graph.nodes[node]['feat']['maxDegree'] = graph.degree(node)
         
+    # Embeddings depend on our strategy
+    if embedding_testing_flag == 'Node2Vec':
+        final_embeddings = compute_node2vec_embeddings(graph)
+    elif embedding_testing_flag == 'Linear':
+        final_embeddings = compute_linear_gnn_embeddings(graph)
         
-    original_nodes = list(graph.nodes())
-    id_to_idx = {node_id: idx for idx, node_id in enumerate(original_nodes)}
-    idx_to_id = {idx: node_id for node_id, idx in id_to_idx.items()}
-
-    # Convert to PyG format
-    pyg_data = from_networkx(graph)
-
-    # Consistent feature ordering (define keys explicitly if needed)
-    feature_keys = list(next(iter(graph.nodes(data=True)))[1]['feat'].keys())
-
-    # Build the feature matrix
-    pyg_data.x = torch.stack([
-        torch.tensor([graph.nodes[n]['feat'][k] for k in feature_keys], dtype=torch.float32)
-        for n in original_nodes
-    ])
-
-    # GCN forward pass
-    new_embeddings = gcn(pyg_data.x, pyg_data.edge_index)
-
-    # Map back to node IDs
-    final_embeddings = {
-        idx_to_id[i]: new_embeddings[i].detach()
-        for i in range(new_embeddings.shape[0])
-    }
     
     existing_nodes = {}
     # process the nodes for old node evaluation
@@ -1076,14 +1126,13 @@ pred_graphs = []
 tmp_target_graphs, _ = modifyGraphIds(target_graphs)
 all_edgebanks = build_edgebanks_from_start(tmp_target_graphs)
 
-target_training_graphs = [tmp_target_graphs[i][-1] for i in range(int(len(tmp_target_graphs) * 0.050))]  # First 50% of the graphs
+target_training_graphs = [tmp_target_graphs[i][-1] for i in range(int(len(tmp_target_graphs) * 0.50))]  # First 50% of the graphs
 
 print('Starting training')
-gcn = GCNEmbedder(in_channels=4, hidden_channels=16, out_channels=32)
-embeddings, degree_clusters, existing_nodes, curr_edgebank_pred = process_starter_graph(target_graphs[0][-1], gcn, thresholds)  # We need a graph to get things going
+embeddings, degree_clusters, existing_nodes, curr_edgebank_pred = process_starter_graph(target_graphs[0][-1], thresholds)  # We need a graph to get things going
 
-# Train the GCN and MLP for later construction
-gcn, mlp = train_models(target_training_graphs, edgebanks=all_edgebanks, thresholds=thresholds, gcn=gcn, embeddings=embeddings, degree_clusters=degree_clusters)
+# Train the MLP for later construction
+mlp = train_models(target_training_graphs, edgebanks=all_edgebanks, thresholds=thresholds, embeddings=embeddings, degree_clusters=degree_clusters)
 old_nodes_true = set()  # The old nodes for the true graphs, used for evaluation
 curr_edgebank_pred = {}  # The current edgebank for the predicted graphs; starts empty
 
@@ -1108,7 +1157,7 @@ for i in range(1, len(probabilities)):
 
     # Build the filtration sequence using the current parameters
     filtration_sequence, node_types, existing_nodes, edge_type_map, curr_edgebank_pred, embeddings, degree_clusters = build_accumulating_filtration_sequence_with_edgebank(
-        embedding, graph_num=i, p_old_nodes=count_old, p_new_nodes=count_new, E_oo=p0, E_nn=p1, E_on=p2, E_oon=p3, thresholds=thresholds, embeddings=embeddings, degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, existing_nodes=existing_nodes, gcn=gcn, mlp=mlp
+        embedding, graph_num=i, p_old_nodes=count_old, p_new_nodes=count_new, E_oo=p0, E_nn=p1, E_on=p2, E_oon=p3, thresholds=thresholds, embeddings=embeddings, degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, existing_nodes=existing_nodes, mlp=mlp
     )
     
     # Evaluate the graphs

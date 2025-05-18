@@ -18,9 +18,6 @@ def plot_structure(real_csv_path, pred_csv_path, diff_path, output_path):
         'Number of Edges',
     ]
 
-    # real_df = pd.read_csv(real_csv_path).iloc[1:94]
-    # pred_df = pd.read_csv(pred_csv_path).iloc[1:94]
-    # diff_df = pd.read_csv(diff_path).iloc[1:94]
     real_df = pd.read_csv(real_csv_path)
     pred_df = pd.read_csv(pred_csv_path)
     diff_df = pd.read_csv(diff_path)
