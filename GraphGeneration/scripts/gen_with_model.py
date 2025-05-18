@@ -47,6 +47,8 @@ parser.add_argument("--embedding", type=str, required=True, choices=['Position',
 parser.add_argument("--mlpEncoding", type=str, required=True, choices=['Concat', 'Product', 'Addition', 'Subtraction'], help="How you want to input node embeddings to the MLP")  # Product and addition lead to potential noise as we use directed graphs
 parser.add_argument("--embedOld", type=str, required=True, choices=['True', 'False'], help="If you want to let the MLP predict edge type \'o-o-bank\', otherwise these edges are randomly added")
 parser.add_argument("--oldDegree", type=str, required=True, choices=['True', 'False'], help="If you want reappearing nodes to reuse their most recent degree")
+parser.add_argument("--embeddingType", type=str, required=True, choices=['Linear', 'Node2Vec'], help="How nodes should be embedded. Either with Node2Vec or with a Linear mutliplication of adjacency matrix by node feature matrix")
+
 args = parser.parse_args()
 
 # Set seeds
@@ -54,10 +56,22 @@ global_seed = 42
 random.seed(global_seed)
 np.random.seed(global_seed)
 
-embedding_testing_flag = 'Linear'  # Options: ['Node2Vec', 'Linear']
+
+# Set up device
+try:
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA (NVIDIA GPU)")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU")
+except Exception:
+    device = torch.device("cpu")
+    print("Using CPU")
+    
 
 # Node2Vec Parameters
-node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features  (TODO scale embeddings to be 60 + 4 and adjust MLP accordingly)
+node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features
 node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
 node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
 node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node(Higher is less backtracking)
@@ -68,9 +82,9 @@ node2vec_batch_words = 4  # The batch size for when Word2Vec is used (Higher wil
 node2vec_workers = 1  # Number of workers (threads)
 
 # Each of these are (2 * node_embedding_size)
-if embedding_testing_flag == 'Node2Vec':
+if args.embeddingType == 'Node2Vec':
     embedding_dim = 128
-elif embedding_testing_flag == 'Linear':
+elif args.embeddingType == 'Linear':
     embedding_dim = 8  # Must be same as the number of features
 
 
@@ -98,6 +112,8 @@ def compute_linear_gnn_embeddings(G: nx.DiGraph):
     
     X = np.array([list(G.nodes[node]['feat'].values()) for node in all_nodes], dtype=np.float32)
     
+    A_normalized = torch.tensor(A_normalized, device=device)
+    X = torch.tensor(X, device=device)
     Z = A_normalized @ X  # As computed in GraphAny
     
     embeddings = {idx_to_id[i]: Z[i] for i in range(Z.shape[0])}
@@ -135,7 +151,7 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
 
     # Used to generate an embedding for isolated nodes
     all_vectors = [model.wv[key] for key in model.wv.index_to_key]
-    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32)
+    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32, device=device)
 
     # Get embeddings and concatenate the node features
     embeddings = {}
@@ -149,7 +165,7 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
         feat_dict = G.nodes[node]['feat']
         sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
         sorted_values = [feat_dict[k] for k in sorted_keys]
-        node_feat = torch.tensor(sorted_values, dtype=torch.float32)  # Shape of (4,)
+        node_feat = torch.tensor(sorted_values, dtype=torch.float32, device=device)  # Shape of (4,)
         combined = torch.cat([node2vec_emb, node_feat], dim=0)
         embeddings[node] = combined
     
@@ -240,7 +256,7 @@ def train_on_stage(G, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_em
     # Mimicks how we assign new node ids later
     for node, data in G.nodes(data=True):
         if node in prev_embeddings:
-            base_embedding = prev_embeddings[node]
+            base_embedding = prev_embeddings[node].clone().detach().to(device).float()
         else:
             base_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
             
@@ -249,16 +265,16 @@ def train_on_stage(G, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_em
                 base_embedding = [np.zeros(32)]
             
         # Convert to tensor for concatenation
-        base_embedding = torch.tensor(base_embedding, dtype=torch.float32)
+        base_embedding = torch.tensor(base_embedding, dtype=torch.float32).to(device)
 
         additional_features = []  # If needed according to arguments
 
         if 'NodeType' in args.embedding:
-            node_type_feat = torch.tensor([data['feat']['type']], dtype=torch.float32)  # Ensure 1D
+            node_type_feat = torch.tensor([data['feat']['type']], dtype=torch.float32).to(device)  # Ensure 1D
             additional_features.append(node_type_feat)
 
         if 'Position' in args.embedding:
-            pos_feat = torch.tensor([math.cos(graph_num)], dtype=torch.float32)  # Ensure 1D
+            pos_feat = torch.tensor([math.cos(graph_num)], dtype=torch.float32).to(device)  # Ensure 1D
             additional_features.append(pos_feat)
 
         if additional_features:
@@ -298,10 +314,10 @@ def train_on_stage(G, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_em
     neg_edges = generate_negative_edges(G, len(pos_edges), edge_type, edgebank)
     # print('Setup')
     all_edges = pos_edges + neg_edges
-    labels = torch.tensor([1] * len(pos_edges) + [0] * len(neg_edges), dtype=torch.float32)
+    labels = torch.tensor([1] * len(pos_edges) + [0] * len(neg_edges), dtype=torch.float32).to(device)
 
-    src_embed = torch.stack([curr_embeddings[u] for u, v in all_edges])
-    dst_embed = torch.stack([curr_embeddings[v] for u, v in all_edges])
+    src_embed = torch.stack([curr_embeddings[u] for u, v in all_edges]).to(device)
+    dst_embed = torch.stack([curr_embeddings[v] for u, v in all_edges]).to(device)
     
     # print('Predicting')
     if args.strategy == 'SingleMLP':
@@ -310,9 +326,9 @@ def train_on_stage(G, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_em
         preds = mlp(src_embed, dst_embed, edge_type).squeeze()
         
     # Embeddings depend on our strategy
-    if embedding_testing_flag == 'Node2Vec':
+    if args.embeddingType == 'Node2Vec':
         final_embeddings = compute_node2vec_embeddings(G)
-    elif embedding_testing_flag == 'Linear':
+    elif args.embeddingType == 'Linear':
         final_embeddings = compute_linear_gnn_embeddings(G)
         
     prev_embeddings.update(final_embeddings)  # Blindly overwrites the previously existing embeddings
@@ -462,6 +478,8 @@ def setupMLP():
             flags = ['o-o-nobank', 'o-n', 'n-n']
         mlp = MultiHeadedEdgePredictor(in_channels=input_dim, hidden_channels=32, edge_types=flags, input_type=args.mlpEncoding)
         
+    mlp.to(device)
+        
     return mlp
 
 
@@ -584,9 +602,13 @@ def predict_edges(graph, edge_type, node_types, edgebank, mlp, embeddings, top_k
 
         # Convert to torch.Tensor if necessary
         if isinstance(src_embed, np.ndarray):
-            src_embed = torch.tensor(src_embed, dtype=torch.float32)
+            src_embed = torch.tensor(src_embed, dtype=torch.float32, device=device)
+        else:
+            src_embed = src_embed.to(device)
         if isinstance(dst_embed, np.ndarray):
-            dst_embed = torch.tensor(dst_embed, dtype=torch.float32)
+            dst_embed = torch.tensor(dst_embed, dtype=torch.float32, device=device)
+        else:
+            dst_embed = dst_embed.to(device)
 
         # Add batch dimension if needed
         if src_embed.dim() == 1:
@@ -596,13 +618,13 @@ def predict_edges(graph, edge_type, node_types, edgebank, mlp, embeddings, top_k
 
         # Append onto the end
         if 'NodeType' in args.embedding:
-            src_type = torch.tensor([[1.0]] if u in node_types['new_nodes'] else [[0.0]])
-            dst_type = torch.tensor([[1.0]] if v in node_types['new_nodes'] else [[0.0]])
+            src_type = torch.tensor([[1.0]] if u in node_types['new_nodes'] else [[0.0]], device=device)
+            dst_type = torch.tensor([[1.0]] if v in node_types['new_nodes'] else [[0.0]], device=device)
             src_embed = torch.cat([src_embed, src_type], dim=1)
             dst_embed = torch.cat([dst_embed, dst_type], dim=1)
 
         if 'Position' in args.embedding:
-            cos_val = torch.tensor([[math.cos(graph_num)]], dtype=torch.float32)
+            cos_val = torch.tensor([[math.cos(graph_num)]], dtype=torch.float32, device=device)
             src_embed = torch.cat([src_embed, cos_val], dim=1)
             dst_embed = torch.cat([dst_embed, cos_val], dim=1)
             
@@ -915,9 +937,9 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
     edgebank = update_edgebank(filtration_graphs[-1], edgebank)
 
     # Embeddings depend on our strategy
-    if embedding_testing_flag == 'Node2Vec':
+    if args.embeddingType == 'Node2Vec':
         final_embeddings = compute_node2vec_embeddings(tmp_graph)
-    elif embedding_testing_flag == 'Linear':
+    elif args.embeddingType == 'Linear':
         final_embeddings = compute_linear_gnn_embeddings(tmp_graph)
         
     
@@ -1028,9 +1050,9 @@ def process_starter_graph(graph: nx.DiGraph, thresholds):
             graph.nodes[node]['feat']['maxDegree'] = graph.degree(node)
         
     # Embeddings depend on our strategy
-    if embedding_testing_flag == 'Node2Vec':
+    if args.embeddingType == 'Node2Vec':
         final_embeddings = compute_node2vec_embeddings(graph)
-    elif embedding_testing_flag == 'Linear':
+    elif args.embeddingType == 'Linear':
         final_embeddings = compute_linear_gnn_embeddings(graph)
         
     
