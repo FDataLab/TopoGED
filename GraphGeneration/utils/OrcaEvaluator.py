@@ -3,6 +3,7 @@ import numpy as np
 import subprocess
 import tempfile
 import os
+import platform
 
 # ORCA's orbit-to-graphlet mapping for 5-node graphlets (21 graphlets)
 # ORCA paper Appendix B: https://arxiv.org/pdf/1704.06664.pdf
@@ -76,7 +77,11 @@ def get_five_node_graphlet_vector(G, orca_path=None):
     # Set up the binary path
     if orca_path is None:
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        orca_path = os.path.join(base_dir, "orca", "orca.exe")
+
+        if platform.system() == "Windows":
+            orca_path = os.path.join(base_dir, "orca", "orca.exe")  # Windows uses .exe
+        else:
+            orca_path = os.path.join(base_dir, "orca", "orca")  # Linux does not use .exe
 
     #print(f"[DEBUG] Using orca_binary_path: {orca_path}")  # DEBUG LINE
 

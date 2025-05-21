@@ -54,11 +54,12 @@ class Evaluator():
         pred_res = self.evaluateSingleStructure(pred_graph)
         true_res = self.evaluateSingleStructure(true_graph)
         
-        res = {k: pred_res[k] - true_res[k] for k in pred_res}  # Since they share keys we can do this
+        res = {k: true_res[k] - pred_res[k] for k in true_res}  # Since they share keys we can do this
         
         return res
     
     
+    # Add this as a class, and let it keep track of old node ids
     def evaluateEdges(self, pred_graph: nx.Graph, true_graph: nx.Graph, edgebank_pred: dict, edgebank_true: dict,graph_num=1):
         # Get shared nodes and get subgraphs for analysis
         common_nodes = set(pred_graph.nodes()).intersection(true_graph.nodes())
@@ -181,9 +182,9 @@ class Evaluator():
         pred_nodes_overall = set(pred_graph.nodes())
         true_nodes_overall = set(true_graph.nodes())
         
-        correct_nodes_old = len(set(old_nodes_pred) & set(old_nodes_true)) 
-        correct_nodes_new = len(set(new_nodes_pred) & set(new_nodes_true)) 
-        correct_nodes_overall = len(pred_nodes_overall & true_nodes_overall)     
+        correct_nodes_old = len(set(old_nodes_pred) & set(old_nodes_true))
+        correct_nodes_new = len(set(new_nodes_pred) & set(new_nodes_true))
+        correct_nodes_overall = len(pred_nodes_overall & true_nodes_overall)
         
         res = {
             'Graph Number': graph_num,
