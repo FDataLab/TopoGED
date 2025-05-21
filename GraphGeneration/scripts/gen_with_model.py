@@ -150,14 +150,15 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
     )  # Perform Node2Vec
 
     # Used to generate an embedding for isolated nodes
+        # Used to generate an embedding for isolated nodes
     all_vectors = [model.wv[key] for key in model.wv.index_to_key]
-    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32, device=device)
+    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32).to(device)
 
     # Get embeddings and concatenate the node features
     embeddings = {}
     for node in G.nodes():
         if node in model.wv:
-            node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32)
+            node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32).to(device)
         else:
             node2vec_emb = mean_vector
             
@@ -165,7 +166,7 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
         feat_dict = G.nodes[node]['feat']
         sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
         sorted_values = [feat_dict[k] for k in sorted_keys]
-        node_feat = torch.tensor(sorted_values, dtype=torch.float32, device=device)  # Shape of (4,)
+        node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
         combined = torch.cat([node2vec_emb, node_feat], dim=0)
         embeddings[node] = combined
     
@@ -341,7 +342,7 @@ def train_on_stage(G, mlp, optimizer, loss_fn, edge_type, edgebank=None, prev_em
         
         # Average the embeddings if both exist
         if old_embedding is not None and len(old_embedding) > 0:
-            new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+            new_embedding = (curr_embedding.detach().cpu().numpy() + old_embedding.detach().cpu().numpy()) / 2
         else:
             new_embedding = curr_embedding
             
@@ -709,11 +710,15 @@ def get_node_features(graph, thresholds, embedding, old_nodes, new_nodes):
 
             # Find the smallest degree in degree_assignment ≥ old_degree
             suitable_degrees = [d for d in degree_assignment if d >= old_degree]
-            if not suitable_degrees:
+            if suitable_degrees:
+                assigned_degree = min(suitable_degrees)
+            else:
                 assigned_degree = degree_assignment.pop()
 
-            assigned_degree = min(suitable_degrees)
-            degree_assignment.remove(assigned_degree)
+            if not degree_assignment:
+                pass
+            else:
+                degree_assignment.remove(assigned_degree)
             
             graph.nodes[node]['feat']['currDegree'] = 0
             graph.nodes[node]['feat']['maxDegree'] = assigned_degree
@@ -954,7 +959,7 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
         
         # Average the embeddings if both exist
         if old_embedding is not None and len(old_embedding) > 0:
-            new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+            new_embedding = (curr_embedding.detach().cpu().numpy() + old_embedding.detach().cpu().numpy()) / 2
         else:
             new_embedding = curr_embedding
             
@@ -1076,7 +1081,7 @@ def process_starter_graph(graph: nx.DiGraph, thresholds):
         
         # Average the embeddings if both exist
         if old_embedding is not None and len(old_embedding) > 0:
-            new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+            new_embedding = (curr_embedding.detach().cpu().numpy() + old_embedding.detach().cpu().numpy()) / 2
         else:
             new_embedding = curr_embedding
             
@@ -1094,14 +1099,14 @@ my_evaluator = Evaluator()
 
 # Construct csv
 run_number = 1
-structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/structure_pred.csv'
-structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/structure_true.csv'
-structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/structure_diff.csv'
-kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/kernel_pred.csv'
-kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/kernel_true.csv'
-edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/edge_analysis.csv'
-topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/toper_diff.csv'
-animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}/pred_vs_true.mp4'
+structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/structure_pred.csv'
+structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/structure_true.csv'
+structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/structure_diff.csv'
+kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/kernel_pred.csv'
+kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/kernel_true.csv'
+edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/edge_analysis.csv'
+topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/toper_diff.csv'
+animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_embeddingType{args.embeddingType}/pred_vs_true.mp4'
 
 # Create file paths if needed
 for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 

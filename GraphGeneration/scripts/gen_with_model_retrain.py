@@ -80,7 +80,7 @@ except Exception:
 node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features 
 node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
 node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
-node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node(Higher is less backtracking)
+node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
 node2vec_q = 1.0  # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
 node2vec_window = 10  # The context size (Higher is broader learning)
 node2vec_min_count = 1  # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
@@ -93,6 +93,23 @@ if args.embeddingType == 'Node2Vec':
 elif args.embeddingType == 'Linear':
     embedding_dim = 8  # Must be same as the number of features
     
+
+# Utility function for CUDA
+def to_numpy(x):
+    if isinstance(x, torch.Tensor):
+        return x.detach().cpu().numpy()
+    elif isinstance(x, np.ndarray):
+        return x
+    else:
+        return np.array(x)
+
+def to_tensor(x):
+    if isinstance(x, list):
+        x = np.array(x)
+    if isinstance(x, np.ndarray):
+        return torch.tensor(x, dtype=torch.float32, device=device)
+    return x.to(device=device, dtype=torch.float32) if device else x
+
 
 def compute_linear_gnn_embeddings(G: nx.DiGraph):
     """
@@ -157,13 +174,13 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
 
     # Used to generate an embedding for isolated nodes
     all_vectors = [model.wv[key] for key in model.wv.index_to_key]
-    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32, device=device)
+    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32).to(device)
 
     # Get embeddings and concatenate the node features
     embeddings = {}
     for node in G.nodes():
         if node in model.wv:
-            node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32)
+            node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32).to(device)
         else:
             node2vec_emb = mean_vector
             
@@ -171,7 +188,7 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
         feat_dict = G.nodes[node]['feat']
         sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
         sorted_values = [feat_dict[k] for k in sorted_keys]
-        node_feat = torch.tensor(sorted_values, dtype=torch.float32, device=device)  # Shape of (4,)
+        node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
         combined = torch.cat([node2vec_emb, node_feat], dim=0)
         embeddings[node] = combined
     
@@ -317,8 +334,14 @@ def train_single_head(model, X_train, y_train, X_val=None, y_val=None, lr=1e-3, 
             optimizer.zero_grad()
             
             # Get current embeddings
-            src_embed = x[:, 0]
-            dst_embed = x[:, 1]
+            half = x.shape[1] // 2  
+            src_embed = x[:, :half]  
+            dst_embed = x[:, half:] 
+
+            if src_embed.dim() == 1:
+                src_embed = src_embed.unsqueeze(1)  
+            if dst_embed.dim() == 1:
+                dst_embed = dst_embed.unsqueeze(1) 
             
             preds = model(src_embed, dst_embed)
             
@@ -342,15 +365,24 @@ def train_single_head(model, X_train, y_train, X_val=None, y_val=None, lr=1e-3, 
             train_loss += loss.item()
             
             # Add to our labels for evaluation
-            train_preds.extend(preds.detach().numpy())
-            train_labels.extend(y.detach().numpy())
+            train_preds.extend(preds.detach().cpu().numpy())
+            train_labels.extend(y.detach().cpu().numpy())
 
         train_aucroc = roc_auc_score(train_labels, train_preds)  # Calculate scores
 
         if X_val is not None and y_val is not None:
             model.eval()
             with torch.no_grad():
-                src_embed, dst_embed = X_val[:, 0], X_val[:, 1]
+                half = X_val.shape[2] // 2  
+                
+                src_embed = X_val[:, :, :half]  
+                dst_embed = X_val[:, :, half:]  
+
+                if src_embed.dim() == 2:  
+                    src_embed = src_embed.unsqueeze(1)
+                if dst_embed.dim() == 2:
+                    dst_embed = dst_embed.unsqueeze(1)
+
                 preds_val = model(src_embed, dst_embed)
                 if preds_val.dim() == 0:
                     preds_val = preds_val.unsqueeze(0)
@@ -362,7 +394,7 @@ def train_single_head(model, X_train, y_train, X_val=None, y_val=None, lr=1e-3, 
 
                 # Calculate the loss and accuracy
                 val_loss = loss_fn(preds_val, y_val).item()
-                val_aucroc = roc_auc_score(y_val.numpy(), preds_val.numpy())
+                val_aucroc = roc_auc_score(y_val.cpu().numpy(), preds_val.cpu().numpy())
                 
             model.train()
             if (epoch + 1) % 100 == 0:
@@ -417,9 +449,15 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
             optimizer.zero_grad()
             
             # Get current embeddings
-            src_embed = x[:, 0]
-            dst_embed = x[:, 1]
-            
+            half = x.shape[1] // 2  
+            src_embed = x[:, :half]  
+            dst_embed = x[:, half:] 
+
+            if src_embed.dim() == 1:
+                src_embed = src_embed.unsqueeze(1)  
+            if dst_embed.dim() == 1:
+                dst_embed = dst_embed.unsqueeze(1) 
+                
             preds = model(src_embed, dst_embed, edge_type)
             if preds.dim() == 0:
                 preds = preds.unsqueeze(0)
@@ -434,8 +472,8 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
             train_loss += loss.item()
             
             # Add to our labels for evaluation
-            train_preds.extend(preds.detach().numpy())
-            train_labels.extend(y.detach().numpy())
+            train_preds.extend(preds.detach().cpu().numpy())
+            train_labels.extend(y.detach().cpu().numpy())
 
         if len(np.unique(train_labels)) < 2:
             train_aucroc = float('inf')
@@ -445,8 +483,17 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
         if X_val is not None and y_val is not None:
             model.eval()
             with torch.no_grad():
-                src_embed, dst_embed = X_val[:, 0], X_val[:, 1]
-                preds_val = model(src_embed, dst_embed, edge_type)
+                half = X_val.shape[2] // 2 
+                
+                src_embed = X_val[:, :, :half] 
+                dst_embed = X_val[:, :, half:]  
+
+                if src_embed.dim() == 2:  
+                    src_embed = src_embed.unsqueeze(1)
+                if dst_embed.dim() == 2:
+                    dst_embed = dst_embed.unsqueeze(1)
+
+                preds_val = model(src_embed, dst_embed)
                 if preds_val.dim() == 0:
                     preds_val = preds_val.unsqueeze(0)
                 if y_val.dim() == 0:  # scalar value like torch.tensor(0.5)
@@ -460,7 +507,7 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
                 if len(np.unique(y_val)) < 2:
                     val_aucroc = float('inf')
                 else:
-                    val_aucroc = roc_auc_score(y_val.numpy(), preds_val.numpy())  # Calculate scores
+                    val_aucroc = roc_auc_score(y_val.cpu().numpy(), preds_val.cpu().numpy())  # Calculate scores
                 
             model.train()
             if (epoch + 1) % 100 == 0:
@@ -472,7 +519,7 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
     return model
 
 
-# TODO Update to use prev_embeddings
+# TODO Update to use prev_embeddings (Kha)
 def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42):
     """
     Create and train the models used for graph construction, these will be used for later graph construction
@@ -522,9 +569,9 @@ def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42
             
             # Average the embeddings if both exist
             if old_embedding is not None and len(old_embedding) > 0:
-                new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+                new_embedding = (to_numpy(curr_embedding) + to_numpy(old_embedding)) / 2
             else:
-                new_embedding = curr_embedding
+                new_embedding = to_tensor(curr_embedding)
                 
             degree_clusters[degree] = new_embedding  # Add the embedding
             
@@ -539,11 +586,12 @@ def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42
                 base_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
                 
                 # Protects from crashes
-                if base_embedding is None and len(base_embedding) == 0:
-                    base_embedding = [np.zeros(32)]
+                if base_embedding is None or len(base_embedding) == 0:
+                    base_embedding = np.zeros(64) if args.embeddingType == 'Node2Vec' else np.zeros(4)
+
                 
             # Convert to tensor for concatenation
-            base_embedding = base_embedding.clone().detach().to(device).float()
+            base_embedding = to_tensor(base_embedding)
 
             additional_features = []  # If needed according to arguments
 
@@ -556,11 +604,10 @@ def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42
                 additional_features.append(pos_feat)
 
             if additional_features:
-                base_embedding = base_embedding.clone().detach().to(device).float()
                 base_embedding = torch.cat([base_embedding] + additional_features, dim=0).to(device)
 
             curr_embeddings[node] = base_embedding
-            
+
         
         num_new_edges_oo = 0
         num_new_edges_oon = 0
@@ -599,7 +646,7 @@ def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42
                     continue
 
                 # Store the sample
-                sorted_samples[edge_type]['X'].append((emb_u, emb_v))
+                sorted_samples[edge_type]['X'].append(torch.cat([emb_u, emb_v], dim=0))
                 sorted_samples[edge_type]['y'].append(1)
 
             except Exception as e:
@@ -613,10 +660,10 @@ def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42
         negative_edges_on = generate_negative_edges(graph, num_new_edges_on, edge_type='o-n', edgebank=edgebanks[i + 1])
         negative_edges_nn = generate_negative_edges(graph, num_new_edges_nn, edge_type='n-n', edgebank=edgebanks[i + 1])
         
-        tmp_samples_oo = [(curr_embeddings[u], curr_embeddings[v]) for u, v in negative_edges_oo]
-        tmp_samples_oon = [(curr_embeddings[u], curr_embeddings[v]) for u, v in negative_edges_oon]
-        tmp_samples_on = [(curr_embeddings[u], curr_embeddings[v]) for u, v in negative_edges_on]
-        tmp_samples_nn = [(curr_embeddings[u], curr_embeddings[v]) for u, v in negative_edges_nn]
+        tmp_samples_oo = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_oo]
+        tmp_samples_oon = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_oon]
+        tmp_samples_on = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_on]
+        tmp_samples_nn = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_nn]
         
         # Add to our samples
         sorted_samples['o-o-bank']['X'].extend(tmp_samples_oo)
@@ -680,6 +727,7 @@ def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42
                 continue
             
             # Numpy for sklearn
+            curr_X = [x.cpu().numpy() if torch.is_tensor(x) else x for x in curr_X]
             curr_X = np.array(curr_X)
             curr_y = np.array(curr_y)
     
@@ -718,6 +766,10 @@ def train_models(prev_graphs, edgebanks, prev_embeddings=None, lr=0.001, seed=42
         y_all.extend(sorted_samples['n-n']['y'])
             
         # Numpy for sklearn
+        X_all = [x.cpu().numpy().tolist() if torch.is_tensor(x) else x for x in X_all]
+        X_all = np.array(X_all)
+        print('Displaying curr_X: ')
+        print(X_all.shape)
         X_all = np.array(X_all)
         y_all = np.array(y_all)
 
@@ -928,11 +980,15 @@ def get_node_features(graph, thresholds, embedding, old_nodes, new_nodes):
 
             # Find the smallest degree in degree_assignment ≥ old_degree
             suitable_degrees = [d for d in degree_assignment if d >= old_degree]
-            if not suitable_degrees:
+            if suitable_degrees:
+                assigned_degree = min(suitable_degrees)
+            else:
                 assigned_degree = degree_assignment.pop()
 
-            assigned_degree = min(suitable_degrees)
-            degree_assignment.remove(assigned_degree)
+            if not degree_assignment:
+                pass
+            else:
+                degree_assignment.remove(assigned_degree)
             
             graph.nodes[node]['feat']['currDegree'] = 0
             graph.nodes[node]['feat']['maxDegree'] = assigned_degree
@@ -1075,8 +1131,8 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
             new_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
             
             # Protects from crashes
-            if new_embedding is None and len(new_embedding) == 0:
-                new_embedding = [np.zeros(32)]
+            if new_embedding is None or len(new_embedding) == 0:
+                new_embedding = np.zeros(64) if args.embeddingType == 'Node2Vec' else np.zeros(4)
 
             curr_embeddings[node] = new_embedding
 
@@ -1173,7 +1229,7 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
         
         # Average the embeddings if both exist
         if old_embedding is not None and len(old_embedding) > 0:
-            new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+            new_embedding = (to_numpy(curr_embedding) + to_numpy(old_embedding)) / 2
         else:
             new_embedding = curr_embedding
             
@@ -1337,7 +1393,7 @@ def process_starter_graph(graphs: list, thresholds: list):
             
             # Average the embeddings if both exist
             if old_embedding is not None and len(old_embedding) > 0:
-                new_embedding = (np.array(curr_embedding) + np.array(old_embedding)) / 2
+                new_embedding = (to_numpy(curr_embedding) + to_numpy(old_embedding)) / 2
             else:
                 new_embedding = curr_embedding
                 
@@ -1354,14 +1410,14 @@ my_evaluator = Evaluator()
 
 # Construct csv
 run_number = 1
-structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/structure_pred.csv'
-structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/structure_true.csv'
-structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/structure_diff.csv'
-kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/kernel_pred.csv'
-kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/kernel_true.csv'
-edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/edge_analysis.csv'
-topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/toper_diff.csv'
-animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}/pred_vs_true.mp4'
+structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_pred.csv'
+structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_true.csv'
+structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_diff.csv'
+kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/kernel_pred.csv'
+kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/kernel_true.csv'
+edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/edge_analysis.csv'
+topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/toper_diff.csv'
+animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/pred_vs_true.mp4'
 
 # Create file paths if needed
 for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 
