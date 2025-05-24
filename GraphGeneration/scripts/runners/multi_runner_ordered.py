@@ -140,7 +140,7 @@ if __name__ == "__main__":
                                     executor.submit(
                                         run_command,
                                         f'python GraphGeneration/scripts/gen_with_model_retrain.py --dataset {ds} --strategy {strategy} --embedding {embedding} --mlpEncoding {mlpEncoding} --embedOld {embedOld} --oldDegree {oldDegree}  --trainingStyle {trainingStyle}'
-                                    ): ds for ds in datasets if ds != 'mathoverflow' and strategy != 'MultiheadedMLP' and trainingStyle != 'TrueGraphs'
+                                    ): ds for ds in datasets if (ds != 'mathoverflow' and strategy != 'MultiheadedMLP' and trainingStyle != 'TrueGraphs')
                                 }
                                 for future in as_completed(futures):
                                     pass

@@ -61,7 +61,7 @@ def train_and_eval(dataset, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_v
                 
     run_name = run_name + '_' + str(counter)    
         
-    probabilities_df = pd.read_csv(f'ReinforcementLearning/output/probabilities/all_back/{dataset}_from_start.csv').iloc[:, 1:]  # Need to make a loader for this
+    probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities')  # Activation doesn't matter here
     _, labels = my_loader.load_data(dataset, 'Degree')  # Load labels
     # Load the features and their subgraphs
     probabilities = probabilities_df.values.tolist()    

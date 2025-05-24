@@ -22,10 +22,46 @@ def plot_structure(real_csv_path, pred_csv_path, diff_path, output_path):
     pred_df = pd.read_csv(pred_csv_path)
     diff_df = pd.read_csv(diff_path)
 
+    # To compare when we don't have enough data for both
+    if 'CollegeMsg' in real_csv_path:
+        common_index = 86
+    elif 'mathoverflow' in real_csv_path:
+        common_index = 128
+    elif 'networkadex' in real_csv_path:
+        common_index = 94
+    elif 'networkaeternity' in real_csv_path:
+        common_index = 115
+    elif 'networkaion' in real_csv_path:
+        common_index = 123
+    elif 'networkaragon' in real_csv_path:
+        common_index = 95
+    elif 'networkbancor' in real_csv_path:
+        common_index = 76
+    elif 'networkcentra' in real_csv_path:
+        common_index = 107
+    elif 'networkcoindash' in real_csv_path:
+        common_index = 74
+    elif 'Reddit_B' in real_csv_path:
+        common_index = 93
+        
+        
+    #common_index = real_df.index.intersection(pred_df.index)
+    #real_df = real_df.loc[common_index].reset_index(drop=True)
+    #pred_df = pred_df.loc[common_index].reset_index(drop=True)
+    original_len = len(real_df)  # Store the original number of rows
+
+    real_df = real_df.loc[:common_index - 1].reset_index(drop=True)
+    pred_df = pred_df.loc[:common_index - 1].reset_index(drop=True)
+
+    percent_used = common_index / original_len * 100 if original_len > 0 else 0
+
+    print(f'Running on: {real_csv_path}')
+    print(f"[INFO] Using {common_index} of {original_len} rows from real_df ({percent_used:.2f}%)")
+
     # Set up output path
-    output_dir_histograms = os.path.join(os.path.dirname(output_path), "histograms")
+    output_dir_histograms = os.path.join(os.path.dirname(output_path), "histogramsPartial")
     os.makedirs(output_dir_histograms, exist_ok=True)
-    output_dir_linechart = os.path.join(os.path.dirname(output_path), "linechart")
+    output_dir_linechart = os.path.join(os.path.dirname(output_path), "linechartPartial")
     os.makedirs(output_dir_linechart, exist_ok=True)
 
     sns.set(style="whitegrid")
@@ -114,9 +150,9 @@ def plot_kernel(real_csv_path, pred_csv_path, output_path):
     pred_df = pd.read_csv(pred_csv_path, header=None, skiprows=1)
 
     # Set up output path
-    output_dir_histograms = os.path.join(os.path.dirname(output_path), "histogramsComparing")
+    output_dir_histograms = os.path.join(os.path.dirname(output_path), "histogramsComparingPartial")
     os.makedirs(output_dir_histograms, exist_ok=True)
-    output_dir_linechart = os.path.join(os.path.dirname(output_path), "linechartComparing")
+    output_dir_linechart = os.path.join(os.path.dirname(output_path), "linechartComparingPartial")
     os.makedirs(output_dir_linechart, exist_ok=True)
 
     for i in range(real_df.shape[1]):
@@ -153,33 +189,39 @@ def plot_kernel(real_csv_path, pred_csv_path, output_path):
         
 def main():
     dirs = [
-        # 'CollegeMsg/contids_degree_oldDegreeFalse', 
-        #'CollegeMsg/contids_degree_oldDegreeTrue',   
-        #'mathoverflow/contids_degree_oldDegreeFalse', 
-        'mathoverflow/contids_degree_oldDegreeTrue',
-        #'networkadex/contids_degree_oldDegreeFalse', 
-        #'networkadex/contids_degree_oldDegreeTrue',
-        #'networkaeternity/contids_degree_oldDegreeFalse', 
-        #'networkaeternity/contids_degree_oldDegreeTrue',
-        #'networkaion/contids_degree_oldDegreeFalse', 
-        #'networkaion/contids_degree_oldDegreeTrue',
-        #'networkaragon/contids_degree_oldDegreeFalse', 
-        #'networkaragon/contids_degree_oldDegreeTrue',
-        #'networkbancor/contids_degree_oldDegreeFalse', 
-        #'networkbancor/contids_degree_oldDegreeTrue',
-        #'networkcentra/contids_degree_oldDegreeFalse', 
-        #'networkcentra/contids_degree_oldDegreeTrue',
-        #'networkcindicator/contids_degree_oldDegreeFalse', 
-        #'networkcindicator/contids_degree_oldDegreeTrue',
-        #'networkcoindash/contids_degree_oldDegreeFalse', 
-        #'networkcoindash/contids_degree_oldDegreeTrue',
-        #'networkdgd/contids_degree_oldDegreeFalse', 
-        #'networkdgd/contids_degree_oldDegreeTrue',
-        #'networkiconomi/contids_degree_oldDegreeFalse', 
-        #'networkiconomi/contids_degree_oldDegreeTrue',
-        #'Reddit_B/contids_degree_oldDegreeFalse', 
-        #'Reddit_B/contids_degree_oldDegreeTrue',
-        'mathoverflow\model_gen_retrain_MultiheadedMLP_embeddingNone_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs'
+        # 'CollegeMsg/contids_degree_oldDegreeTrue',   
+        # 'mathoverflow/contids_degree_oldDegreeTrue',
+        # 'networkadex/contids_degree_oldDegreeTrue',
+        # 'networkaeternity/contids_degree_oldDegreeTrue',
+        # 'networkaion/contids_degree_oldDegreeTrue',
+        # 'networkaragon/contids_degree_oldDegreeTrue',
+        # 'networkbancor/contids_degree_oldDegreeTrue',
+        'networkcentra/contids_degree_oldDegreeTrue',
+        # 'networkcindicator/contids_degree_oldDegreeTrue',
+        'networkcoindash/contids_degree_oldDegreeTrue',
+        # 'networkdgd/contids_degree_oldDegreeTrue',
+        # 'networkiconomi/contids_degree_oldDegreeTrue',
+        'Reddit_B/contids_degree_oldDegreeTrue',
+        #'CollegeMsg/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        #'CollegeMsg/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        #'mathoverflow/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        #'mathoverflow/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        #'networkadex/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        #'networkadex/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        # 'networkaeternity/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        # 'networkaeternity/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        # 'networkaion/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        # 'networkaion/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        # 'networkaragon/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        # 'networkaragon/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        #'networkbancor/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        # 'networkbancor/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        # # 'networkcentra/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        # # 'networkcentra/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        # # 'networkcoindash/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        # # 'networkcoindash/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
+        # 'Reddit_B/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeLinear',
+        # 'Reddit_B/model_gen_retrain_MultiheadedMLP_embeddingPosition_mlpEncodingConcat_embedOldTrue_trainingStyleTrueGraphs_embeddingTypeNode2Vec',
         ]  # I need to make this easier to generate
     
     flags = ['structure', 'kernel']

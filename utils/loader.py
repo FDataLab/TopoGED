@@ -10,6 +10,7 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from utils.probabilities import Probs
 from utils.embedding_methods.betweenness import EmbedBetweenness
 from utils.embedding_methods.closeness import EmbedCloseness
 from utils.embedding_methods.incremental_closeness import EmbedIncrementalCloseness
@@ -112,6 +113,11 @@ class Loader():
         elif type == 'features' and include_weights == True:
             seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+        elif type == 'probabilities':
+            seek_file = dataset + '_' + 'probabilities'
+            dataset_folder = os.path.join(self.output_dir, dataset)
+            dataset_folder = os.path.join(dataset_folder, 'probabilities')
+            return pd.read_csv(dataset_folder + f'/{dataset}_probabilities.csv')  # We just return the dataframe directly
         else:
             seek_file = dataset + '_' + activation + '_no_weight' + '.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
@@ -133,6 +139,10 @@ class Loader():
                 seek_file_path = os.path.join(dataset_folder, seek_file)
                 graphs, labels = self.from_cached(seek_file_path, type)  # Load data
                 return graphs, labels
+            elif type == 'probabilities':
+                seek_file_path = os.path.join(dataset_folder, seek_file)
+                probs = pd.read_csv(seek_file_path)
+                return probs
         
         else:
             print(f'Dataset {dataset} not found in files, please check available datasets and try again')
@@ -261,19 +271,22 @@ class Loader():
         Returns:
             None
         """
-        normalization_datasets = ['networkaeternity', 'networkiconomi', 'networkcindicator', 'networkdgd']
+        normalization_datasets = ['networkaeternity', 'networkiconomi', 'networkcindicator', 'networkdgd']  # Cuneyt recommended normalizing these datasets due to large edge weights messing up data
         
         raw_data = [file for file in os.listdir(self.edgelist_dir)]
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
         cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
-        # Betweenness and Closeness take too long to process and are deemed not feasible 
+        # Betweenness takes too long to process and are deemed not feasible 
         activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
         activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
         activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedIncrementalCloseness]  # All activation functions to use
         activation_names = ['Degree', 'Forman', 'Weight', 'Closeness']
-        # activations = [EmbedBetweenness]  # All activation functions to use
+        # If you want to use Betweenness, just run it here
+        # activations = [EmbedBetweenness] 
         # activation_names = ['Betweenness']
+        my_probs_generator = Probs()
+        
         
         missing_cached = []
         for dataset in raw_data:
@@ -316,6 +329,10 @@ class Loader():
                     missing_cached.append(dataset)
                     break  # Skip to the next dataset if any activation file is missing
                 
+            # Check the probabilities (we just do all_back)
+            probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities.csv')
+            if not os.path.exists(probabilities_file):
+                missing_cached.append(dataset)
         
                 
         # If we are missing files, generate them
@@ -393,6 +410,15 @@ class Loader():
                         print(f'sending thresholds to {activation_file_path}')
                         with open(activation_file_path, "wb") as f:
                             pickle.dump(thresholds, f)
+                            
+                # Add on the probabiliites
+                probs = my_probs_generator.gen_probs(num_graphs_back = 1, graphs=graphs, from_start=True)
+                data_dir = self.output_dir + '/' + file + '/probabilities'
+                os.makedirs(data_dir, exist_ok=True)
+                probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities.csv')
+                df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                df.to_csv(probabilities_file_path)
+                print(f'Sending probabilities to {probabilities_file_path}')
 
 
     # Load from the pkl file

@@ -391,7 +391,7 @@ pd.DataFrame().to_csv(kernel_pred_file_path, index=False)
 pd.DataFrame().to_csv(kernel_true_file_path, index=False)
 
 # Load probabilities
-probabilities_df = pd.read_csv(f'ReinforcementLearning/output/probabilities/{dataset}_1back.csv').iloc[:, 1:]
+probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities')  # Activation doesn't matter here
 probabilities = probabilities_df.values.tolist()
 
 # Load all features, thresholds, and target subgraphs

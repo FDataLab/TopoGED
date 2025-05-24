@@ -54,7 +54,7 @@ args = parser.parse_args()
 
 dataset = 'CollegeMsg'
 my_loader = Loader()
-probabilities_df = pd.read_csv(f'ReinforcementLearning/output/probabilities/all_back/{dataset}_from_start.csv').iloc[:, 1:]  # Need to make a loader for this
+probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities')  # Activation doesn't matter here
 
 # Load the features and their subgraphs
 features, _ = my_loader.load_data(dataset, activation='Degree', type='features', include_weights=False)
