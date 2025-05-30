@@ -90,7 +90,10 @@ def get_five_node_graphlet_vector(G, orca_path=None):
         out_path = os.path.join(tmpdir, "output.txt")
 
         write_graph_to_orca_input(G, in_path)
+        print("Running ORCA with:", [orca_path, "5", in_path, out_path])
         subprocess.run([orca_path, "5", in_path, out_path], check=True)
+
+        # subprocess.run([orca_path, "5", in_path, out_path], check=True)
 
         orbit_matrix = read_orca_output(out_path)
         graphlet_vector = count_graphlets_from_orbits(orbit_matrix)

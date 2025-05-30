@@ -101,7 +101,7 @@ class Loader():
             graphs (list): A list of networkx graphs to process
             labels (list): The associated labels for each graph
         """
-        self.to_cached()
+        # self.to_cached()
         if type == 'subgraphs':
             seek_file = dataset + '_' + activation + '_subgraphs.pkl'
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
