@@ -8,7 +8,8 @@ from scipy.stats import wasserstein_distance
 import matplotlib.pyplot as plt 
 from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
 from .OrcaEvaluator import get_five_node_graphlet_vector
-
+from collections import Counter
+from scipy.special import rel_entr
 
 class Evaluator():
     def __init__(self):
@@ -493,3 +494,33 @@ class Evaluator():
         top_k_vals = sorted(eigenvals, key=lambda x: abs(x), reverse=True)[:num_values]
         
         return top_k_vals
+
+    def kl_divergence_graphs(self, G1, G2, mode="in"):
+        def get_degree_distribution(graph, mode="in"):
+            if mode == "in":
+                degrees = [deg for _, deg in graph.in_degree()]
+            elif mode == "out":
+                degrees = [deg for _, deg in graph.out_degree()]
+            elif mode == "total":
+                degrees = [graph.in_degree(n) + graph.out_degree(n) for n in graph.nodes()]
+            else:
+                raise ValueError("mode must be 'in', 'out', or 'total'")
+
+            return Counter(degrees)
+        
+        dist1 = get_degree_distribution(G1, mode=mode)
+        dist2 = get_degree_distribution(G2, mode=mode)
+
+        all_degrees = sorted(set(dist1) | set(dist2))
+        
+        P = np.array([dist1.get(d, 0) for d in all_degrees], dtype=float)
+        Q = np.array([dist2.get(d, 0) for d in all_degrees], dtype=float)
+
+        epsilon = 1e-10
+        P += epsilon
+        Q += epsilon
+        P /= P.sum()
+        Q /= Q.sum()
+
+        kl = np.sum(rel_entr(P, Q))
+        return kl

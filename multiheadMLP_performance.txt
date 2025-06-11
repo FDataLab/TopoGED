@@ -1,0 +1,762 @@
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 0.0071 | Train AUCROC inf
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 0.0019 | Train AUCROC inf
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 0.0008 | Train AUCROC inf
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 0.0004 | Train AUCROC inf
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 0.0003 | Train AUCROC inf
+
+Epoch 100 | Edge Type: o-n | Train Loss: 0.0049 | Train AUCROC inf
+Epoch 200 | Edge Type: o-n | Train Loss: 0.0005 | Train AUCROC inf
+Epoch 300 | Edge Type: o-n | Train Loss: 0.0002 | Train AUCROC inf
+Epoch 400 | Edge Type: o-n | Train Loss: 0.0001 | Train AUCROC inf
+Epoch 500 | Edge Type: o-n | Train Loss: 0.0002 | Train AUCROC inf
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.3568 | Train AUCROC 0.6055
+Epoch 200 | Edge Type: n-n | Train Loss: 1.3437 | Train AUCROC 0.6234
+Epoch 300 | Edge Type: n-n | Train Loss: 1.3340 | Train AUCROC 0.6342
+Epoch 400 | Edge Type: n-n | Train Loss: 1.3236 | Train AUCROC 0.6550
+Epoch 500 | Edge Type: n-n | Train Loss: 1.3060 | Train AUCROC 0.6667
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 0.5762 | Train AUCROC 0.9310
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 0.4836 | Train AUCROC 0.9649
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 0.4431 | Train AUCROC 0.9810
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 0.3289 | Train AUCROC 0.9780
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 0.2850 | Train AUCROC 0.9845
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 2.9795 | Train AUCROC 0.8812
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 2.6550 | Train AUCROC 0.9095
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 2.4651 | Train AUCROC 0.9247
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 2.3590 | Train AUCROC 0.9299
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 2.2369 | Train AUCROC 0.9362
+
+Epoch 100 | Edge Type: o-n | Train Loss: 0.0157 | Train AUCROC inf
+Epoch 200 | Edge Type: o-n | Train Loss: 0.0069 | Train AUCROC inf
+Epoch 300 | Edge Type: o-n | Train Loss: 0.0044 | Train AUCROC inf
+Epoch 400 | Edge Type: o-n | Train Loss: 0.0036 | Train AUCROC inf
+Epoch 500 | Edge Type: o-n | Train Loss: 0.0025 | Train AUCROC inf
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.0948 | Train AUCROC 0.6365
+Epoch 200 | Edge Type: n-n | Train Loss: 2.0661 | Train AUCROC 0.6095
+Epoch 300 | Edge Type: n-n | Train Loss: 1.7978 | Train AUCROC 0.6209
+Epoch 400 | Edge Type: n-n | Train Loss: 1.9494 | Train AUCROC 0.6458
+Epoch 500 | Edge Type: n-n | Train Loss: 1.9778 | Train AUCROC 0.6301
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 1.2486 | Train AUCROC 0.9885
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 0.7703 | Train AUCROC 0.9921
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 0.7617 | Train AUCROC 0.9925
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 0.5211 | Train AUCROC 0.9967
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 0.3551 | Train AUCROC 0.9962
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 4.6924 | Train AUCROC 0.8930
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 4.4604 | Train AUCROC 0.9204
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 3.9508 | Train AUCROC 0.9306
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 3.9017 | Train AUCROC 0.9305
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 3.7662 | Train AUCROC 0.9328
+
+Epoch 100 | Edge Type: o-n | Train Loss: 1.3787 | Train AUCROC 0.9437
+Epoch 200 | Edge Type: o-n | Train Loss: 1.0790 | Train AUCROC 0.9696
+Epoch 300 | Edge Type: o-n | Train Loss: 0.9366 | Train AUCROC 0.9767
+Epoch 400 | Edge Type: o-n | Train Loss: 0.9090 | Train AUCROC 0.9772
+Epoch 500 | Edge Type: o-n | Train Loss: 0.8123 | Train AUCROC 0.9829
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.4186 | Train AUCROC 0.7967
+Epoch 200 | Edge Type: n-n | Train Loss: 1.4130 | Train AUCROC 0.8063
+Epoch 300 | Edge Type: n-n | Train Loss: 1.3999 | Train AUCROC 0.8050
+Epoch 400 | Edge Type: n-n | Train Loss: 1.3982 | Train AUCROC 0.8090
+Epoch 500 | Edge Type: n-n | Train Loss: 1.4092 | Train AUCROC 0.8085
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 1.7835 | Train AUCROC 0.9876
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 1.4138 | Train AUCROC 0.9913
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 2.0759 | Train AUCROC 0.9939
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 0.8346 | Train AUCROC 0.9949
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 0.8768 | Train AUCROC 0.9944
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 7.9899 | Train AUCROC 0.8855
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 7.5396 | Train AUCROC 0.8985
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 7.3240 | Train AUCROC 0.9037
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 7.2730 | Train AUCROC 0.9048
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 6.9199 | Train AUCROC 0.9146
+
+Epoch 100 | Edge Type: o-n | Train Loss: 1.2415 | Train AUCROC 0.9689
+Epoch 200 | Edge Type: o-n | Train Loss: 0.9751 | Train AUCROC 0.9833
+Epoch 300 | Edge Type: o-n | Train Loss: 0.7676 | Train AUCROC 0.9916
+Epoch 400 | Edge Type: o-n | Train Loss: 0.6557 | Train AUCROC 0.9927
+Epoch 500 | Edge Type: o-n | Train Loss: 0.5849 | Train AUCROC 0.9930
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.3841 | Train AUCROC 0.8040
+Epoch 200 | Edge Type: n-n | Train Loss: 1.3700 | Train AUCROC 0.8170
+Epoch 300 | Edge Type: n-n | Train Loss: 1.3569 | Train AUCROC 0.8214
+Epoch 400 | Edge Type: n-n | Train Loss: 1.3417 | Train AUCROC 0.8287
+Epoch 500 | Edge Type: n-n | Train Loss: 1.3372 | Train AUCROC 0.8321
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 2.3001 | Train AUCROC 0.9932
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 1.2072 | Train AUCROC 0.9978
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 0.8547 | Train AUCROC 0.9976
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 0.7849 | Train AUCROC 0.9977
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 0.7012 | Train AUCROC 0.9984
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 10.3358 | Train AUCROC 0.8795
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 10.0508 | Train AUCROC 0.8878
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 9.1444 | Train AUCROC 0.9068
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 9.1202 | Train AUCROC 0.9076
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 8.8715 | Train AUCROC 0.9124
+
+Epoch 100 | Edge Type: o-n | Train Loss: 3.2409 | Train AUCROC 0.9207
+Epoch 200 | Edge Type: o-n | Train Loss: 2.7724 | Train AUCROC 0.9441
+Epoch 300 | Edge Type: o-n | Train Loss: 2.3706 | Train AUCROC 0.9542
+Epoch 400 | Edge Type: o-n | Train Loss: 2.2190 | Train AUCROC 0.9619
+Epoch 500 | Edge Type: o-n | Train Loss: 2.0028 | Train AUCROC 0.9693
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.7091 | Train AUCROC 0.8209
+Epoch 200 | Edge Type: n-n | Train Loss: 1.7460 | Train AUCROC 0.8306
+Epoch 300 | Edge Type: n-n | Train Loss: 1.6043 | Train AUCROC 0.8307
+Epoch 400 | Edge Type: n-n | Train Loss: 1.7915 | Train AUCROC 0.8458
+Epoch 500 | Edge Type: n-n | Train Loss: 1.5767 | Train AUCROC 0.8491
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 14.7463 | Train AUCROC 0.9765
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 13.6901 | Train AUCROC 0.9782
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 12.3980 | Train AUCROC 0.9833
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 11.1978 | Train AUCROC 0.9891
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 11.1392 | Train AUCROC 0.9886
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 15.2044 | Train AUCROC 0.8471
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 14.1798 | Train AUCROC 0.8678
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 14.0214 | Train AUCROC 0.8713
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 13.3422 | Train AUCROC 0.8856
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 13.2189 | Train AUCROC 0.8869
+
+Epoch 100 | Edge Type: o-n | Train Loss: 4.9294 | Train AUCROC 0.9059
+Epoch 200 | Edge Type: o-n | Train Loss: 4.6654 | Train AUCROC 0.9135
+Epoch 300 | Edge Type: o-n | Train Loss: 4.2052 | Train AUCROC 0.9326
+Epoch 400 | Edge Type: o-n | Train Loss: 3.9551 | Train AUCROC 0.9421
+Epoch 500 | Edge Type: o-n | Train Loss: 3.6732 | Train AUCROC 0.9483
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.5159 | Train AUCROC 0.8426
+Epoch 200 | Edge Type: n-n | Train Loss: 1.4795 | Train AUCROC 0.8601
+Epoch 300 | Edge Type: n-n | Train Loss: 1.4526 | Train AUCROC 0.8654
+Epoch 400 | Edge Type: n-n | Train Loss: 1.4543 | Train AUCROC 0.8690
+Epoch 500 | Edge Type: n-n | Train Loss: 1.4187 | Train AUCROC 0.8703
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 12.2604 | Train AUCROC 0.9693
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 10.8729 | Train AUCROC 0.9738
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 10.2905 | Train AUCROC 0.9759
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 9.1812 | Train AUCROC 0.9806
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 8.5458 | Train AUCROC 0.9820
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 21.2243 | Train AUCROC 0.8518
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 20.2854 | Train AUCROC 0.8677
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 20.2904 | Train AUCROC 0.8656
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 18.9575 | Train AUCROC 0.8821
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 18.8671 | Train AUCROC 0.8815
+
+Epoch 100 | Edge Type: o-n | Train Loss: 6.6985 | Train AUCROC 0.8978
+Epoch 200 | Edge Type: o-n | Train Loss: 5.6461 | Train AUCROC 0.9280
+Epoch 300 | Edge Type: o-n | Train Loss: 5.3725 | Train AUCROC 0.9374
+Epoch 400 | Edge Type: o-n | Train Loss: 5.1854 | Train AUCROC 0.9433
+Epoch 500 | Edge Type: o-n | Train Loss: 4.8092 | Train AUCROC 0.9520
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.3898 | Train AUCROC 0.8595
+Epoch 200 | Edge Type: n-n | Train Loss: 1.3939 | Train AUCROC 0.8678
+Epoch 300 | Edge Type: n-n | Train Loss: 1.3839 | Train AUCROC 0.8678
+Epoch 400 | Edge Type: n-n | Train Loss: 1.3727 | Train AUCROC 0.8720
+Epoch 500 | Edge Type: n-n | Train Loss: 1.3651 | Train AUCROC 0.8716
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 33.0144 | Train AUCROC 0.9088
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 29.0305 | Train AUCROC 0.9289
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 27.8367 | Train AUCROC 0.9339
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 27.8146 | Train AUCROC 0.9344
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 25.7003 | Train AUCROC 0.9437
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 28.2541 | Train AUCROC 0.8432
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 27.0246 | Train AUCROC 0.8575
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 26.3703 | Train AUCROC 0.8627
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 26.0361 | Train AUCROC 0.8661
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 26.4187 | Train AUCROC 0.8628
+
+Epoch 100 | Edge Type: o-n | Train Loss: 8.4442 | Train AUCROC 0.8950
+Epoch 200 | Edge Type: o-n | Train Loss: 7.9072 | Train AUCROC 0.9075
+Epoch 300 | Edge Type: o-n | Train Loss: 8.1891 | Train AUCROC 0.9005
+Epoch 400 | Edge Type: o-n | Train Loss: 7.6544 | Train AUCROC 0.9155
+Epoch 500 | Edge Type: o-n | Train Loss: 7.0840 | Train AUCROC 0.9283
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.0402 | Train AUCROC 0.8762
+Epoch 200 | Edge Type: n-n | Train Loss: 1.5514 | Train AUCROC 0.8778
+Epoch 300 | Edge Type: n-n | Train Loss: 1.8776 | Train AUCROC 0.8779
+Epoch 400 | Edge Type: n-n | Train Loss: 1.8336 | Train AUCROC 0.8775
+Epoch 500 | Edge Type: n-n | Train Loss: 2.1955 | Train AUCROC 0.8771
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 58.5220 | Train AUCROC 0.8454
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 54.2437 | Train AUCROC 0.8669
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 50.9246 | Train AUCROC 0.8849
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 47.9601 | Train AUCROC 0.8982
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 45.6661 | Train AUCROC 0.9070
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 35.0015 | Train AUCROC 0.8455
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 34.0187 | Train AUCROC 0.8576
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 34.4641 | Train AUCROC 0.8502
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 33.3387 | Train AUCROC 0.8621
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 32.6982 | Train AUCROC 0.8701
+
+Epoch 100 | Edge Type: o-n | Train Loss: 11.4941 | Train AUCROC 0.8810
+Epoch 200 | Edge Type: o-n | Train Loss: 11.1487 | Train AUCROC 0.8869
+Epoch 300 | Edge Type: o-n | Train Loss: 9.9797 | Train AUCROC 0.9112
+Epoch 400 | Edge Type: o-n | Train Loss: 9.5920 | Train AUCROC 0.9194
+Epoch 500 | Edge Type: o-n | Train Loss: 9.9221 | Train AUCROC 0.9146
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.5362 | Train AUCROC 0.8919
+Epoch 200 | Edge Type: n-n | Train Loss: 1.5283 | Train AUCROC 0.8963
+Epoch 300 | Edge Type: n-n | Train Loss: 1.5063 | Train AUCROC 0.8968
+Epoch 400 | Edge Type: n-n | Train Loss: 1.4433 | Train AUCROC 0.9007
+Epoch 500 | Edge Type: n-n | Train Loss: 1.4548 | Train AUCROC 0.9007
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 85.0144 | Train AUCROC 0.8001
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 80.4233 | Train AUCROC 0.8235
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 76.2571 | Train AUCROC 0.8429
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 75.7052 | Train AUCROC 0.8458
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 73.1102 | Train AUCROC 0.8573
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 43.4684 | Train AUCROC 0.8492
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 42.3324 | Train AUCROC 0.8581
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 41.1450 | Train AUCROC 0.8639
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 41.3219 | Train AUCROC 0.8620
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 40.8391 | Train AUCROC 0.8670
+
+Epoch 100 | Edge Type: o-n | Train Loss: 14.1123 | Train AUCROC 0.8511
+Epoch 200 | Edge Type: o-n | Train Loss: 13.0758 | Train AUCROC 0.8763
+Epoch 300 | Edge Type: o-n | Train Loss: 12.6974 | Train AUCROC 0.8842
+Epoch 400 | Edge Type: o-n | Train Loss: 12.4420 | Train AUCROC 0.8891
+Epoch 500 | Edge Type: o-n | Train Loss: 12.3050 | Train AUCROC 0.8934
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.4923 | Train AUCROC 0.8736
+Epoch 200 | Edge Type: n-n | Train Loss: 1.4647 | Train AUCROC 0.8901
+Epoch 300 | Edge Type: n-n | Train Loss: 1.4511 | Train AUCROC 0.8891
+Epoch 400 | Edge Type: n-n | Train Loss: 1.4507 | Train AUCROC 0.8972
+Epoch 500 | Edge Type: n-n | Train Loss: 1.4571 | Train AUCROC 0.8960
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 111.6683 | Train AUCROC 0.7925
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 105.8881 | Train AUCROC 0.8161
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 104.8912 | Train AUCROC 0.8213
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 100.8981 | Train AUCROC 0.8367
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 99.3281 | Train AUCROC 0.8437
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 51.6150 | Train AUCROC 0.8378
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 49.9387 | Train AUCROC 0.8489
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 49.2032 | Train AUCROC 0.8531
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 48.4876 | Train AUCROC 0.8576
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 48.3789 | Train AUCROC 0.8569
+
+Epoch 100 | Edge Type: o-n | Train Loss: 13.8481 | Train AUCROC 0.8576
+Epoch 200 | Edge Type: o-n | Train Loss: 13.2768 | Train AUCROC 0.8695
+Epoch 300 | Edge Type: o-n | Train Loss: 12.9641 | Train AUCROC 0.8756
+Epoch 400 | Edge Type: o-n | Train Loss: 12.3334 | Train AUCROC 0.8923
+Epoch 500 | Edge Type: o-n | Train Loss: 11.6122 | Train AUCROC 0.9055
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.5187 | Train AUCROC 0.8742
+Epoch 200 | Edge Type: n-n | Train Loss: 1.4698 | Train AUCROC 0.8826
+Epoch 300 | Edge Type: n-n | Train Loss: 1.4908 | Train AUCROC 0.8875
+Epoch 400 | Edge Type: n-n | Train Loss: 1.5087 | Train AUCROC 0.8961
+Epoch 500 | Edge Type: n-n | Train Loss: 1.4856 | Train AUCROC 0.9022
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 146.2810 | Train AUCROC 0.7648
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 140.8474 | Train AUCROC 0.7866
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 138.3513 | Train AUCROC 0.7963
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 136.2150 | Train AUCROC 0.8036
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 135.5587 | Train AUCROC 0.8064
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 59.9804 | Train AUCROC 0.8283
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 59.2170 | Train AUCROC 0.8324
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 57.7340 | Train AUCROC 0.8405
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 56.8147 | Train AUCROC 0.8453
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 56.1182 | Train AUCROC 0.8496
+
+Epoch 100 | Edge Type: o-n | Train Loss: 15.8312 | Train AUCROC 0.8648
+Epoch 200 | Edge Type: o-n | Train Loss: 15.0691 | Train AUCROC 0.8774
+Epoch 300 | Edge Type: o-n | Train Loss: 13.9104 | Train AUCROC 0.8993
+Epoch 400 | Edge Type: o-n | Train Loss: 13.8017 | Train AUCROC 0.9003
+Epoch 500 | Edge Type: o-n | Train Loss: 13.4951 | Train AUCROC 0.9054
+
+Epoch 100 | Edge Type: n-n | Train Loss: 1.5710 | Train AUCROC 0.9148
+Epoch 200 | Edge Type: n-n | Train Loss: 1.6991 | Train AUCROC 0.9087
+Epoch 300 | Edge Type: n-n | Train Loss: 1.7673 | Train AUCROC 0.9159
+Epoch 400 | Edge Type: n-n | Train Loss: 1.7721 | Train AUCROC 0.9182
+Epoch 500 | Edge Type: n-n | Train Loss: 1.4644 | Train AUCROC 0.9176
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 182.9114 | Train AUCROC 0.7375
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 176.5844 | Train AUCROC 0.7602
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 174.6984 | Train AUCROC 0.7668
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 172.4815 | Train AUCROC 0.7722
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 172.4267 | Train AUCROC 0.7722
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 71.1400 | Train AUCROC 0.8326
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 68.6756 | Train AUCROC 0.8409
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 67.6360 | Train AUCROC 0.8471
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 67.2865 | Train AUCROC 0.8487
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 66.8307 | Train AUCROC 0.8505
+
+Epoch 100 | Edge Type: o-n | Train Loss: 24.2515 | Train AUCROC 0.7855
+Epoch 200 | Edge Type: o-n | Train Loss: 22.3211 | Train AUCROC 0.8197
+Epoch 300 | Edge Type: o-n | Train Loss: 21.5575 | Train AUCROC 0.8263
+Epoch 400 | Edge Type: o-n | Train Loss: 21.5391 | Train AUCROC 0.8428
+Epoch 500 | Edge Type: o-n | Train Loss: 21.0905 | Train AUCROC 0.8397
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.1608 | Train AUCROC 0.9458
+Epoch 200 | Edge Type: n-n | Train Loss: 1.9453 | Train AUCROC 0.9502
+Epoch 300 | Edge Type: n-n | Train Loss: 2.3170 | Train AUCROC 0.9523
+Epoch 400 | Edge Type: n-n | Train Loss: 1.8764 | Train AUCROC 0.9540
+Epoch 500 | Edge Type: n-n | Train Loss: 1.8405 | Train AUCROC 0.9541
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 223.2746 | Train AUCROC 0.7115
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 216.7509 | Train AUCROC 0.7331
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 210.8991 | Train AUCROC 0.7526
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 208.6569 | Train AUCROC 0.7624
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 204.8253 | Train AUCROC 0.7735
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 86.8951 | Train AUCROC 0.8278
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 85.7091 | Train AUCROC 0.8352
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 84.1103 | Train AUCROC 0.8391
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 84.2807 | Train AUCROC 0.8401
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 83.3262 | Train AUCROC 0.8437
+
+Epoch 100 | Edge Type: o-n | Train Loss: 26.7144 | Train AUCROC 0.7761
+Epoch 200 | Edge Type: o-n | Train Loss: 25.6617 | Train AUCROC 0.8003
+Epoch 300 | Edge Type: o-n | Train Loss: 24.6997 | Train AUCROC 0.8198
+Epoch 400 | Edge Type: o-n | Train Loss: 23.5759 | Train AUCROC 0.8384
+Epoch 500 | Edge Type: o-n | Train Loss: 23.5288 | Train AUCROC 0.8387
+
+Epoch 100 | Edge Type: n-n | Train Loss: 188.6139 | Train AUCROC 0.5717
+Epoch 200 | Edge Type: n-n | Train Loss: 192.9563 | Train AUCROC 0.5864
+Epoch 300 | Edge Type: n-n | Train Loss: 197.2090 | Train AUCROC 0.5882
+Epoch 400 | Edge Type: n-n | Train Loss: 197.2296 | Train AUCROC 0.5870
+Epoch 500 | Edge Type: n-n | Train Loss: 197.2077 | Train AUCROC 0.5892
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 264.5422 | Train AUCROC 0.7147
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 257.4899 | Train AUCROC 0.7360
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 255.1116 | Train AUCROC 0.7424
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 253.7908 | Train AUCROC 0.7452
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 252.9083 | Train AUCROC 0.7482
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 103.7582 | Train AUCROC 0.8206
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 100.5800 | Train AUCROC 0.8322
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 100.0438 | Train AUCROC 0.8349
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 98.9681 | Train AUCROC 0.8373
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 98.5251 | Train AUCROC 0.8396
+
+Epoch 100 | Edge Type: o-n | Train Loss: 28.8550 | Train AUCROC 0.7961
+Epoch 200 | Edge Type: o-n | Train Loss: 27.9739 | Train AUCROC 0.8167
+Epoch 300 | Edge Type: o-n | Train Loss: 27.2198 | Train AUCROC 0.8228
+Epoch 400 | Edge Type: o-n | Train Loss: 27.0734 | Train AUCROC 0.8277
+Epoch 500 | Edge Type: o-n | Train Loss: 26.1558 | Train AUCROC 0.8411
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.3471 | Train AUCROC 0.9488
+Epoch 200 | Edge Type: n-n | Train Loss: 2.1177 | Train AUCROC 0.9576
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0446 | Train AUCROC 0.9597
+Epoch 400 | Edge Type: n-n | Train Loss: 2.2480 | Train AUCROC 0.9573
+Epoch 500 | Edge Type: n-n | Train Loss: 2.0704 | Train AUCROC 0.9603
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 312.5935 | Train AUCROC 0.7032
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 307.4816 | Train AUCROC 0.7176
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 305.8438 | Train AUCROC 0.7216
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 305.8318 | Train AUCROC 0.7229
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 304.8765 | Train AUCROC 0.7242
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 121.8200 | Train AUCROC 0.8158
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 119.6566 | Train AUCROC 0.8249
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 119.3388 | Train AUCROC 0.8242
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 118.0075 | Train AUCROC 0.8288
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 117.8500 | Train AUCROC 0.8291
+
+Epoch 100 | Edge Type: o-n | Train Loss: 32.9176 | Train AUCROC 0.7776
+Epoch 200 | Edge Type: o-n | Train Loss: 32.2106 | Train AUCROC 0.7892
+Epoch 300 | Edge Type: o-n | Train Loss: 30.9704 | Train AUCROC 0.8055
+Epoch 400 | Edge Type: o-n | Train Loss: 30.4003 | Train AUCROC 0.8140
+Epoch 500 | Edge Type: o-n | Train Loss: 29.6512 | Train AUCROC 0.8255
+
+Epoch 100 | Edge Type: n-n | Train Loss: 210.5173 | Train AUCROC 0.5781
+Epoch 200 | Edge Type: n-n | Train Loss: 210.3838 | Train AUCROC 0.5805
+Epoch 300 | Edge Type: n-n | Train Loss: 210.7811 | Train AUCROC 0.5829
+Epoch 400 | Edge Type: n-n | Train Loss: 210.8555 | Train AUCROC 0.5863
+Epoch 500 | Edge Type: n-n | Train Loss: 211.1506 | Train AUCROC 0.5871
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 370.3876 | Train AUCROC 0.6905
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 363.4800 | Train AUCROC 0.7056
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 360.5258 | Train AUCROC 0.7122
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 359.1911 | Train AUCROC 0.7149
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 358.4496 | Train AUCROC 0.7177
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 137.6839 | Train AUCROC 0.8160
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 135.2304 | Train AUCROC 0.8241
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 134.8697 | Train AUCROC 0.8256
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 134.1210 | Train AUCROC 0.8269
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 133.6014 | Train AUCROC 0.8287
+
+Epoch 100 | Edge Type: o-n | Train Loss: 33.9180 | Train AUCROC 0.7797
+Epoch 200 | Edge Type: o-n | Train Loss: 34.7088 | Train AUCROC 0.7831
+Epoch 300 | Edge Type: o-n | Train Loss: 30.6120 | Train AUCROC 0.8270
+Epoch 400 | Edge Type: o-n | Train Loss: 30.2237 | Train AUCROC 0.8303
+Epoch 500 | Edge Type: o-n | Train Loss: 31.6602 | Train AUCROC 0.8192
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.2912 | Train AUCROC 0.9519
+Epoch 200 | Edge Type: n-n | Train Loss: 2.0668 | Train AUCROC 0.9613
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0086 | Train AUCROC 0.9662
+Epoch 400 | Edge Type: n-n | Train Loss: 1.8598 | Train AUCROC 0.9683
+Epoch 500 | Edge Type: n-n | Train Loss: 1.9519 | Train AUCROC 0.9674
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 431.6879 | Train AUCROC 0.6907
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 425.3292 | Train AUCROC 0.7031
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 423.3689 | Train AUCROC 0.7078
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 422.1763 | Train AUCROC 0.7094
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 422.2749 | Train AUCROC 0.7093
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 152.8155 | Train AUCROC 0.8083
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 148.7217 | Train AUCROC 0.8218
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 147.2197 | Train AUCROC 0.8257
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 146.9242 | Train AUCROC 0.8273
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 146.4924 | Train AUCROC 0.8275
+
+Epoch 100 | Edge Type: o-n | Train Loss: 35.2700 | Train AUCROC 0.7789
+Epoch 200 | Edge Type: o-n | Train Loss: 33.7597 | Train AUCROC 0.8019
+Epoch 300 | Edge Type: o-n | Train Loss: 32.3377 | Train AUCROC 0.8208
+Epoch 400 | Edge Type: o-n | Train Loss: 31.6414 | Train AUCROC 0.8306
+Epoch 500 | Edge Type: o-n | Train Loss: 31.2614 | Train AUCROC 0.8346
+
+Epoch 100 | Edge Type: n-n | Train Loss: 3.1177 | Train AUCROC 0.9213
+Epoch 200 | Edge Type: n-n | Train Loss: 2.0058 | Train AUCROC 0.9658
+Epoch 300 | Edge Type: n-n | Train Loss: 2.6331 | Train AUCROC 0.9684
+Epoch 400 | Edge Type: n-n | Train Loss: 2.0122 | Train AUCROC 0.9686
+Epoch 500 | Edge Type: n-n | Train Loss: 1.8718 | Train AUCROC 0.9670
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 495.7347 | Train AUCROC 0.6896
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 491.6509 | Train AUCROC 0.6974
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 489.9493 | Train AUCROC 0.7007
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 488.4770 | Train AUCROC 0.7032
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 486.9815 | Train AUCROC 0.7050
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 165.0883 | Train AUCROC 0.8107
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 161.9385 | Train AUCROC 0.8197
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 160.8815 | Train AUCROC 0.8226
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 160.3130 | Train AUCROC 0.8241
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 159.2860 | Train AUCROC 0.8269
+
+Epoch 100 | Edge Type: o-n | Train Loss: 34.1509 | Train AUCROC 0.8039
+Epoch 200 | Edge Type: o-n | Train Loss: 31.5583 | Train AUCROC 0.8396
+Epoch 300 | Edge Type: o-n | Train Loss: 31.4466 | Train AUCROC 0.8412
+Epoch 400 | Edge Type: o-n | Train Loss: 30.3210 | Train AUCROC 0.8538
+Epoch 500 | Edge Type: o-n | Train Loss: 29.5548 | Train AUCROC 0.8625
+
+Epoch 100 | Edge Type: n-n | Train Loss: 236.2929 | Train AUCROC 0.5753
+Epoch 200 | Edge Type: n-n | Train Loss: 229.4451 | Train AUCROC 0.5785
+Epoch 300 | Edge Type: n-n | Train Loss: 216.0301 | Train AUCROC 0.5814
+Epoch 400 | Edge Type: n-n | Train Loss: 215.9683 | Train AUCROC 0.5809
+Epoch 500 | Edge Type: n-n | Train Loss: 222.7541 | Train AUCROC 0.5818
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 562.5567 | Train AUCROC 0.6828
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 557.0247 | Train AUCROC 0.6914
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 553.0577 | Train AUCROC 0.6959
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 549.5669 | Train AUCROC 0.7021
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 548.3051 | Train AUCROC 0.7041
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 180.3209 | Train AUCROC 0.8037
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 174.7676 | Train AUCROC 0.8184
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 173.1808 | Train AUCROC 0.8224
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 173.2556 | Train AUCROC 0.8222
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 172.4353 | Train AUCROC 0.8245
+
+Epoch 100 | Edge Type: o-n | Train Loss: 35.4450 | Train AUCROC 0.7927
+Epoch 200 | Edge Type: o-n | Train Loss: 36.1138 | Train AUCROC 0.7928
+Epoch 300 | Edge Type: o-n | Train Loss: 33.8823 | Train AUCROC 0.8188
+Epoch 400 | Edge Type: o-n | Train Loss: 33.1509 | Train AUCROC 0.8287
+Epoch 500 | Edge Type: o-n | Train Loss: 31.9129 | Train AUCROC 0.8423
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.2572 | Train AUCROC 0.9609
+Epoch 200 | Edge Type: n-n | Train Loss: 2.0306 | Train AUCROC 0.9638
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0038 | Train AUCROC 0.9700
+Epoch 400 | Edge Type: n-n | Train Loss: 2.1554 | Train AUCROC 0.9662
+Epoch 500 | Edge Type: n-n | Train Loss: 1.9670 | Train AUCROC 0.9691
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 626.3411 | Train AUCROC 0.6814
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 623.9555 | Train AUCROC 0.6851
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 622.9908 | Train AUCROC 0.6864
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 622.2722 | Train AUCROC 0.6874
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 618.7298 | Train AUCROC 0.6936
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 189.0902 | Train AUCROC 0.8093
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 185.7978 | Train AUCROC 0.8175
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 185.1146 | Train AUCROC 0.8196
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 183.9736 | Train AUCROC 0.8221
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 183.6878 | Train AUCROC 0.8233
+
+Epoch 100 | Edge Type: o-n | Train Loss: 39.4674 | Train AUCROC 0.7692
+Epoch 200 | Edge Type: o-n | Train Loss: 36.9605 | Train AUCROC 0.8013
+Epoch 300 | Edge Type: o-n | Train Loss: 37.4184 | Train AUCROC 0.7970
+Epoch 400 | Edge Type: o-n | Train Loss: 35.9818 | Train AUCROC 0.8138
+Epoch 500 | Edge Type: o-n | Train Loss: 35.8390 | Train AUCROC 0.8164
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.3335 | Train AUCROC 0.9568
+Epoch 200 | Edge Type: n-n | Train Loss: 2.0726 | Train AUCROC 0.9638
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0300 | Train AUCROC 0.9648
+Epoch 400 | Edge Type: n-n | Train Loss: 2.0380 | Train AUCROC 0.9668
+Epoch 500 | Edge Type: n-n | Train Loss: 1.9996 | Train AUCROC 0.9682
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 687.8033 | Train AUCROC 0.6784
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 682.4805 | Train AUCROC 0.6842
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 679.7855 | Train AUCROC 0.6887
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 678.4061 | Train AUCROC 0.6895
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 678.4312 | Train AUCROC 0.6886
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 200.3567 | Train AUCROC 0.8109
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 197.5225 | Train AUCROC 0.8173
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 196.8868 | Train AUCROC 0.8195
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 195.6833 | Train AUCROC 0.8216
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 195.5645 | Train AUCROC 0.8213
+
+Epoch 100 | Edge Type: o-n | Train Loss: 39.3888 | Train AUCROC 0.7638
+Epoch 200 | Edge Type: o-n | Train Loss: 39.5260 | Train AUCROC 0.7660
+Epoch 300 | Edge Type: o-n | Train Loss: 38.8542 | Train AUCROC 0.7781
+Epoch 400 | Edge Type: o-n | Train Loss: 36.4069 | Train AUCROC 0.8129
+Epoch 500 | Edge Type: o-n | Train Loss: 35.1350 | Train AUCROC 0.8294
+
+Epoch 100 | Edge Type: n-n | Train Loss: 225.1686 | Train AUCROC 0.5861
+Epoch 200 | Edge Type: n-n | Train Loss: 219.8420 | Train AUCROC 0.5872
+Epoch 300 | Edge Type: n-n | Train Loss: 216.2668 | Train AUCROC 0.5897
+Epoch 400 | Edge Type: n-n | Train Loss: 223.3412 | Train AUCROC 0.5901
+Epoch 500 | Edge Type: n-n | Train Loss: 223.3069 | Train AUCROC 0.5922
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 748.1716 | Train AUCROC 0.6697
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 745.7410 | Train AUCROC 0.6712
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 744.6371 | Train AUCROC 0.6733
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 743.7884 | Train AUCROC 0.6760
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 747.4432 | Train AUCROC 0.6758
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 209.0901 | Train AUCROC 0.8073
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 205.9806 | Train AUCROC 0.8139
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 205.0232 | Train AUCROC 0.8162
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 204.4987 | Train AUCROC 0.8173
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 204.0105 | Train AUCROC 0.8178
+
+Epoch 100 | Edge Type: o-n | Train Loss: 39.7909 | Train AUCROC 0.7788
+Epoch 200 | Edge Type: o-n | Train Loss: 37.1487 | Train AUCROC 0.8078
+Epoch 300 | Edge Type: o-n | Train Loss: 37.0388 | Train AUCROC 0.8117
+Epoch 400 | Edge Type: o-n | Train Loss: 36.8854 | Train AUCROC 0.8119
+Epoch 500 | Edge Type: o-n | Train Loss: 35.3864 | Train AUCROC 0.8292
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.6968 | Train AUCROC 0.9490
+Epoch 200 | Edge Type: n-n | Train Loss: 2.1724 | Train AUCROC 0.9626
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0607 | Train AUCROC 0.9659
+Epoch 400 | Edge Type: n-n | Train Loss: 2.0335 | Train AUCROC 0.9644
+Epoch 500 | Edge Type: n-n | Train Loss: 1.9936 | Train AUCROC 0.9681
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 801.3684 | Train AUCROC 0.6656
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 815.2253 | Train AUCROC 0.6688
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 796.1124 | Train AUCROC 0.6732
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 794.2960 | Train AUCROC 0.6754
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 792.7307 | Train AUCROC 0.6777
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 216.7794 | Train AUCROC 0.8040
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 213.5941 | Train AUCROC 0.8119
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 212.3262 | Train AUCROC 0.8145
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 212.0860 | Train AUCROC 0.8154
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 211.7850 | Train AUCROC 0.8150
+
+Epoch 100 | Edge Type: o-n | Train Loss: 39.0681 | Train AUCROC 0.7859
+Epoch 200 | Edge Type: o-n | Train Loss: 38.2851 | Train AUCROC 0.7986
+Epoch 300 | Edge Type: o-n | Train Loss: 37.9033 | Train AUCROC 0.8017
+Epoch 400 | Edge Type: o-n | Train Loss: 37.4358 | Train AUCROC 0.8099
+Epoch 500 | Edge Type: o-n | Train Loss: 36.4830 | Train AUCROC 0.8214
+
+Epoch 100 | Edge Type: n-n | Train Loss: 218.9243 | Train AUCROC 0.5787
+Epoch 200 | Edge Type: n-n | Train Loss: 214.7258 | Train AUCROC 0.5859
+Epoch 300 | Edge Type: n-n | Train Loss: 217.5153 | Train AUCROC 0.5887
+Epoch 400 | Edge Type: n-n | Train Loss: 221.5750 | Train AUCROC 0.5890
+Epoch 500 | Edge Type: n-n | Train Loss: 221.5797 | Train AUCROC 0.5893
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 849.0274 | Train AUCROC 0.6656
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 846.1931 | Train AUCROC 0.6688
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 844.6643 | Train AUCROC 0.6707
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 844.4987 | Train AUCROC 0.6714
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 843.0770 | Train AUCROC 0.6727
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 227.0417 | Train AUCROC 0.7990
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 222.2398 | Train AUCROC 0.8103
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 221.3473 | Train AUCROC 0.8116
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 220.7416 | Train AUCROC 0.8127
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 220.7480 | Train AUCROC 0.8137
+
+Epoch 100 | Edge Type: o-n | Train Loss: 43.0786 | Train AUCROC 0.7351
+Epoch 200 | Edge Type: o-n | Train Loss: 41.4195 | Train AUCROC 0.7695
+Epoch 300 | Edge Type: o-n | Train Loss: 38.6290 | Train AUCROC 0.7994
+Epoch 400 | Edge Type: o-n | Train Loss: 37.1768 | Train AUCROC 0.8181
+Epoch 500 | Edge Type: o-n | Train Loss: 36.4863 | Train AUCROC 0.8253
+
+Epoch 100 | Edge Type: n-n | Train Loss: 215.7412 | Train AUCROC 0.5670
+Epoch 200 | Edge Type: n-n | Train Loss: 219.6003 | Train AUCROC 0.5860
+Epoch 300 | Edge Type: n-n | Train Loss: 213.0988 | Train AUCROC 0.5859
+Epoch 400 | Edge Type: n-n | Train Loss: 224.7419 | Train AUCROC 0.5864
+Epoch 500 | Edge Type: n-n | Train Loss: 219.5751 | Train AUCROC 0.5866
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 896.5126 | Train AUCROC 0.6657
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 894.2080 | Train AUCROC 0.6677
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 893.6489 | Train AUCROC 0.6683
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 892.8528 | Train AUCROC 0.6710
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 891.1737 | Train AUCROC 0.6722
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 237.5108 | Train AUCROC 0.7962
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 234.7148 | Train AUCROC 0.8030
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 232.8883 | Train AUCROC 0.8071
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 232.3499 | Train AUCROC 0.8083
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 232.2895 | Train AUCROC 0.8091
+
+Epoch 100 | Edge Type: o-n | Train Loss: 40.1862 | Train AUCROC 0.7779
+Epoch 200 | Edge Type: o-n | Train Loss: 39.3308 | Train AUCROC 0.7845
+Epoch 300 | Edge Type: o-n | Train Loss: 38.4442 | Train AUCROC 0.7956
+Epoch 400 | Edge Type: o-n | Train Loss: 36.0725 | Train AUCROC 0.8294
+Epoch 500 | Edge Type: o-n | Train Loss: 37.5066 | Train AUCROC 0.8180
+
+Epoch 100 | Edge Type: n-n | Train Loss: 222.1901 | Train AUCROC 0.5869
+Epoch 200 | Edge Type: n-n | Train Loss: 222.2001 | Train AUCROC 0.5872
+Epoch 300 | Edge Type: n-n | Train Loss: 214.3474 | Train AUCROC 0.5900
+Epoch 400 | Edge Type: n-n | Train Loss: 220.8445 | Train AUCROC 0.5891
+Epoch 500 | Edge Type: n-n | Train Loss: 215.6284 | Train AUCROC 0.5881
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 942.6777 | Train AUCROC 0.6609
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 941.4237 | Train AUCROC 0.6615
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 938.6652 | Train AUCROC 0.6637
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 938.0299 | Train AUCROC 0.6665
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 937.4282 | Train AUCROC 0.6674
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 251.0607 | Train AUCROC 0.7951
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 248.0711 | Train AUCROC 0.8007
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 247.1047 | Train AUCROC 0.8020
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 246.1220 | Train AUCROC 0.8038
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 245.8691 | Train AUCROC 0.8049
+
+Epoch 100 | Edge Type: o-n | Train Loss: 41.6617 | Train AUCROC 0.7682
+Epoch 200 | Edge Type: o-n | Train Loss: 39.8592 | Train AUCROC 0.7921
+Epoch 300 | Edge Type: o-n | Train Loss: 38.4689 | Train AUCROC 0.8153
+Epoch 400 | Edge Type: o-n | Train Loss: 37.4060 | Train AUCROC 0.8285
+Epoch 500 | Edge Type: o-n | Train Loss: 36.8740 | Train AUCROC 0.8324
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.3254 | Train AUCROC 0.9576
+Epoch 200 | Edge Type: n-n | Train Loss: 2.3735 | Train AUCROC 0.9572
+Epoch 300 | Edge Type: n-n | Train Loss: 2.1123 | Train AUCROC 0.9637
+Epoch 400 | Edge Type: n-n | Train Loss: 2.0090 | Train AUCROC 0.9678
+Epoch 500 | Edge Type: n-n | Train Loss: 1.9862 | Train AUCROC 0.9684
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 991.0298 | Train AUCROC 0.6568
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 987.0982 | Train AUCROC 0.6616
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 985.5193 | Train AUCROC 0.6632
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 984.5226 | Train AUCROC 0.6642
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 981.8276 | Train AUCROC 0.6662
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 264.7108 | Train AUCROC 0.7979
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 262.4232 | Train AUCROC 0.8020
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 261.2069 | Train AUCROC 0.8044
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 260.6100 | Train AUCROC 0.8058
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 260.4936 | Train AUCROC 0.8060
+
+Epoch 100 | Edge Type: o-n | Train Loss: 43.6074 | Train AUCROC 0.7797
+Epoch 200 | Edge Type: o-n | Train Loss: 44.6893 | Train AUCROC 0.7698
+Epoch 300 | Edge Type: o-n | Train Loss: 42.1189 | Train AUCROC 0.7950
+Epoch 400 | Edge Type: o-n | Train Loss: 45.0747 | Train AUCROC 0.7740
+Epoch 500 | Edge Type: o-n | Train Loss: 42.3718 | Train AUCROC 0.7936
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.3963 | Train AUCROC 0.9585
+Epoch 200 | Edge Type: n-n | Train Loss: 2.2061 | Train AUCROC 0.9630
+Epoch 300 | Edge Type: n-n | Train Loss: 2.1512 | Train AUCROC 0.9642
+Epoch 400 | Edge Type: n-n | Train Loss: 2.0016 | Train AUCROC 0.9681
+Epoch 500 | Edge Type: n-n | Train Loss: 2.2697 | Train AUCROC 0.9586
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 1034.7036 | Train AUCROC 0.6568
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 1032.1605 | Train AUCROC 0.6596
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 1031.2583 | Train AUCROC 0.6617
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 1029.4854 | Train AUCROC 0.6625
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 1030.3271 | Train AUCROC 0.6621
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 283.2596 | Train AUCROC 0.7935
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 278.6532 | Train AUCROC 0.8005
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 277.2197 | Train AUCROC 0.8022
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 277.5261 | Train AUCROC 0.8021
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 276.8241 | Train AUCROC 0.8035
+
+Epoch 100 | Edge Type: o-n | Train Loss: 46.3447 | Train AUCROC 0.7675
+Epoch 200 | Edge Type: o-n | Train Loss: 44.5242 | Train AUCROC 0.7890
+Epoch 300 | Edge Type: o-n | Train Loss: 43.1406 | Train AUCROC 0.8090
+Epoch 400 | Edge Type: o-n | Train Loss: 44.4288 | Train AUCROC 0.8022
+Epoch 500 | Edge Type: o-n | Train Loss: 41.0923 | Train AUCROC 0.8296
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.4195 | Train AUCROC 0.9563
+Epoch 200 | Edge Type: n-n | Train Loss: 2.1769 | Train AUCROC 0.9643
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0904 | Train AUCROC 0.9662
+Epoch 400 | Edge Type: n-n | Train Loss: 1.9840 | Train AUCROC 0.9672
+Epoch 500 | Edge Type: n-n | Train Loss: 1.8483 | Train AUCROC 0.9738
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 1093.4983 | Train AUCROC 0.6542
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 1088.7952 | Train AUCROC 0.6589
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 1086.9780 | Train AUCROC 0.6604
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 1085.2114 | Train AUCROC 0.6616
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 1084.0668 | Train AUCROC 0.6613
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 295.7895 | Train AUCROC 0.7961
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 293.7934 | Train AUCROC 0.7995
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 293.1753 | Train AUCROC 0.8004
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 292.8590 | Train AUCROC 0.8013
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 292.9682 | Train AUCROC 0.8007
+
+Epoch 100 | Edge Type: o-n | Train Loss: 49.9686 | Train AUCROC 0.7512
+Epoch 200 | Edge Type: o-n | Train Loss: 51.9777 | Train AUCROC 0.7495
+Epoch 300 | Edge Type: o-n | Train Loss: 47.5164 | Train AUCROC 0.7824
+Epoch 400 | Edge Type: o-n | Train Loss: 46.8214 | Train AUCROC 0.7905
+Epoch 500 | Edge Type: o-n | Train Loss: 46.0354 | Train AUCROC 0.7975
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.2569 | Train AUCROC 0.9590
+Epoch 200 | Edge Type: n-n | Train Loss: 2.1663 | Train AUCROC 0.9633
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0595 | Train AUCROC 0.9665
+Epoch 400 | Edge Type: n-n | Train Loss: 2.0955 | Train AUCROC 0.9648
+Epoch 500 | Edge Type: n-n | Train Loss: 1.9505 | Train AUCROC 0.9700
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 1150.9629 | Train AUCROC 0.6567
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 1148.9365 | Train AUCROC 0.6578
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 1150.0043 | Train AUCROC 0.6586
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 1146.4602 | Train AUCROC 0.6597
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 1146.5488 | Train AUCROC 0.6594
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 310.9182 | Train AUCROC 0.7916
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 308.4480 | Train AUCROC 0.7967
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 307.1365 | Train AUCROC 0.7986
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 306.7512 | Train AUCROC 0.7990
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 306.4536 | Train AUCROC 0.7992
+
+Epoch 100 | Edge Type: o-n | Train Loss: 49.0504 | Train AUCROC 0.7694
+Epoch 200 | Edge Type: o-n | Train Loss: 47.3159 | Train AUCROC 0.7847
+Epoch 300 | Edge Type: o-n | Train Loss: 46.3939 | Train AUCROC 0.7965
+Epoch 400 | Edge Type: o-n | Train Loss: 45.0194 | Train AUCROC 0.8109
+Epoch 500 | Edge Type: o-n | Train Loss: 43.6569 | Train AUCROC 0.8249
+
+Epoch 100 | Edge Type: n-n | Train Loss: 2.3211 | Train AUCROC 0.9605
+Epoch 200 | Edge Type: n-n | Train Loss: 2.2532 | Train AUCROC 0.9614
+Epoch 300 | Edge Type: n-n | Train Loss: 2.0813 | Train AUCROC 0.9662
+Epoch 400 | Edge Type: n-n | Train Loss: 1.9918 | Train AUCROC 0.9700
+Epoch 500 | Edge Type: n-n | Train Loss: 2.0590 | Train AUCROC 0.9689
+
+Epoch 100 | Edge Type: o-o-bank | Train Loss: 1215.5104 | Train AUCROC 0.6549
+Epoch 200 | Edge Type: o-o-bank | Train Loss: 1212.2059 | Train AUCROC 0.6560
+Epoch 300 | Edge Type: o-o-bank | Train Loss: 1210.2026 | Train AUCROC 0.6592
+Epoch 400 | Edge Type: o-o-bank | Train Loss: 1208.4342 | Train AUCROC 0.6604
+Epoch 500 | Edge Type: o-o-bank | Train Loss: 1207.3912 | Train AUCROC 0.6610
+
+Epoch 100 | Edge Type: o-o-nobank | Train Loss: 318.4132 | Train AUCROC 0.7945
+Epoch 200 | Edge Type: o-o-nobank | Train Loss: 316.7274 | Train AUCROC 0.7974
+Epoch 300 | Edge Type: o-o-nobank | Train Loss: 316.0423 | Train AUCROC 0.7982
+Epoch 400 | Edge Type: o-o-nobank | Train Loss: 315.1843 | Train AUCROC 0.7996
+Epoch 500 | Edge Type: o-o-nobank | Train Loss: 314.9660 | Train AUCROC 0.8001
+
+Epoch 100 | Edge Type: o-n | Train Loss: 53.3397 | Train AUCROC 0.7412
+Epoch 200 | Edge Type: o-n | Train Loss: 48.1893 | Train AUCROC 0.7922
+Epoch 300 | Edge Type: o-n | Train Loss: 47.2330 | Train AUCROC 0.8000
+Epoch 400 | Edge Type: o-n | Train Loss: 46.3020 | Train AUCROC 0.8082
+Epoch 500 | Edge Type: o-n | Train Loss: 44.8186 | Train AUCROC 0.8200
+
+Epoch 100 | Edge Type: n-n | Train Loss: 216.3822 | Train AUCROC 0.5833
+Epoch 200 | Edge Type: n-n | Train Loss: 216.8805 | Train AUCROC 0.5871
+Epoch 300 | Edge Type: n-n | Train Loss: 217.2604 | Train AUCROC 0.5881
+Epoch 400 | Edge Type: n-n | Train Loss: 216.9869 | Train AUCROC 0.5882
+Epoch 500 | Edge Type: n-n | Train Loss: 217.2518 | Train AUCROC 0.5887
+

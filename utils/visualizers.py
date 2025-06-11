@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np 
 import seaborn as sns
-
+import networkx as nx
 # Update path for imports
 import os
 import sys
@@ -340,3 +340,31 @@ class Visualizer:
         
         plt.show()
         plt.clf()
+        
+
+    def display_pred_graph_vs_true_graph(self, predGraph, trueGraph):
+        # Convert to undirected for fair visual comparison
+        pred = predGraph
+        true = trueGraph
+
+        # Use same layout for both so node positions match
+        combined = nx.compose(pred, true)
+        pos = nx.spring_layout(combined, seed=42)
+
+        fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+        # --- True Graph ---
+        axs[0].set_title("True Graph")
+        nx.draw(true, pos, ax=axs[0], with_labels=True, node_color='lightgreen',
+                edge_color='gray', node_size=800, font_size=10)
+        axs[0].axis('off')
+
+        # --- Predicted Graph ---
+        axs[1].set_title("Predicted Graph")
+        nx.draw(pred, pos, ax=axs[1], with_labels=True, node_color='skyblue',
+                edge_color='gray', node_size=800, font_size=10)
+        axs[1].axis('off')
+
+        plt.tight_layout()
+        plt.show()
+

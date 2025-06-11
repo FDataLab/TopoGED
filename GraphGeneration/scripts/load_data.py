@@ -1,31 +1,16 @@
-from collections import defaultdict
-import numpy as np 
-import networkx as nx
 import pandas as pd 
-import random
-from sklearn.metrics import roc_auc_score, average_precision_score
-from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
-import copy
-import math
-import torch
-from torch.utils.data import DataLoader, TensorDataset
-import torch.nn as nn
-
-import argparse
 import os
 import sys
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from utils.loader import Loader
-from GraphGeneration.utils.Evaluator import Evaluator
 
 
 def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle, embeddingType):
     my_loader = Loader()
     
     # Construct csv
-    run_number = 1
     structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_pred.csv'
     structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_true.csv'
     structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_diff.csv'
