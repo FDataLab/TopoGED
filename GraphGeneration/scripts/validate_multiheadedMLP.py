@@ -79,7 +79,12 @@ if args.embeddingType == 'Node2Vec':
     embedding_dim = 128
 elif args.embeddingType == 'Linear':
     embedding_dim = 8  # Must be same as the number of features
-    
+
+# Create file for visualization
+file_visualization_path = rf"./GraphGeneration\scripts\Visualize"
+if not os.path.exists(rf"{file_visualization_path}\{args.dataset}"):
+    os.mkdir(rf"{file_visualization_path}\{args.dataset}")
+    open(rf"{file_visualization_path}\{args.dataset}\multiheadMLP_performance.txt", "w").close()
 
 # Utility function for CUDA
 def to_numpy(x):
@@ -301,12 +306,16 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
                 
             model.train()
             if (epoch + 1) % 100 == 0:
-                print(f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f} | Val Loss: {val_loss:.4f} | Val AUCROC: {val_aucroc:.4f}")
-                
+                epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f} | Val Loss: {val_loss:.4f} | Val AUCROC: {val_aucroc:.4f}"
+                print(epochMessage)
+                with open(rf"{file_visualization_path}\{args.dataset}\multiheadMLP_performance.txt", "a") as f:
+                    f.write(epochMessage + "\n")
         else:
             if (epoch + 1) % 100 == 0:
-                print(f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f}")
-               
+                epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f}"
+                print(epochMessage)
+                with open(rf"{file_visualization_path}\{args.dataset}\multiheadMLP_performance.txt", "a") as f:
+                    f.write(epochMessage + "\n")
     return model
 
 
@@ -1324,12 +1333,12 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     print('Constructing graph number: ', i + 1)
     
     # Get the number of resources available for this graph
-    count_old = probabilities[i][1]
-    count_new = probabilities[i][2]
-    p0 = probabilities[i][3]
-    p1 = probabilities[i][4]
-    p2 = probabilities[i][5]
-    p3 = probabilities[i][6]
+    count_old = probabilities[i][0]
+    count_new = probabilities[i][1]
+    p0 = probabilities[i][2]
+    p1 = probabilities[i][3]
+    p2 = probabilities[i][4]
+    p3 = probabilities[i][5]
 
     # Get the embedding and reshape it
     embedding = features[i]
