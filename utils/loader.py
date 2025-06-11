@@ -117,7 +117,9 @@ class Loader():
             seek_file = dataset + '_' + 'probabilities'
             dataset_folder = os.path.join(self.output_dir, dataset)
             dataset_folder = os.path.join(dataset_folder, 'probabilities')
-            return pd.read_csv(dataset_folder + f'/{dataset}_probabilities.csv')  # We just return the dataframe directly
+            df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities.csv')
+            df = df.drop(columns=["Unnamed: 0"], errors="ignore")
+            return df  # We just return the dataframe directly
         else:
             seek_file = dataset + '_' + activation + '_no_weight' + '.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
@@ -142,6 +144,7 @@ class Loader():
             elif type == 'probabilities':
                 seek_file_path = os.path.join(dataset_folder, seek_file)
                 probs = pd.read_csv(seek_file_path)
+                probs = probs.drop(columns=["Unnamed: 0"], errors="ignore")
                 return probs
         
         else:
