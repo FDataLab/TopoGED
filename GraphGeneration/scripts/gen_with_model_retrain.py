@@ -1260,12 +1260,12 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     print('Constructing graph number: ', i + 1)
     
     # Get the number of resources available for this graph
-    count_old = probabilities[i][1]
-    count_new = probabilities[i][2]
-    p0 = probabilities[i][3]
-    p1 = probabilities[i][4]
-    p2 = probabilities[i][5]
-    p3 = probabilities[i][6]
+    count_old = probabilities[i][0]
+    count_new = probabilities[i][1]
+    p0 = probabilities[i][2]
+    p1 = probabilities[i][3]
+    p2 = probabilities[i][4]
+    p3 = probabilities[i][5]
 
     # Get the embedding and reshape it
     embedding = features[i]
