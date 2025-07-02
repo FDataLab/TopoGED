@@ -1,17 +1,11 @@
 import matplotlib.pyplot as plt
 import re
 from collections import defaultdict
-import pandas as pd
 from matplotlib.ticker import MaxNLocator
 
-def visualize_multihead_MLP_performance(dataset):
-    log_path = rf"Topological-Temporal-GFM\GraphGeneration\scripts\Visualize\{dataset}\multiheadMLP_performance.txt"
-    # "Topological-Temporal-GFM\data\input\cached\CollegeMsg\probabilities\CollegeMsg_probabilities.csv"
-    CollegeMsgProb = rf"..\Topological-Temporal-GFM\Topological-Temporal-GFM\data\input\cached\{dataset}\probabilities\{dataset}_probabilities.csv"
-
-    # Load CSV into DataFrame
-    df = pd.read_csv(CollegeMsgProb)
-
+def visualize_multihead_MLP_performance(dataset, embeddingType):
+    log_path = rf"GraphGeneration\scripts\Visualize\{dataset}\{embeddingType}\multiheadMLP_performance.txt"
+    # GraphGeneration\scripts\Visualize\CollegeMsg\GCLSTM\multiheadMLP_performance.txt
     # Store metrics per edge type
     loss_dict = defaultdict(list)
     auc_dict = defaultdict(list)
@@ -52,8 +46,6 @@ def visualize_multihead_MLP_performance(dataset):
         loss_at_5 = loss_dict[edge_type][4::5]
         ax1.plot(range(3, 3 + len(loss_at_5)), loss_at_5, label=f"{edge_type} Loss")
 
-    # Add secondary axis for Prob NN
-    ax1b = ax1.twinx()
     # ax1b.plot(prob_new_nodes_sampled, '-o', color='purple', label='Prob NN')
 
     ax1.set_title("Train Loss per Edge Type")
@@ -78,12 +70,14 @@ def visualize_multihead_MLP_performance(dataset):
     # ax2b.plot(prob_new_nodes_sampled, '-o', color='purple', label='Prob NN')
 
     ax2.set_title("Train AUCROC per Edge Type")
-    ax2.set_xlabel("Time Window Index")
+    ax2.set_xlabel("Day")
     ax2.set_ylabel("AUC-ROC")
     ax2.legend(loc='upper left')
     ax2.grid(True)
-
+    
+    plt.savefig(f'GraphGeneration\scripts\Visualize\{dataset}\{embeddingType}\{dataset}_multiheadMLP_performance.png')
     plt.tight_layout()
     plt.show()
+    
 
-visualize_multihead_MLP_performance("CollegeMsg")
+visualize_multihead_MLP_performance("networkaion", "GCLSTM")

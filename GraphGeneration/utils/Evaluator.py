@@ -189,12 +189,12 @@ class Evaluator():
         
         res = {
             'Graph Number': graph_num,
-            'precision overall': precision,
-            'recall overall': recall,
-            'tp overall': tp, 
-            'fp overall': fp,
-            'tn overall': tn,
-            'fn overall': fn,
+            # 'precision overall': precision,
+            # 'recall overall': recall,
+            # 'tp overall': tp, 
+            # 'fp overall': fp,
+            # 'tn overall': tn,
+            # 'fn overall': fn,
             'precision oo': precision_oo,
             'recall oo': recall_oo,
             'tp oo': tp_oo, 
@@ -207,28 +207,28 @@ class Evaluator():
             'fp oon': fp_oon,
             'tn oon': tn_oon,
             'fn oon': fn_oon,
-            'precision on': precision_on,
-            'recall on': recall_on,
-            'tp on': tp_on, 
-            'fp on': fp_on,
-            'tn on': tn_on,
-            'fn on': fn_on,
-            'precision nn': precision_nn,
-            'recall nn': recall_nn,
-            'tp nn': tp_nn, 
-            'fp nn': fp_nn,
-            'tn nn': tn_nn,
-            'fn nn': fn_nn,
-            'Correct Node IDs': len(common_nodes) / len(true_graph.nodes()),
-            'Correct Old Node IDs': correct_nodes_old,
-            'Precision Old IDs': correct_nodes_old / len(old_nodes_pred) if old_nodes_pred else 0.0,
-            'Recall Old IDs': correct_nodes_old / len(old_nodes_true) if old_nodes_true else 0.0,
-            'Correct New Node IDs': correct_nodes_new,
-            'Precision New IDs': correct_nodes_new / len(new_nodes_pred) if new_nodes_pred else 0.0,
-            'Recall New IDs': correct_nodes_new / len(new_nodes_true) if new_nodes_true else 0.0,
-            'Correct Overall IDs': correct_nodes_overall,
-            'Precision Overall IDs': correct_nodes_overall / len(pred_nodes_overall) if pred_nodes_overall else 0.0,
-            'Recall Overall IDs': correct_nodes_overall / len(true_nodes_overall) if true_nodes_overall else 0.0,
+            # 'precision on': precision_on,
+            # 'recall on': recall_on,
+            # 'tp on': tp_on, 
+            # 'fp on': fp_on,
+            # 'tn on': tn_on,
+            # 'fn on': fn_on,
+            # 'precision nn': precision_nn,
+            # 'recall nn': recall_nn,
+            # 'tp nn': tp_nn, 
+            # 'fp nn': fp_nn,
+            # 'tn nn': tn_nn,
+            # 'fn nn': fn_nn,
+            # 'Correct Node IDs': len(common_nodes) / len(true_graph.nodes()),
+            # 'Correct Old Node IDs': correct_nodes_old,
+            # 'Precision Old IDs': correct_nodes_old / len(old_nodes_pred) if old_nodes_pred else 0.0,
+            # 'Recall Old IDs': correct_nodes_old / len(old_nodes_true) if old_nodes_true else 0.0,
+            # 'Correct New Node IDs': correct_nodes_new,
+            # 'Precision New IDs': correct_nodes_new / len(new_nodes_pred) if new_nodes_pred else 0.0,
+            # 'Recall New IDs': correct_nodes_new / len(new_nodes_true) if new_nodes_true else 0.0,
+            # 'Correct Overall IDs': correct_nodes_overall,
+            # 'Precision Overall IDs': correct_nodes_overall / len(pred_nodes_overall) if pred_nodes_overall else 0.0,
+            # 'Recall Overall IDs': correct_nodes_overall / len(true_nodes_overall) if true_nodes_overall else 0.0,
         }
         
         return res
@@ -524,3 +524,14 @@ class Evaluator():
 
         kl = np.sum(rel_entr(P, Q))
         return kl
+    
+    def calculate_precision_picking_nodes(self, G_pred, G_true, old_nodes):
+        V_true = set(G_true.nodes()).intersection(set(old_nodes))
+        V_pred = set(G_pred.nodes()).intersection(set(old_nodes))
+
+        tp = V_true & V_pred
+        precision = len(tp) / len(V_pred) if V_pred else 0.0
+        recall = len(tp) / len(V_true) if V_true else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+
+        return precision, recall, f1

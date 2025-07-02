@@ -1,3 +1,4 @@
+from collections import defaultdict
 import numpy as np 
 import networkx as nx
 import torch
@@ -107,3 +108,96 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
         embeddings[node] = combined
     
     return embeddings
+
+# LSTM embeddings  
+def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
+    """
+    Args:
+        graph_snapshots (list of nx.DiGraph): temporal graphs with node['feat'] ready
+        lstm_model (SimpleNodeLSTM): LSTM model to compute temporal embeddings
+    Returns:
+        dict of {node_id: final temporal embedding}
+    """
+    # Step 1: Collect per-timestep node embeddings
+    node_history = defaultdict(list)
+
+    for G in graph_snapshots:
+        snapshot_embeddings = compute_node2vec_embeddings(G)
+        for node, emb in snapshot_embeddings.items():
+            node_history[node].append(emb)
+
+    # Step 2: Run LSTM on each node's time-series embedding
+    final_node_embeddings = lstm_model(node_history)
+    return final_node_embeddings
+
+# GCN embeddings
+def get_GCN_data(graph_snapshots):
+    """
+        Converts a sequence of NetworkX graph snapshots into PyTorch-ready inputs for GCN models.
+
+        Args:
+            graph_snapshots (list of nx.DiGraph): Temporal graph snapshots.
+                Each node must have its 'feat' computed via node2vec or similar embedding method.
+
+        Returns:
+            x_list (List[Tensor]): List of node feature matrices (shape [num_nodes, F]) for each snapshot.
+            edge_index_list (List[Tensor]): List of edge index tensors (shape [2, num_edges]) for each snapshot.
+            node_list (List): Sorted list of unique global node IDs.
+            node_id_map (Dict): Mapping from node ID to index in feature matrix.
+    """
+    # Step 1: Build global node set
+    all_nodes = set()
+    for G in graph_snapshots:
+        all_nodes.update(G.nodes())
+    node_list = sorted(list(all_nodes))  # fixed order
+    node_id_map = {node: i for i, node in enumerate(node_list)}  # map node → index
+    N = len(node_list)
+    x_list = []
+    edge_index_list = []
+
+    F = node2vec_dimensions + 4 # number of features per node (change this if you want more features)
+
+    for G in graph_snapshots:
+        node2vec_embeddings = compute_node2vec_embeddings(G)
+        x_t = torch.zeros(N, F)  # default: zero for all nodes
+        for node in G.nodes():
+            idx = node_id_map[node]
+            x_t[idx] = node2vec_embeddings[node].clone().detach()
+
+        edge_index = []
+        for u, v in G.edges():
+            src = node_id_map[u]
+            tgt = node_id_map[v]
+            edge_index.append([src, tgt])
+        edge_index = torch.tensor(edge_index).t().contiguous()  # shape [2, E]
+
+        x_list.append(x_t)
+        edge_index_list.append(edge_index)
+    return x_list, edge_index_list, node_list, node_id_map
+
+def compute_node_embeddings_GCLSTM(graph_snapshots, gclstm_model):
+    """
+    Args:
+        graph_snapshots (list of nx.DiGraph): temporal graphs with node['feat'] ready
+        lstm_model (SimpleNodeLSTM): LSTM model to compute temporal embeddings
+    Returns:
+        dict of {node_id: final temporal embedding}
+    """
+    x_list, edge_index_list, node_id_list, node_id_map = get_GCN_data(graph_snapshots)
+
+    final_node_embeddings = gclstm_model(x_list, edge_index_list, node_id_list, node_id_map)
+    return final_node_embeddings
+
+# HTGN for encoding
+def compute_node_embeddings_HTGN(graph_snapshots, HTGN_model):
+    """
+    Args:
+        graph_snapshots (list of nx.DiGraph): temporal graphs with node['feat'] ready
+        lstm_model (SimpleNodeLSTM): LSTM model to compute temporal embeddings
+    Returns:
+        dict of {node_id: final temporal embedding}
+    """
+    x_list, edge_index_list, node_id_list, node_id_map = get_GCN_data(graph_snapshots)
+    HTGN_model.init_hiddens()
+    final_node_embeddings = HTGN_model(edge_index=edge_index_list[-1], x=None, node_id_list=node_id_list, node_id_map=node_id_map)
+    return final_node_embeddings

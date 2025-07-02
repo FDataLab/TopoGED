@@ -439,9 +439,54 @@ class Loader():
         with open(file_name, "rb") as f:
             data = pickle.load(f)
 
+ 
         if type == 'features':
             graphs, labels = zip(*data)
             return graphs, labels
         
         else:
             return data
+    
+    def load_HTGN_data(dataset):
+        print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
+        data = {}
+        edgelist_rawfile = '../data/input/raw/{}/{}_edgelist.txt'.format(dataset, dataset)
+        edgelist_df = pd.read_csv(edgelist_rawfile)
+        uniq_ts_list = np.unique(edgelist_df['snapshot'])
+        print("INFO: Number of unique snapshots: {}".format(len(uniq_ts_list)))
+        adj_time_list = []
+        for ts in uniq_ts_list:
+            # NOTE: this code does not use any node or edge features
+            ts_edges = edgelist_df.loc[edgelist_df['snapshot'] == ts, ['from', 'to']]
+            ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to')
+            ts_A = nx.to_scipy_sparse_array(ts_G)
+            adj_time_list.append(ts_A)
+
+        # Now, exactly like "load_vgrnn_dataset_det"
+        print('INFO: Generating edges, negative edges and new edges, wait for a while ...')
+        edge_proc_start = time.time()
+        data = {}
+        edges, biedges = mask_edges_det(adj_time_list)  # list
+        new_pedges, new_nedges = mask_edges_prd_new_by_marlin(adj_time_list)  # list
+        print('INFO: Processing finished! Elapsed time (sec.): {:.4}'.format(time.time() - edge_proc_start))
+        assert len(edges) == len(biedges) == len(new_nedges) == len(new_pedges)
+        edge_index_list, pedges_list, nedges_list, new_nedges_list, new_pedges_list = [], [], [], [], []
+        for t in range(len(biedges)):
+            edge_index_list.append(torch.tensor(np.transpose(biedges[t]), dtype=torch.long))
+            pedges_list.append(torch.tensor(np.transpose(pedges[t]), dtype=torch.long))
+            nedges_list.append(torch.tensor(np.transpose(nedges[t]), dtype=torch.long))
+            new_pedges_list.append(torch.tensor(np.transpose(new_pedges[t]), dtype=torch.long))
+            new_nedges_list.append(torch.tensor(np.transpose(new_nedges[t]), dtype=torch.long))
+
+        data['edge_index_list'] = edge_index_list
+    
+
+        data['time_length'] = len(edge_index_list)
+        data['weights'] = None
+        print('INFO: Data: {}'.format(dataset))
+        print('INFO: Total length:{}'.format(len(edge_index_list)))
+        print('INFO: Number nodes: {}'.format(data['num_nodes']))
+        return data
+
+
+    
