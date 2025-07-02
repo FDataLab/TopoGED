@@ -1,4 +1,4 @@
-# Topological-Temporal-GFM
+# TOPOGED: A Topological Encoder Decoder Framework For Temporal Graph Learning
 
 A Temporal Graph Generation Method, powered by TopER<sup>1</sup>. Our goal is to construct a series of temporal graphs, given prior history and the current predicted TopER vector. We aim to construct graphs that have nodes that appear and dissapear over time.
 
