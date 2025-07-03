@@ -17,6 +17,7 @@ import random
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
+import copy
 import math
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -29,30 +30,30 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.loader import Loader
 from GraphGeneration.utils.Evaluator import Evaluator
-from load_data import load_data
+
 
 # Models in use
 from GraphGeneration.models.MultiHeadedEdgePredictor import MultiHeadedEdgePredictor
 from GraphGeneration.models.EdgePredictor import EdgePredictorMLP
 
+from torch_geometric.utils import from_networkx
 from itertools import product
 
 # Import all embedding methods
 from utils.embedding_methods.degree import EmbedDegree
+from node2vec import Node2Vec
 
-from compute_embedding import compute_linear_gnn_embeddings, compute_node2vec_embeddings
-from process_data import modifyGraphIds, build_edgebanks_from_start
 
 # Process arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, required=False, default='CollegeMsg', choices=['CollegeMsg', 'mathoverflow', 'networkadex', 'networkaeternity', 'networkaion', 'networkaragon', 'networkbancor', 'networkcentra', 'networkcoindash', 'Reddit_B', 'networkcindicator', 'networkiconomi', 'networkdgd'])
-parser.add_argument("--strategy", type=str, required=False, default='MultiheadedMLP', choices=['MultiheadedMLP', 'SingleMLP'], help="The type of MLP NN to use")
-parser.add_argument("--embedding", type=str, required=False, default='Position', choices=['Position', 'NodeType', 'Position+NodeType', 'None'], help="Allows appending positional encodings or an integer node type onto the end of the embeddings")
-parser.add_argument("--mlpEncoding", type=str, required=False, default='Concat', choices=['Concat', 'Product', 'Addition', 'Subtraction'], help="How you want to input node embeddings to the MLP")  # Product and addition lead to potential noise as we use directed graphs
-parser.add_argument("--embedOld", type=str, required=False, default='True', choices=['True', 'False'], help="If you want to let the MLP predict edge type \'o-o-bank\', otherwise these edges are randomly added")
-parser.add_argument("--oldDegree", type=str, required=False, default='False' ,choices=['True', 'False'], help="If you want reappearing nodes to reuse their most recent degree")
-parser.add_argument("--trainingStyle", type=str, required=False, default='TrueGraphs', choices=['TrueGraphs', 'PredGraphs', 'MixedGraphs'], help="When training the MLP, decides if you use real graphs, predicted graphs (with first real as starter), or real then pred for MLP training")
-parser.add_argument("--embeddingType", type=str, required=False, default='Linear', choices=['Linear', 'Node2Vec'], help="How nodes should be embedded. Either with Node2Vec or with a Linear mutliplication of adjacency matrix by node feature matrix")
+parser.add_argument("--dataset", type=str, required=True, choices=['CollegeMsg', 'mathoverflow', 'networkadex', 'networkaeternity', 'networkaion', 'networkaragon', 'networkbancor', 'networkcentra', 'networkcoindash', 'Reddit_B', 'networkcindicator', 'networkiconomi', 'networkdgd'])
+parser.add_argument("--strategy", type=str, required=True, choices=['MultiheadedMLP', 'SingleMLP'], help="The type of MLP NN to use")
+parser.add_argument("--embedding", type=str, required=True, choices=['Position', 'NodeType', 'Position+NodeType', 'None'], help="Allows appending positional encodings or an integer node type onto the end of the embeddings")
+parser.add_argument("--mlpEncoding", type=str, required=True, choices=['Concat', 'Product', 'Addition', 'Subtraction'], help="How you want to input node embeddings to the MLP")  # Product and addition lead to potential noise as we use directed graphs
+parser.add_argument("--embedOld", type=str, required=True, choices=['True', 'False'], help="If you want to let the MLP predict edge type \'o-o-bank\', otherwise these edges are randomly added")
+parser.add_argument("--oldDegree", type=str, required=True, choices=['True', 'False'], help="If you want reappearing nodes to reuse their most recent degree")
+parser.add_argument("--trainingStyle", type=str, required=True, choices=['TrueGraphs', 'PredGraphs', 'MixedGraphs'], help="When training the MLP, decides if you use real graphs, predicted graphs (with first real as starter), or real then pred for MLP training")
+parser.add_argument("--embeddingType", type=str, required=True, choices=['Linear', 'Node2Vec'], help="How nodes should be embedded. Either with Node2Vec or with a Linear mutliplication of adjacency matrix by node feature matrix")
 
 args = parser.parse_args()
 
@@ -60,6 +61,7 @@ args = parser.parse_args()
 global_seed = 42
 random.seed(global_seed)
 np.random.seed(global_seed)
+
 
 # Set up device
 try:
@@ -72,6 +74,18 @@ try:
 except Exception:
     device = torch.device("cpu")
     print("Using CPU")
+
+
+# Node2Vec Parameters
+node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features 
+node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
+node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
+node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
+node2vec_q = 1.0  # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
+node2vec_window = 10  # The context size (Higher is broader learning)
+node2vec_min_count = 1  # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
+node2vec_batch_words = 4  # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
+node2vec_workers = 1  # Number of workers (threads)
 
 # Each of these are (2 * node_embedding_size)
 if args.embeddingType == 'Node2Vec':
@@ -95,6 +109,90 @@ def to_tensor(x):
     if isinstance(x, np.ndarray):
         return torch.tensor(x, dtype=torch.float32, device=device)
     return x.to(device=device, dtype=torch.float32) if device else x
+
+
+def compute_linear_gnn_embeddings(G: nx.DiGraph):
+    """
+    An embedding method inspired by LinearGNNs from GraphAny where Z=AX given A is the adjacency matrix and X is the node feature matrix
+    One of two available methods
+    
+    Args:
+        G (nx.DiGraph): The graph to embed
+        
+    Returns:
+        embeddings (dict): The constructed dictionary of {node: [embedding]} pairs
+    """
+    all_nodes = sorted(G.nodes())
+    id_to_idx = {node_id: idx for idx, node_id in enumerate(all_nodes)}
+    idx_to_id = {idx: node_id for node_id, idx in id_to_idx.items()}
+    
+    A = nx.to_numpy_array(G, nodelist=all_nodes, dtype=np.float32)  # The matrix to operate on
+    
+    # Normalize A
+    row_sums = A.sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1  # avoid division by zero
+    A_normalized = A / row_sums
+    
+    X = np.array([list(G.nodes[node]['feat'].values()) for node in all_nodes], dtype=np.float32)
+    
+    A_normalized = torch.tensor(A_normalized, device=device)
+    X = torch.tensor(X, device=device)
+    Z = A_normalized @ X  # As computed in GraphAny
+    
+    embeddings = {idx_to_id[i]: Z[i] for i in range(Z.shape[0])}
+    
+    return embeddings
+
+
+def compute_node2vec_embeddings(G: nx.DiGraph):
+    """
+    Use Node2Vec to embed nodes in the constructed graph. Appends node features onto the end since Node2Vec does not account for features
+    One of two available methods
+    
+    Args:
+        G (nx.DiGraph): The graph to embed
+        
+    Returns:
+        embeddings (dict): The constructed dictionary of {node: [embedding]} pairs
+    """
+    node2vec = Node2Vec(
+        G,
+        dimensions=node2vec_dimensions,
+        walk_length=node2vec_walk_length,
+        num_walks=node2vec_num_walks,
+        workers=node2vec_workers,
+        p=node2vec_p,
+        q=node2vec_q,
+        quiet=True
+    )
+    
+    model = node2vec.fit(
+        window=node2vec_window, 
+        min_count=node2vec_min_count, 
+        batch_words=node2vec_batch_words
+    )  # Perform Node2Vec
+
+    # Used to generate an embedding for isolated nodes
+    all_vectors = [model.wv[key] for key in model.wv.index_to_key]
+    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32).to(device)
+
+    # Get embeddings and concatenate the node features
+    embeddings = {}
+    for node in G.nodes():
+        if node in model.wv:
+            node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32).to(device)
+        else:
+            node2vec_emb = mean_vector
+            
+        # Add on features since Node2Vec doesn't account for features
+        feat_dict = G.nodes[node]['feat']
+        sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
+        sorted_values = [feat_dict[k] for k in sorted_keys]
+        node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
+        combined = torch.cat([node2vec_emb, node_feat], dim=0)
+        embeddings[node] = combined
+    
+    return embeddings
 
 
 def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
@@ -339,7 +437,7 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
     if X_val is not None and y_val is not None:
         X_val = torch.tensor(X_val, dtype=torch.float32).to(device)
         y_val = torch.tensor(y_val, dtype=torch.float32).to(device)
-    trainingPerformanceFile = open("multiheadMLP_performance.txt", "a")
+
     # Train
     for epoch in range(epochs):
         train_loss = 0
@@ -414,14 +512,10 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
             model.train()
             if (epoch + 1) % 100 == 0:
                 print(f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f} | Val Loss: {val_loss:.4f} | Val AUCROC: {val_aucroc:.4f}")
-                trainingPerformanceFile.write(f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f} | Val Loss: {val_loss:.4f} | Val AUCROC: {val_aucroc:.4f}\n")
         else:
             if (epoch + 1) % 100 == 0:
                 print(f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f}")
-                trainingPerformanceFile.write(f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f}\n")
-                
-    trainingPerformanceFile.write("\n")
-    trainingPerformanceFile.close()
+
     return model
 
 
@@ -1142,7 +1236,100 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, graph_num, p
         degree_clusters[degree] = new_embedding  # Add the embedding
 
     return filtration_graphs, node_types, existing_nodes, edge_type_map, edgebank, embeddings, degree_clusters
+
+
+def modifyGraphIds(graphs, thresholds):
+    '''
+    For the target graphs, modify their ids to start at 0 for an instance of a node, then increment throughout the graphs
+    
+    Args:
+        graphs (list(nx.Graph)): A list of graphs to modify
+        
+    Returns:
+        graphs (list(nx.Graph)): The modified graphs (operations performed in-place)       
+    '''
+    # This dictionary will store the mapping of original node IDs to new node IDs
+    node_mapping = {}
+    new_id = 0
+    updated_graphs = []
+
+    # Iterate over all graphs in the list of lists (where each graph is a subgraph in the list)
+    # First pass: assign a new ID to every unique node
+    for graph_list in graphs:
+        updated_sublist = []
+        for graph in graph_list:
+            curr_mapping = {}  # Mapping applies to this specific graph
+
+            for node in graph.nodes:
+                # Ensure that 'feat' exists and is properly initialized
+                if 'feat' not in graph.nodes[node]:
+                    graph.nodes[node]['feat'] = {}
+
+                # Mark the node as new or old
+                if node not in node_mapping:
+                    node_mapping[node] = new_id
+                    new_id += 1
+                    graph.nodes[node]['feat']['type'] = 1  # Node is new
+                else:
+                    graph.nodes[node]['feat']['type'] = 0  # Node is old
+
+                # Map the node and update the ID in the feature dictionary
+                curr_mapping[node] = node_mapping[node]
+                graph.nodes[node]['feat']['id'] = node_mapping[node]
+
+                node_degree = graph.degree(node)  # Current node's degree
+
+                # If thresholds are available, calculate the max degree based on thresholds
+                if np.any(thresholds):
+                    graph.nodes[node]['feat']['currDegree'] = node_degree
+                    graph.nodes[node]['feat']['maxDegree'] = next((t for t in thresholds if node_degree <= t), thresholds[-1])
+                else:
+                    # If no thresholds, use degree as maxDegree
+                    graph.nodes[node]['feat']['currDegree'] = node_degree
+                    graph.nodes[node]['feat']['maxDegree'] = node_degree
+
+            # Relabel the graph nodes according to the new IDs
+            relabeled_graph = nx.relabel_nodes(graph, curr_mapping, copy=True)
+
+            # Preserve features for relabeled nodes
+            for old_node, new_node in curr_mapping.items():
+                relabeled_graph.nodes[new_node]['feat'] = graph.nodes[old_node]['feat'].copy()
+                # print(f"Old Node: {old_node}, Features: {graph.nodes[old_node]['feat']}")
+                # print(f"New Node: {new_node}, Features: {relabeled_graph.nodes[new_node]['feat']}")
+
+            updated_sublist.append(relabeled_graph)
+        updated_graphs.append(updated_sublist)
+
+    return updated_graphs, len(node_mapping)
  
+
+def build_edgebanks_from_start(graphs):
+    """
+    Build the edgebanks for each graph in graphs, stores all edges from graph i-1 in each index i
+    
+    Args:
+        graphs (list(nx.Graph)): A list of nx Graphs that we will build our edgebanks from
+        
+    Returns:
+        edgebanks (list(dict)): A list of dictionary edgebanks that store all edges from the previous graphs in each index
+    """
+    edgebanks = [{}]  # Initialize an empty list for edgebanks
+
+    # Loop over all graphs (starting from the second graph)
+    for i in range(1, len(graphs)):
+        curr_edgebank = {}
+
+        # Add edges from all previous graphs (not the current graph)
+        for j in range(i):  # Loop through all previous graphs (graphs 0 to i-1)
+            for u, v in graphs[j][-1].edges():  # Accessing the graph directly
+                u_key = u
+                v_key = v
+                curr_edgebank.setdefault(u_key, []).append(v_key)  # Add edge from u to v
+
+        edgebanks.append(curr_edgebank)  # Append the current edgebank to the list
+
+    return edgebanks
+
 
 def process_starter_graph(graphs: list, thresholds: list):
     """
@@ -1215,14 +1402,14 @@ def process_starter_graph(graphs: list, thresholds: list):
     return final_embeddings, degree_clusters, existing_nodes, edgebank
 
 
-# # Data Loading and Prep
+# Data Loading and Prep
 
 dataset = args.dataset
 my_loader = Loader()
 my_evaluator = Evaluator()
 
-# # Construct csv
-# run_number = 1
+# Construct csv
+run_number = 1
 structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_pred.csv'
 structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_true.csv'
 structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_diff.csv'
@@ -1232,7 +1419,43 @@ edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_
 topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/toper_diff.csv'
 animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/pred_vs_true.mp4'
 
-probabilities, features, thresholds, target_graphs = load_data(args.dataset, args.strategy, args.embedding, args.mlpEncoding, args.embedOld, args.trainingStyle, args.embeddingType)
+# Create file paths if needed
+for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 
+             kernel_true_file_path, edge_file_path, topER_file_path, animation_path]:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+columns_structure = ['Graph Number', 'Average Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortivity Coefficient',
+            'Clustering Coefficient', 'Density', 'Number of Weakly Connected Components',
+            'Number of Strongly Connected Components', 'Number of Nodes', 'Number of Edges',
+            'Eigenvalue_1', 'Eigenvalue_2', 'Eigenvalue_3', 'Eigenvalue_4', 'Eigenvalue_5', ]
+removed = ['Betweenness Centrality', 'Closeness Centrality', 'Number of Cliques', 'Diameter', 'Number of 3-Motifs',  'Number of Cycles', ]
+
+# Write the header and empty content
+pd.DataFrame(columns=columns_structure).to_csv(structure_pred_file_path, index=False)
+pd.DataFrame(columns=columns_structure).to_csv(structure_true_file_path, index=False)
+pd.DataFrame(columns=columns_structure + ['Kernel Distance']).to_csv(structure_diff_file_path, index=False)
+
+columns_edges = ['Graph Number', 'precision overall', 'recall overall', 'tp_overall', 'fp_overall','tn_overall','fn_overall', 'precision oo', 'recall oo', 'tp_oo', 'fp_oo','tn_oo','fn_oo', 'precision oon', 'recall oon', 'tp_oon', 'fp_oon','tn_oon','fn_oon',  'precision on', 'recall on', 'tp_on', 'fp_on','tn_on','fn_on', 'precision nn', 'recall nn', 'tp_nn', 'fp_nn','tn_nn','fn_nn', 
+                     'Correct Node IDs', 'Correct Old Node IDs', 'Precision Old IDs', 'Recall Old IDs',  'Correct New Node IDs', 'Precision New IDs', 
+                     'Recall New IDs', 'Correct Overall IDs', 'Precision Overall IDs', 'Recall Overall IDs']
+
+# Write the header and empty content
+pd.DataFrame(columns=columns_edges).to_csv(edge_file_path, index=False)
+
+columns_kernel = ['Subgraph 1', 'Subgraph 2', 'Subgraph 3', 'Subgraph 4']
+
+# Write the header and empty content
+pd.DataFrame(columns=columns_kernel).to_csv(kernel_pred_file_path, index=False)
+pd.DataFrame(columns=columns_kernel).to_csv(kernel_true_file_path, index=False)
+
+# Load probabilities
+probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities')  # Activation doesn't matter here
+probabilities = probabilities_df.values.tolist()
+
+# Load all features, thresholds, and target subgraphs
+features, _ = my_loader.load_data(dataset, activation='Degree', type='features', include_weights=True)
+thresholds = my_loader.load_data(dataset, activation='Degree', type='thresholds', include_weights=True)
+target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraphs', include_weights=False)
 
 # Initialize list for predicted graphs
 pred_graphs = []
@@ -1252,6 +1475,7 @@ curr_edgebank_pred = all_edgebanks[num_trainers]  # We start with an edgebank
 TEST_GRAPH_PERCENT = 0.3
 split_idx = int((1.0 - TEST_GRAPH_PERCENT) * len(tmp_target_graphs))
 mlp_training_graphs = [tmp_target_graphs[i][-1] for i in range(num_trainers)]  # The graphs we will use to train the MLPs, must start with our starter
+
 
 # Graph Creation
 
@@ -1290,14 +1514,13 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
 
     results_diff_structure['Kernel Distance'] = distance  # The kernel distance will be part of our structure evaluation
 
-
     # Store all results
-    # pd.DataFrame([results_diff_structure]).to_csv(structure_diff_file_path, mode='a', header=False, index=False)
-    # pd.DataFrame([results_edges]).to_csv(edge_file_path, mode='a', header=False, index=False)
-    # pd.DataFrame([results_true_structure]).to_csv(structure_true_file_path, mode='a', header=False, index=False)
-    # pd.DataFrame([results_pred_structure]).to_csv(structure_pred_file_path, mode='a', header=False, index=False)
-    # pd.DataFrame([pred_kernel]).to_csv(kernel_pred_file_path, mode='a', header=False, index=False)
-    # pd.DataFrame([true_kernel]).to_csv(kernel_true_file_path, mode='a', header=False, index=False)
+    pd.DataFrame([results_diff_structure]).to_csv(structure_diff_file_path, mode='a', header=False, index=False)
+    pd.DataFrame([results_edges]).to_csv(edge_file_path, mode='a', header=False, index=False)
+    pd.DataFrame([results_true_structure]).to_csv(structure_true_file_path, mode='a', header=False, index=False)
+    pd.DataFrame([results_pred_structure]).to_csv(structure_pred_file_path, mode='a', header=False, index=False)
+    pd.DataFrame([pred_kernel]).to_csv(kernel_pred_file_path, mode='a', header=False, index=False)
+    pd.DataFrame([true_kernel]).to_csv(kernel_true_file_path, mode='a', header=False, index=False)
     
     # Append the last graph from the filtration (assumed to be the "predicted" one)
     pred_graphs.append(filtration_sequence)  # The kernel distance will be part of our structure evaluation

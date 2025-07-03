@@ -601,7 +601,7 @@ def predict_edges(graph, edge_type, node_types, edgebank, mlp, embeddings, top_k
 
     elif edge_type == 'o-n':
         nodes = node_types['old_nodes'] + node_types['new_nodes']  # Since all nodes are valid candidates
-        candidate_edges = generate_candidates(graph, nodes_1=nodes, nodes_2=nodes, flag=edge_type, edgebank=edgebank)
+        candidate_edges = generate_candidates(graph, nodes_1=nodes, nodes_2=nodes, flag=edge_type, edgebank=edgebank) #TODO kha: check this
     
     # Predict edge probabilities using the MLP
     edge_probs = []

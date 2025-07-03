@@ -124,7 +124,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
     for G in graph_snapshots:
         snapshot_embeddings = compute_node2vec_embeddings(G)
         for node, emb in snapshot_embeddings.items():
-            node_history[node].append(emb)
+            node_history[node].append(emb) # TODO: Check nodeId if the same for every snapshot
 
     # Step 2: Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
