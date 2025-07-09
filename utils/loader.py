@@ -124,7 +124,7 @@ class Loader():
             seek_file = dataset + '_' + activation + '_no_weight' + '.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
             dataset_folder = os.path.join(dataset_folder, 'no_weight')  # Target folder path
-            
+        
         data_files = os.listdir(dataset_folder)
         
         if seek_file in data_files:

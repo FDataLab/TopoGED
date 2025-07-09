@@ -50,12 +50,12 @@ class GCLSTM(nn.Module):
         N = x_list[0].size(0)
         H = self.hidden_channels
 
-        h = [torch.zeros(N, H, device=x_list[0].device) for _ in range(self.num_layers)]
-        c = [torch.zeros(N, H, device=x_list[0].device) for _ in range(self.num_layers)]
+        h = [torch.zeros(N, H, device=self.device) for _ in range(self.num_layers)]
+        c = [torch.zeros(N, H, device=self.device) for _ in range(self.num_layers)]
 
         for t in range(T):
-            x = x_list[t]
-            edge_index = edge_index_list[t]
+            x = x_list[t].to(self.device)
+            edge_index = edge_index_list[t].to(self.device)
             for l in range(self.num_layers):
                 h[l], c[l] = self.cells[l](x, edge_index, h[l], c[l])
                 x = h[l]
