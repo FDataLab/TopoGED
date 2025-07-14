@@ -42,12 +42,14 @@ def load_encoder_model(args, device, node2vec_dimensions, HTGN_nodelist=[]):
         model = SimpleNodeLSTM(input_dim=node2vec_dimensions+4, hidden_dim=64).to(device)
     elif args.embeddingType == 'GCLSTM':
         model = GCLSTM(in_channels=node2vec_dimensions+4, hidden_channels=64).to(device)
+        model.device = device
     elif args.embeddingType == 'HTGN':
         args.num_nodes = len(HTGN_nodelist)
         args.nfeat = node2vec_dimensions + 4
         args.nhid = 64
         args.nout = 64
         model = HTGN(args).to(device)
+        model.device = device
     else:
         raise Exception('pls define the model')
     logger.info('using model {} '.format(args.embeddingType))

@@ -19,6 +19,8 @@ import math
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn as nn
+import timeit
+import statistics as stat
 
 import os
 import sys
@@ -41,7 +43,7 @@ from create_sub_graphs import create_nn_graph, create_on_graph, create_onn_with_
 from torch.utils.data import DataLoader
 
 # Set seeds
-global_seed = 42
+global_seed = args.seed
 random.seed(global_seed)
 np.random.seed(global_seed)   
 
@@ -49,7 +51,7 @@ np.random.seed(global_seed)
 try:
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        print("Using CUDA (NVIDIA GPU)")
+        # print("Using CUDA (NVIDIA GPU)")
     else:
         device = torch.device("cpu")
         print("Using CPU")
@@ -64,7 +66,6 @@ except Exception:
 #                  'n-n': load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions)}
 encoder_model = load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions)
 
-
 # Each of these are (2 * node_embedding_size)
 if args.embeddingType in ['Node2Vec', 'LSTM', 'GCLSTM', 'HTGN']:
     embedding_dim = 128
@@ -72,29 +73,45 @@ elif args.embeddingType == 'Linear':
     embedding_dim = 8  # Must be same as the number of features
 
 # Create file for visualization
-file_visualization_path = rf"./GraphGeneration\scripts\Visualize"
-if not os.path.exists(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}"):
-    os.mkdir(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}")
-with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "w") as f:
+file_visualization_path = "GraphGeneration/scripts/Visualize"
+if not os.path.exists(f"{file_visualization_path}/{args.dataset}/{args.embeddingType}"):
+    os.makedirs(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}")
+with open(f"{file_visualization_path}/{args.dataset}/{args.embeddingType}/multiheadMLP_performance_{args.seed}.txt", "w") as f:
     f.write("")
-with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_on.txt", "w") as f:
+with open(f"{file_visualization_path}/{args.dataset}/{args.embeddingType}/kl_results_on_{args.seed}.txt", "w") as f:
     f.write("snapshot, kl-divergence\n")
-with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_nn.txt", "w") as f:
+with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/kl_results_nn_{args.seed}.txt", "w") as f:
     f.write("snapshot, kl-divergence\n")
-with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_oonn.txt", "w") as f:
+with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/kl_results_oonn_{args.seed}.txt", "w") as f:
     f.write("snapshot, kl-divergence\n")
-with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_pred_oonn.txt", "w") as f:
+with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/kernel_results_pred_oonn_{args.seed}.txt", "w") as f:
     categories = [f"Graphlet{i}" for i in range(1, 22)]
     f.write("snapshot," + ",".join(categories) + "\n")
-with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_true_oonn.txt", "w") as f:
+with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/kernel_results_true_oonn_{args.seed}.txt", "w") as f:
     categories = [f"Graphlet{i}" for i in range(1, 22)]
     f.write("snapshot," + ",".join(categories) + "\n")
-with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\picking_nodes_on.txt", "w") as f:
+with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/picking_nodes_on_{args.seed}.txt", "w") as f:
     f.write(f"snapshot, precison_on, recall_on, f1_on\n")
 with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\influential_prediction.txt", "w") as f:
     f.write("snapshot, precision\n")
     
+def save_result_time(model_name,dataset,time,seed):
+    partial_path = "data/output/results/time"
+    if not os.path.exists(partial_path):
+        os.makedirs(partial_path)
+    result_path = f"{partial_path}/time_saving.csv"
+    if not os.path.exists(result_path):
+        result_df = pd.DataFrame(
+            columns=["model", "dataset","time","seed"])
+    else:
+        result_df = pd.read_csv(result_path)
 
+    result_df = result_df.append({'model': model_name,
+                                  'dataset': dataset,
+                                  "time": time,
+                                  "seed" : seed
+                                  }, ignore_index=True)
+    result_df.to_csv(result_path, index=False)
 
 # Utility function for CUDA
 def to_numpy(x):
@@ -206,7 +223,7 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
     if X_val is not None and y_val is not None:
         X_val = torch.tensor(X_val, dtype=torch.float32).to(device)
         y_val = torch.tensor(y_val, dtype=torch.float32).to(device)
-        
+
     # Train
     for epoch in range(epochs):
         train_loss = 0
@@ -282,14 +299,15 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
             if (epoch + 1) % 100 == 0:
                 epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f} | Val Loss: {val_loss:.4f} | Val AUCROC: {val_aucroc:.4f}"
                 print(epochMessage)
-                with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "a") as f:
+                with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/multiheadMLP_performance.txt", "a") as f:
                     f.write(epochMessage + "\n")
         else:
             if (epoch + 1) % 100 == 0:
                 epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f}"
                 print(epochMessage)
-                with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "a") as f:
+                with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/multiheadMLP_performance.txt", "a") as f:
                     f.write(epochMessage + "\n")
+    
     return model
 
 def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
@@ -986,18 +1004,21 @@ my_visualizer = Visualizer(dataset=dataset, task='regression')
 
 # # Construct csv
 # run_number = 1
-structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_pred.csv'
-structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_true.csv'
-structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_diff.csv'
-kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/kernel_pred.csv'
-kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/kernel_true.csv'
-edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/edge_analysis.csv'
-topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/toper_diff.csv'
-animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/pred_vs_true.mp4'
+# structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_pred.csv'
+# structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_true.csv'
+# structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_diff.csv'
+# kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/kernel_pred.csv'
+# kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/kernel_true.csv'
+# edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/edge_analysis.csv'
+# topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/toper_diff.csv'
+# animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/pred_vs_true.mp4'
 
 probabilities, features, thresholds, target_graphs = load_data(args.dataset, args.strategy, args.embedding, args.mlpEncoding, args.embedOld, args.trainingStyle, args.embeddingType)
 # Initialize list for predicted graphs
 pred_graphs = []
+
+
+start = timeit.default_timer()
 
 # Build the edgebanks for construction
 tmp_target_graphs, _ = modifyGraphIds(target_graphs, thresholds)
@@ -1029,6 +1050,7 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     old_nodes = set().union(*[g[-1].nodes() for g in tmp_target_graphs[:i+1]]) #Get all old nodes up to current snapshot
     encoder_model = load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions, 
                                        HTGN_nodelist=old_nodes)
+
     
     # Get the number of resources available for this graph
     count_old = probabilities[i][0]
@@ -1043,79 +1065,87 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     embedding = list(zip(embedding[0::3], embedding[1::3], embedding[2::3]))
 
     print('Training the MLP')
-    mlp = train_models(mlp_training_graphs, all_edgebanks, lr=0.001, seed=42)
+    mlp = train_models(mlp_training_graphs, all_edgebanks, lr=0.001, seed=global_seed)
     print('Finished training the MLP; Beginning Construction')
     # Build the filtration sequence using the current parameters
     filtration_sequence, node_types, existing_nodes, edge_type_map, curr_edgebank_pred, embeddings, degree_clusters = build_accumulating_filtration_sequence_with_edgebank(
         embedding=embedding, prev_graphs=mlp_training_graphs, graph_num=i, p_old_nodes=count_old, p_new_nodes=count_new, 
         E_oo=p0, E_nn=p1, E_on=p2, E_oon=p3, thresholds=thresholds, embeddings=embeddings, 
-        degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, existing_nodes=existing_nodes, mlp=mlp
+        degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, existing_nodes=existing_nodes, mlp=mlp,
+        seed= global_seed
     )
 
     # Evaluate the graph of o-n 
     pred_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, filtration_sequence[-1].copy())
-    true_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, tmp_target_graphs[i][-1].copy())
-    on_graph_history.append(true_on_graph.copy())
+    # true_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, tmp_target_graphs[i][-1].copy())
+    # on_graph_history.append(true_on_graph.copy())
     
-    precison_on, recall_on, f1_on = my_evaluator.calculate_precision_picking_nodes(pred_on_graph, true_on_graph, old_nodes=old_nodes)
-    on_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
+    # precison_on, recall_on, f1_on = my_evaluator.calculate_precision_picking_nodes(pred_on_graph, true_on_graph, old_nodes=old_nodes)
+    # on_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
 
-    with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_on.txt", "a") as f:
-        f.write(f"{i + 1}, {on_kl_divergence_results:.6f}\n")
+    # with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_on.txt", "a") as f:
+    #     f.write(f"{i + 1}, {on_kl_divergence_results:.6f}\n")
     
-    with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\picking_nodes_on.txt", "a") as f:
-        f.write(f"{i + 1}, {precison_on:.6f}, {recall_on:.6f}, {f1_on:.6f}\n")
+    # with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\picking_nodes_on.txt", "a") as f:
+    #     f.write(f"{i + 1}, {precison_on:.6f}, {recall_on:.6f}, {f1_on:.6f}\n")
         
     # Evaluate the graph of oo-nn
     pred_oonn_graph = create_onn_with_hops_graph(node_types["new_nodes"], filtration_sequence[-1].copy())
-    true_oonn_graph = create_onn_with_hops_graph(node_types["new_nodes"], tmp_target_graphs[i][-1].copy())
-    try:
-        pred_kernel, true_kernel, distance = my_evaluator.evaluateOrca(pred_oonn_graph, true_oonn_graph)
-        on_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_oonn_graph, true_oonn_graph, mode="total")
+    # true_oonn_graph = create_onn_with_hops_graph(node_types["new_nodes"], tmp_target_graphs[i][-1].copy())
+    # try:
+    #     pred_kernel, true_kernel, distance = my_evaluator.evaluateOrca(pred_oonn_graph, true_oonn_graph)
+    #     on_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_oonn_graph, true_oonn_graph, mode="total")
 
-        with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_oonn.txt", "a") as f:
-            f.write(f"{i + 1}, {on_kl_divergence_results:.6f}\n")
+    #     with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_oonn.txt", "a") as f:
+    #         f.write(f"{i + 1}, {on_kl_divergence_results:.6f}\n")
 
-        with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_pred_oonn.txt", "a") as f:
-            csv_string = ",".join(f"{x:.3f}" for x in pred_kernel) + ","
-            f.write(f"{i + 1}," + csv_string + "\n")
+    #     with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_pred_oonn.txt", "a") as f:
+    #         csv_string = ",".join(f"{x:.3f}" for x in pred_kernel) + ","
+    #         f.write(f"{i + 1}," + csv_string + "\n")
 
-        with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_true_oonn.txt", "a") as f:
-            csv_string = ",".join(f"{x:.3f}" for x in true_kernel) + ","
-            f.write(f"{i + 1}," + csv_string + "\n")
+    #     with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_true_oonn.txt", "a") as f:
+    #         csv_string = ",".join(f"{x:.3f}" for x in true_kernel) + ","
+    #         f.write(f"{i + 1}," + csv_string + "\n")
 
-    except Exception as e:
-        print(f"[Error at step {i + 1}] ORCA evaluation failed: {e}")
+    # except Exception as e:
+    #     print(f"[Error at step {i + 1}] ORCA evaluation failed: {e}")
 
         
     # Evaluate the graph of n-n 
     pred_nn_graph = create_nn_graph(node_types["new_nodes"], filtration_sequence[-1].copy())
-    true_nn_graph = create_nn_graph(node_types["new_nodes"], tmp_target_graphs[i][-1].copy())
+    # true_nn_graph = create_nn_graph(node_types["new_nodes"], tmp_target_graphs[i][-1].copy())
 
-    nn_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_nn_graph, true_nn_graph, mode="total")
+    # nn_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_nn_graph, true_nn_graph, mode="total")
 
-    with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_nn.txt", "a") as f:
-        f.write(f"{i + 1}, {nn_kl_divergence_results:.6f}\n")
+    # with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_nn.txt", "a") as f:
+    #     f.write(f"{i + 1}, {nn_kl_divergence_results:.6f}\n")
         
     # Evaluate the graph of old nodes
     oldG = filtration_sequence[-1].subgraph(old_nodes).copy()
     target_oldG = tmp_target_graphs[i][-1].subgraph(old_nodes).copy()
     results_diff_structure = my_evaluator.evaluateTwoStructure(oldG, target_oldG, graph_num=i)
     
-    results_edges = my_evaluator.evaluateEdges(filtration_sequence[-1], tmp_target_graphs[i][-1], curr_edgebank_pred, all_edgebanks[i], graph_num=i)
-    results_true_structure = my_evaluator.evaluateSingleStructure(target_oldG, graph_num=i)
-    results_pred_structure = my_evaluator.evaluateSingleStructure(oldG, graph_num=i)
-    pred_kernel, true_kernel, distance = my_evaluator.evaluateOrca(oldG, target_oldG)
+    # results_edges = my_evaluator.evaluateEdges(filtration_sequence[-1], tmp_target_graphs[i][-1], curr_edgebank_pred, all_edgebanks[i], graph_num=i)
+    # results_true_structure = my_evaluator.evaluateSingleStructure(target_oldG, graph_num=i)
+    # results_pred_structure = my_evaluator.evaluateSingleStructure(oldG, graph_num=i)
+    # pred_kernel, true_kernel, distance = my_evaluator.evaluateOrca(oldG, target_oldG)
     
-    results_diff_structure['Kernel Distance'] = distance  # The kernel distance will be part of our structure evaluation
+    # results_diff_structure['Kernel Distance'] = distance  # The kernel distance will be part of our structure evaluation
 
     # Store all results
-    pd.DataFrame([results_diff_structure]).to_csv(structure_diff_file_path, mode='a', header=False, index=False)
-    pd.DataFrame([results_edges]).to_csv(edge_file_path, mode='a', header=False, index=False)
-    pd.DataFrame([results_true_structure]).to_csv(structure_true_file_path, mode='a', header=False, index=False)
-    pd.DataFrame([results_pred_structure]).to_csv(structure_pred_file_path, mode='a', header=False, index=False)
-    pd.DataFrame([pred_kernel]).to_csv(kernel_pred_file_path, mode='a', header=False, index=False)
-    pd.DataFrame([true_kernel]).to_csv(kernel_true_file_path, mode='a', header=False, index=False)
+    # pd.DataFrame([results_diff_structure]).to_csv(structure_diff_file_path, mode='a', header=False, index=False)
+    # pd.DataFrame([results_edges]).to_csv(edge_file_path, mode='a', header=False, index=False)
+    # pd.DataFrame([results_true_structure]).to_csv(structure_true_file_path, mode='a', header=False, index=False)
+    # pd.DataFrame([results_pred_structure]).to_csv(structure_pred_file_path, mode='a', header=False, index=False)
+    # pd.DataFrame([pred_kernel]).to_csv(kernel_pred_file_path, mode='a', header=False, index=False)
+    # pd.DataFrame([true_kernel]).to_csv(kernel_true_file_path, mode='a', header=False, index=False)
+
+        
+    # Visualize predGraph vs trueGraph
+    # print(len(oldG.nodes()))
+    # print(len(target_oldG))
+    # print(f"snapshot {i}")
+    # my_visualizer.display_pred_graph_vs_true_graph(oldG[-1], target_oldG)
     
     # Append the last graph from the filtration (assumed to be the "predicted" one)
     pred_graphs.append(filtration_sequence)  # The kernel distance will be part of our structure evaluation
@@ -1130,3 +1160,8 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
             mlp_training_graphs.append(tmp_target_graphs[i][-1])
         elif i >= split_idx:
             mlp_training_graphs.append(pred_graphs[i - 2][-1])
+
+end = timeit.default_timer()
+duration = end - start
+save_result_time(args.embeddingType,args.dataset,duration,global_seed)
+

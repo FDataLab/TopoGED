@@ -189,7 +189,6 @@ def compute_node_embeddings_GCLSTM(graph_snapshots, gclstm_model):
         dict of {node_id: final temporal embedding}
     """
     x_list, edge_index_list, node_id_list, node_id_map = get_GCN_data(graph_snapshots)
-
     final_node_embeddings = gclstm_model(x_list, edge_index_list, node_id_list, node_id_map)
     return final_node_embeddings
 

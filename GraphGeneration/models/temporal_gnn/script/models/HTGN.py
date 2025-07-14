@@ -37,6 +37,7 @@ class HTGN(BaseModel):
         self.Q = Parameter(torch.ones((args.nout, args.nhid)), requires_grad=True)
         self.r = Parameter(torch.ones((args.nhid, 1)), requires_grad=True)
         self.num_window = args.nb_window
+        self.device = args.device
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -84,6 +85,7 @@ class HTGN(BaseModel):
         return self.manifold.sqdist(x, h, self.c[2]).mean()
 
     def forward(self, edge_index, node_id_list, node_id_map, x=None, weight=None):
+        edge_index = edge_index.to(self.device)
         if x is None:  # using trainable feat matrix
             x = self.initHyperX(self.linear(self.feat), self.c[0])
         else:
@@ -93,6 +95,7 @@ class HTGN(BaseModel):
 
         # layer 1
         x = self.manifold.proj(x, self.c[0])
+        
         x = self.layer1(x, edge_index)
 
         # layer 2
