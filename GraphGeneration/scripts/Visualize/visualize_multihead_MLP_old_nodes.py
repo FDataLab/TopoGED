@@ -80,4 +80,4 @@ def visualize_multihead_MLP_performance(dataset, embeddingType):
     plt.show()
     
 
-visualize_multihead_MLP_performance("networkaion", "GCLSTM")
+visualize_multihead_MLP_performance("mathoverflow", "LSTM")

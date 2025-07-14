@@ -35,7 +35,7 @@ from itertools import product
 
 # Import all embedding methods
 
-from compute_embedding import compute_linear_gnn_embeddings, compute_node2vec_embeddings, compute_node_embeddings_GCLSTM, compute_node_embeddings_HTGN, compute_node_embeddings_LSTM, node2vec_dimensions
+from compute_embedding import node2vec_dimensions, compute_embedding
 from process_data import modifyGraphIds, build_edgebanks_from_start, process_starter_graph
 from create_sub_graphs import create_nn_graph, create_on_graph, create_onn_with_hops_graph
 from torch.utils.data import DataLoader
@@ -91,6 +91,8 @@ with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kerne
     f.write("snapshot," + ",".join(categories) + "\n")
 with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\picking_nodes_on.txt", "w") as f:
     f.write(f"snapshot, precison_on, recall_on, f1_on\n")
+with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\influential_prediction.txt", "w") as f:
+    f.write("snapshot, precision\n")
     
 
 
@@ -167,7 +169,6 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
                 attempts += 1
                     
     negatives = list(negatives)
-    print(f"{edge_type}: {len(negatives)}")
     if len(negatives) < num_samples:
         print(f"Only {len(negatives)} unique negative edges found for type {edge_type}, requested {num_samples}")
 
@@ -311,7 +312,7 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
     embeddings = {}
     degree_clusters = {}
     
-    old_nodes = set().union(*[g.nodes() for g in prev_graphs])  # A set of old nodes used to differentiate node types
+    old_nodes = set(prev_graphs[0].nodes())  # A set of old nodes used to differentiate node types
 
     sorted_samples = {
         'o-o-bank': {'X': [], 'y': []},
@@ -325,18 +326,8 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
         prev_graph = prev_graphs[i]
         
         # Embeddings depend on our strategy
-        if args.embeddingType == 'Node2Vec':
-            final_embeddings = compute_node2vec_embeddings(prev_graph)
-        elif args.embeddingType == 'Linear':
-            final_embeddings = compute_linear_gnn_embeddings(prev_graph)
-        elif args.embeddingType == 'LSTM':
-            # graph_snapshots = [G_0, G_1, ..., G_T]  # each G must have node['feat']
-            final_embeddings = compute_node_embeddings_LSTM(prev_graphs[:i+1], encoder_model)
-        elif args.embeddingType == 'GCLSTM':
-            final_embeddings = compute_node_embeddings_GCLSTM(prev_graphs[:i+1], encoder_model)
-        elif args.embeddingType == 'HTGN':
-            final_embeddings = compute_node_embeddings_HTGN(prev_graphs[:i+1], encoder_model)
-        else: final_embeddings = {}
+        final_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs[:i+1]+[prev_graph], encoder_model=encoder_model)
+       
         embeddings.update(final_embeddings)  # Update our embeddings to reflect the new node ids
         
         # Update the degree clusters
@@ -362,12 +353,12 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
             if node in embeddings:
                 base_embedding = embeddings[node]
             else:
-                base_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
+                # base_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
                 
-                # Protects from crashes
-                if base_embedding is None or len(base_embedding) == 0:
+                # # Protects from crashes
+                # if base_embedding is None or len(base_embedding) == 0:
                     # base_embedding = np.zeros(64) if args.embeddingType == 'Node2Vec' else np.zeros(4)
-                    base_embedding = np.zeros(len(embeddings[0]))
+                base_embedding = np.zeros(len(embeddings[0]))
                 
             # Convert to tensor for concatenation
             base_embedding = to_tensor(base_embedding)
@@ -438,8 +429,7 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
         negative_edges_oon = generate_negative_edges(graph, num_new_edges_oon, edge_type='o-o-nobank', edgebank=edgebanks[i + 1])
         negative_edges_on = generate_negative_edges(graph, num_new_edges_on, edge_type='o-n', edgebank=edgebanks[i + 1])
         negative_edges_nn = generate_negative_edges(graph, num_new_edges_nn, edge_type='n-n', edgebank=edgebanks[i + 1])
-        print("Negative edges nn, on:")
-        print(len(negative_edges_nn), len(negative_edges_on))
+
         tmp_samples_oo = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_oon]
         tmp_samples_on = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_on]
@@ -902,23 +892,33 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, prev_graphs,
     oo_bank_edges = []
     oo_nobank_edges = []
     
-
-    oo_bank_edges = sample_edges(old_nodes, old_nodes, count=E_oo, edge_type="o-o-bank")
+    # Phase 1: o-o-bank
+    oo_bank_edges = sample_edges(old_nodes, old_nodes, E_oo, edge_type="o-o-bank")
     tmp_graph.add_edges_from(oo_bank_edges)
     update_degrees(tmp_graph)
-    
-    oo_nobank_edges = sample_edges(old_nodes, old_nodes, count=E_oon, edge_type="o-o-nobank")
+    new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs + [tmp_graph], encoder_model=encoder_model)
+    embeddings.update(new_embeddings)  # Recompute old node embeddings
+
+    # Phase 2: o-o-nobank
+    oo_nobank_edges = sample_edges(old_nodes, old_nodes, E_oon, edge_type="o-o-nobank")
     tmp_graph.add_edges_from(oo_nobank_edges)
     update_degrees(tmp_graph)
-    
-    on_edges = sample_edges(old_nodes, new_nodes, count=E_on, edge_type="o-n")
+    new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs + [tmp_graph], encoder_model=encoder_model)
+    embeddings.update(new_embeddings)  # Recompute old node embeddings
+
+    # Phase 3: o-n
+    on_edges = sample_edges(old_nodes, new_nodes, E_on, edge_type="o-n")
     tmp_graph.add_edges_from(on_edges)
     update_degrees(tmp_graph)
-    
-    nn_edges = sample_edges(new_nodes, new_nodes, count=E_nn, edge_type="n-n")
+    new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs + [tmp_graph], encoder_model=encoder_model)
+    embeddings.update(new_embeddings)  # Recompute old and new node embeddings
+
+    # Phase 4: n-n
+    nn_edges = sample_edges(new_nodes, new_nodes, E_nn, edge_type="n-n")
     tmp_graph.add_edges_from(nn_edges)
     update_degrees(tmp_graph)
-    
+    new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs + [tmp_graph], encoder_model=encoder_model)
+    embeddings.update(new_embeddings)  # Final update  
     
     edge_pool = (oo_bank_edges + oo_nobank_edges + on_edges + nn_edges)
     weights = np.random.dirichlet(np.ones(len(edge_pool))) * W_total
@@ -957,17 +957,7 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, prev_graphs,
     edgebank = update_edgebank(filtration_graphs[-1], edgebank)
     graphs = prev_graphs + [tmp_graph]
     # Embeddings depend on our strategy
-    if args.embeddingType == 'Node2Vec':
-        final_embeddings = compute_node2vec_embeddings(tmp_graph)
-    elif args.embeddingType == 'Linear':
-        final_embeddings = compute_linear_gnn_embeddings(tmp_graph)
-    elif args.embeddingType == 'LSTM':       
-        # graph_snapshots = [G_0, G_1, ..., G_T]  # each G must have node['feat']
-        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model)
-    elif args.embeddingType == 'GCLSTM':
-        final_embeddings = compute_node_embeddings_GCLSTM(graphs, encoder_model)
-    elif args.embeddingType == 'HTGN':
-        final_embeddings = compute_node_embeddings_HTGN(graphs, encoder_model)
+    final_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=graphs, encoder_model=encoder_model)
     
     embeddings.update(final_embeddings)  # Blindly overwrites the previously existing embeddings
     
@@ -987,147 +977,6 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, prev_graphs,
 
     return filtration_graphs, node_types, existing_nodes, edge_type_map, edgebank, embeddings, degree_clusters
  
-def build_oo_graph_with_edgebank(embedding, prev_graphs, graph_num, p_old_nodes, E_oo, E_oon, thresholds, embeddings=None, degree_clusters=None, edgebank=None, existing_nodes=None, mlp=None, seed=42):
-    """
-    Our main driver function to build graphs, takes in various arguments to guide the graph construction
-    Specifically, this version uses an MLP to assign edges to two nodes based on the probability of them forming an edge
-    But, this version also creates a new MLP before each new graph construction. A process called "continual learning"
-    
-    Args:
-        embedding (list): The TopER embedding to guide construction of the graph, stores the number of nodes and edges to add to the graph
-        graph_num (int): The current graph number we are on
-        p_old_nodes (int): The number of old nodes that we are going to see in this graph
-        p_new_nodes (int): The number of new nodes that we are going to see in this graph
-        E_oo (int): The number of edges type 'oo' to add (old edges from the edgebank)
-        E_nn (int): The number of edges type 'nn' to add (new edges that involves two new nodes)
-        E_on (int): The number of edges type 'on' to add (new edges between one new node and one old node (either direction))
-        E_oon (int): The number of edges type 'oon' to add (new edges between two old nodes that was not in the edgebank)
-        thresholds (list): The thresholds for node degrees 'maxDegree' as dicted by TopER
-        embeddings (dict): The embeddings of all old nodes we have seen up to this point
-        degree_clusters (dict): A dictionary of {'degree': [created_embedding]} that we use to assign the embeddings for new nodes
-        edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
-        existing_nodes (dict): A dict of {node_id: (last_seen_timestamp, last_seen_degree)} used for computing reappearance probabilities
-        mlp (MLP NN): An MLP that predicts the probability of an edge occurring
-        seed (int): The seed for reproducibility purposes, controls our randomness in this strategy
-        
-    Returns:
-        old_graphs (list(nx.DiGraph)): A list of nx Graphs that we built up from our TopER embedding
-    """
-    random.seed(seed)
-    np.random.seed(seed)
-
-
-    if existing_nodes is None:
-        existing_nodes = {}
-
-    W_total = embedding[-1][2] 
-
-    # Sample old nodes
-    probs = compute_reappearance_probabilities(existing_nodes, graph_num)
-    node_ids = list(probs.keys())
-    weights = list(probs.values())
-
-    if graph_num > 0:
-        old_nodes = list(np.random.choice(node_ids, size=p_old_nodes, replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
-    else:
-        old_nodes = []
-           
-    all_nodes = old_nodes
-
-    edges = set()
-    edge_type_map = {}  # For calculating AUC scores later 
-    tmp_graph = nx.DiGraph()  # A graph for computing node embeddings easily
-     
-    node_types = {
-        "old_nodes": old_nodes,
-        "new_nodes": []
-    } 
-    
-     
-    # Add the nodes to the graph
-    for node in old_nodes:
-        tmp_graph.add_node(node)
-        feature_dict_old = {'id': node, 'type': 0}  
-        tmp_graph.nodes[node]['feat'] = feature_dict_old
-    
-    get_node_features(tmp_graph, thresholds, embedding, old_nodes, [])  # Assign maximum degrees
-
-    curr_embeddings = {}
-    for node, data in tmp_graph.nodes(data=True):
-        if node in embeddings:
-            curr_embeddings[node] = embeddings[node]
-        else:
-            new_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
-            
-            # Protects from crashes
-            if new_embedding is None or len(new_embedding) == 0:
-                new_embedding = np.zeros(64) if args.embeddingType == 'Node2Vec' else np.zeros(4)
-
-            curr_embeddings[node] = new_embedding
-
-
-    def sample_edges(src_list, dst_list, count, edge_type=None):
-        sampled = set()
-        attempts = 0
-
-        if args.embedOld == False and edge_type == "o-o-bank" and edgebank is not None:
-            for u in src_list:
-                if u in edgebank:
-                    for v in edgebank[u]:
-                        if v in dst_list and u != v and v in edgebank.get(u, []) and (u, v) not in edges:
-                            sampled.add((u, v))
-                            edge_type_map.setdefault(edge_type, []).append((u, v))
-                            edges.add((u, v))
-                            if len(sampled) >= count:
-                                return list(sampled)
-
-        else:
-            if count > 0:
-                sampled = predict_edges(tmp_graph, edge_type, node_types, edgebank, mlp, curr_embeddings, top_k=count, graph_num=graph_num)
-                
-        return list(sampled)
-
-    # Get edges of each type
-    oo_bank_edges = sample_edges(old_nodes, old_nodes, count=E_oo, edge_type="o-o-bank")
-    tmp_graph.add_edges_from(oo_bank_edges)
-    update_degrees(tmp_graph)
-    
-    oo_nobank_edges = sample_edges(old_nodes, old_nodes, count=E_oon, edge_type="o-o-nobank")
-    tmp_graph.add_edges_from(oo_nobank_edges)
-    update_degrees(tmp_graph)
-    
-    
-    edge_pool = (oo_bank_edges + oo_nobank_edges)
-    weights = np.random.dirichlet(np.ones(len(edge_pool))) * W_total
-    edge_weight_map = {edge: w for edge, w in zip(edge_pool, weights)}
-
-    G = nx.DiGraph()
-    used_edges = set()
-    old_graphs = []
-
-    for i, (v_target, e_target, w_target) in enumerate(embedding):
-        v_target = int(v_target)
-        e_target = int(e_target)
-
-        current_nodes = set(all_nodes[:v_target])
-        G.add_nodes_from(current_nodes)
-
-        available_edges = [
-            (u, v) for (u, v) in edge_pool
-            if u in current_nodes and v in current_nodes and (u, v) not in used_edges
-        ]
-
-        needed = e_target - G.number_of_edges()
-        selected_edges = available_edges[:needed]
-
-        for (u, v) in selected_edges:
-            G.add_edge(u, v, weight=edge_weight_map[(u, v)])
-            used_edges.add((u, v))
-
-        old_graphs.append(G.copy())  
-                
-    return old_graphs
-
 # # Data Loading and Prep
 
 dataset = args.dataset
@@ -1196,14 +1045,13 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     print('Training the MLP')
     mlp = train_models(mlp_training_graphs, all_edgebanks, lr=0.001, seed=42)
     print('Finished training the MLP; Beginning Construction')
-    print("New nodes: ", count_new)
     # Build the filtration sequence using the current parameters
     filtration_sequence, node_types, existing_nodes, edge_type_map, curr_edgebank_pred, embeddings, degree_clusters = build_accumulating_filtration_sequence_with_edgebank(
         embedding=embedding, prev_graphs=mlp_training_graphs, graph_num=i, p_old_nodes=count_old, p_new_nodes=count_new, 
         E_oo=p0, E_nn=p1, E_on=p2, E_oon=p3, thresholds=thresholds, embeddings=embeddings, 
         degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, existing_nodes=existing_nodes, mlp=mlp
     )
-    
+
     # Evaluate the graph of o-n 
     pred_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, filtration_sequence[-1].copy())
     true_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, tmp_target_graphs[i][-1].copy())
@@ -1250,11 +1098,8 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
         f.write(f"{i + 1}, {nn_kl_divergence_results:.6f}\n")
         
     # Evaluate the graph of old nodes
-    oldG = build_oo_graph_with_edgebank(embedding, prev_graphs=mlp_training_graphs, graph_num=i, p_old_nodes=count_old, E_oo=p0, E_oon=p3, 
-                                        thresholds=thresholds, embeddings=embeddings, degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, 
-                                        existing_nodes=existing_nodes, mlp=mlp)
-    oldG = oldG[-1]
-    target_oldG = tmp_target_graphs[i][-1].subgraph(tmp_target_graphs[i-1][-1].nodes()).copy()
+    oldG = filtration_sequence[-1].subgraph(old_nodes).copy()
+    target_oldG = tmp_target_graphs[i][-1].subgraph(old_nodes).copy()
     results_diff_structure = my_evaluator.evaluateTwoStructure(oldG, target_oldG, graph_num=i)
     
     results_edges = my_evaluator.evaluateEdges(filtration_sequence[-1], tmp_target_graphs[i][-1], curr_edgebank_pred, all_edgebanks[i], graph_num=i)
@@ -1264,7 +1109,6 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     
     results_diff_structure['Kernel Distance'] = distance  # The kernel distance will be part of our structure evaluation
 
-    
     # Store all results
     pd.DataFrame([results_diff_structure]).to_csv(structure_diff_file_path, mode='a', header=False, index=False)
     pd.DataFrame([results_edges]).to_csv(edge_file_path, mode='a', header=False, index=False)
@@ -1272,13 +1116,6 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     pd.DataFrame([results_pred_structure]).to_csv(structure_pred_file_path, mode='a', header=False, index=False)
     pd.DataFrame([pred_kernel]).to_csv(kernel_pred_file_path, mode='a', header=False, index=False)
     pd.DataFrame([true_kernel]).to_csv(kernel_true_file_path, mode='a', header=False, index=False)
-
-        
-    # Visualize predGraph vs trueGraph
-    # print(len(oldG.nodes()))
-    # print(len(target_oldG))
-    # print(f"snapshot {i}")
-    # my_visualizer.display_pred_graph_vs_true_graph(oldG[-1], target_oldG)
     
     # Append the last graph from the filtration (assumed to be the "predicted" one)
     pred_graphs.append(filtration_sequence)  # The kernel distance will be part of our structure evaluation

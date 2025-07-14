@@ -120,12 +120,17 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
     """
     # Step 1: Collect per-timestep node embeddings
     node_history = defaultdict(list)
-
+    old_nodes = set()
+    null_embed = torch.tensor([0]*(node2vec_dimensions + 4), dtype=torch.float32).to(device)
     for G in graph_snapshots:
         snapshot_embeddings = compute_node2vec_embeddings(G)
         for node, emb in snapshot_embeddings.items():
             node_history[node].append(emb) # TODO: Check nodeId if the same for every snapshot
-
+        
+        for node in old_nodes:
+            if node not in snapshot_embeddings:
+                node_history[node].append(null_embed)
+        old_nodes = old_nodes | set(G.nodes())
     # Step 2: Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
     return final_node_embeddings
@@ -201,3 +206,18 @@ def compute_node_embeddings_HTGN(graph_snapshots, HTGN_model):
     HTGN_model.init_hiddens()
     final_node_embeddings = HTGN_model(edge_index=edge_index_list[-1], x=None, node_id_list=node_id_list, node_id_map=node_id_map)
     return final_node_embeddings
+
+def compute_embedding(embeddingType, graphs, encoder_model=None):
+    if embeddingType == 'Node2Vec':
+        final_embeddings = compute_node2vec_embeddings(graphs[-1])
+    elif embeddingType == 'Linear':
+        final_embeddings = compute_linear_gnn_embeddings(graphs[-1])
+    elif embeddingType == 'LSTM':       
+        # graph_snapshots = [G_0, G_1, ..., G_T]  # each G must have node['feat']
+        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model)
+    elif embeddingType == 'GCLSTM':
+        final_embeddings = compute_node_embeddings_GCLSTM(graphs, encoder_model)
+    elif embeddingType == 'HTGN':
+        final_embeddings = compute_node_embeddings_HTGN(graphs, encoder_model)
+    
+    return final_embeddings

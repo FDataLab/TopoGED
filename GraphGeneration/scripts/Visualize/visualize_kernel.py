@@ -68,4 +68,4 @@ def call_visualize_kernel(dataset, embeddingType):
     # visualize_graphlet_diff_linechart(pred_path, true_path, dataset)
     visualize_kernel_barplot(pred_path, true_path, dataset)
 
-call_visualize_kernel("networkaion", "GCLSTM")
+call_visualize_kernel("mathoverflow", "LSTM")
