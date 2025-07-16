@@ -1,15 +1,16 @@
 """
 Assumption:
-    Train and test temporal graph classification task 
+    Train and test temporal link prediction task 
     without having a pre-trained model
 
-July 14, 2023
+July 14, 2025
 """
 
 import os
 import sys
 import time
 import torch
+import torch.nn as nn
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -18,53 +19,39 @@ from math import isnan
 from sklearn.metrics import roc_auc_score, average_precision_score
 from pickle import dump, load
 import matplotlib.pyplot as plt
-
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
+path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../'))
+print("Added to sys.path:", path)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
   
 
-class MLP(torch.nn.Module):
-  """
-  Binary Classifier to work as a decoder
+class MLP(nn.Module):
+    def __init__(self, in_channels, hidden_channels=32, input_type='Concat'):
+        super().__init__()
 
-  reference:
-    https://github.com/twitter-research/tgn/blob/master/utils/utils.py
-  """
-  def __init__(self, in_dim, hidden_dim_1, hidden_dim_2, drop=0.5):
-    super().__init__()
-    self.fc_1 = torch.nn.Linear(in_dim, hidden_dim_1)
-    self.fc_2 = torch.nn.Linear(hidden_dim_1, hidden_dim_2)
-    self.fc_3 = torch.nn.Linear(hidden_dim_1, 1)
-    self.act = torch.nn.ReLU()
-    self.dropout = torch.nn.Dropout(p=drop, inplace=False)
+        self.input_type = input_type
+        self.heads = nn.Sequential(
+                nn.Linear(in_channels, hidden_channels),
+                nn.ReLU(),
+                nn.Linear(hidden_channels, 1),
+                nn.Sigmoid()
+           )
 
-  def forward(self, x):
-    x = self.act(self.fc_1(x))
-    x = self.dropout(x)
-    x = self.act(self.fc_2(x))
-    x = self.dropout(x)
-    return self.fc_3(x).squeeze(dim=1)
-
-
-def readout_function(embeddings, readout_scheme='mean'):
-    """
-    Read out function to generate a representation for the whole graph
-    reference:    
-    https://github.com/qbxlvnf11/graph-neural-networks-for-graph-classification/blob/master/readouts/basic_readout.py
-    """
-    # note: x.size(): [#nodes, args.n_out]
-    if readout_scheme == 'max':
-      readout = torch.max(embeddings, dim=0)[0].squeeze() # max readout
-    elif readout_scheme == 'mean':
-      readout = torch.mean(embeddings, dim=0).squeeze() # mean readout
-    elif readout_scheme == 'sum':
-      readout = torch.sum(embeddings, dim=0).squeeze() # sum readout
-    else:
-      readout = None
-      raise ValueError("Readout Method Undefined!")
-    return readout
-  
+    def forward(self, src_embed, dst_embed):
+        if self.input_type == 'Concat':
+            edge_input = torch.cat([src_embed, dst_embed], dim=1)
+        elif self.input_type == 'Addition':
+            edge_input = src_embed + dst_embed
+        elif self.input_type == 'Subtraction':
+            edge_input = src_embed - dst_embed
+        elif self.input_type == 'Product':
+            edge_input = src_embed * dst_embed
+            
+        return self.heads(edge_input).squeeze()
 
 def extra_dataset_attributes_loading(args, readout_scheme='mean'):
     """
@@ -133,12 +120,11 @@ class Runner(object):
         # self.model.load_state_dict(torch.load(self.model_path))
 
         # load the graph labels
-        self.t_graph_labels, self.t_graph_feat = extra_dataset_attributes_loading(args)
+        # self.t_graph_labels, self.t_graph_feat = extra_dataset_attributes_loading(args)
 
         # define decoder: graph classifier
         num_extra_feat = 4  # = len([in-degree, weighted-in-degree, out-degree, weighted-out-degree])
-        self.tgc_decoder = MLP(in_dim=args.nout+num_extra_feat, hidden_dim_1=args.nout+num_extra_feat, 
-                               hidden_dim_2=args.nout+num_extra_feat, drop=0.1)  # @NOTE: these hyperparameters may need to be changed 
+        self.tgc_decoder = MLP(in_channels=args.nout*2)  # @NOTE: these hyperparameters may need to be changed 
 
     def load_feature(self):
         if args.trainable_feat:
@@ -167,19 +153,43 @@ class Runner(object):
            self.model.eval()
            self.tgc_decoder.eval()
            with torch.no_grad():
-              edge_index, pos_edge, neg_edge = prepare(data, t)[:3]
-              new_pos_edge, new_neg_edge = prepare(data, t)[-2:]
+                edge_index, pos_index, neg_index, node_list, edge_weight, _, _, node_id_map = prepare(data, t)
+                embeddings, x_embeddings = self.model(edge_index, x=self.x, node_id_list=node_list, node_id_map=node_id_map)
+                
+                # 1. Stack edges: shape [2, N_total]
+                all_edges = torch.cat([pos_index, neg_index], dim=1)
+                
+                # 2. Create labels: shape [N_total]
+                pos_labels = torch.ones(pos_index.shape[1], dtype=torch.float32)
+                neg_labels = torch.zeros(neg_index.shape[1], dtype=torch.float32)
+                all_labels = torch.cat([pos_labels, neg_labels], dim=0)
 
-              embeddings = self.model(edge_index, self.x)
+                # 3. Shuffle the edges and labels in unison
+                perm = torch.randperm(all_edges.shape[1])
+                shuffled_edges = all_edges[:, perm]
+                shuffled_labels = all_labels[perm].float()
+                
+                # Remap edge indices using node_id_map
+                src_nodes = shuffled_edges[0].tolist()
+                dst_nodes = shuffled_edges[1].tolist()
 
-              # graph readout
-              tg_readout = readout_function(embeddings, readout_scheme)
-              tg_embedding = torch.cat((tg_readout, 
-                                        torch.from_numpy(self.t_graph_feat[t_test_idx + len(self.train_shots)]).to(args.device)))
-          
-              # graph classification
-              tg_labels.append(self.t_graph_labels[t_test_idx + len(self.train_shots)].cpu().numpy())
-              tg_preds.append(self.tgc_decoder(tg_embedding.view(1, tg_embedding.size()[0]).float()).sigmoid().cpu().numpy())
+                # Map raw node IDs → indices in embeddings using node_id_map
+                try:
+                    mapped_src = torch.tensor([node_id_map[int(n)] for n in src_nodes], dtype=torch.long).to(args.device)
+                    mapped_dst = torch.tensor([node_id_map[int(n)] for n in dst_nodes], dtype=torch.long).to(args.device)
+                except KeyError as e:
+                    print(f"KeyError: Node {e} not found in node_id_map.")
+                    continue  # Skip this batch
+
+                # Decode edges
+                src_embeddings = torch.stack([embeddings[int(n)] for n in mapped_src])
+                dst_embeddings = torch.stack([embeddings[int(n)] for n in mapped_dst])
+
+                tg_pred = self.tgc_decoder(src_embeddings, dst_embeddings).squeeze()
+
+                # graph classification
+                tg_labels.append(shuffled_labels.detach().cpu().numpy())
+                tg_preds.append(tg_pred.cpu().numpy())
 
         auc, ap = roc_auc_score(tg_labels, tg_preds), average_precision_score(tg_labels, tg_preds)
         return epoch, auc, ap
@@ -215,24 +225,48 @@ class Runner(object):
             epoch_losses = []
             for t_train_idx, t_train in enumerate(self.train_shots):
                 optimizer.zero_grad()
-
-                edge_index, pos_index, neg_index, activate_nodes, edge_weight, _, _ = prepare(data, t_train)
-                embeddings = self.model(edge_index, self.x)
+                # edge_index, pos_index, neg_index, node_list, weights, new_pos_index, new_neg_index, node_id_map
+                edge_index, pos_index, neg_index, node_list, edge_weight, _, _, node_id_map = prepare(data, t_train)
+                embeddings, x_embeddings = self.model(edge_index, x=self.x, node_id_list=node_list, node_id_map=node_id_map)
                 
-                # graph readout
-                tg_readout = readout_function(embeddings, self.readout_scheme)
-                tg_embedding = torch.cat((tg_readout, torch.from_numpy(self.t_graph_feat[t_train_idx]).to(args.device)))
+                # 1. Stack edges: shape [2, N_total]
+                all_edges = torch.cat([pos_index, neg_index], dim=1)
                 
-                # graph classification
-                tg_label = self.t_graph_labels[t_train_idx].float().view(1, )
-                tg_pred = self.tgc_decoder(tg_embedding.view(1, tg_embedding.size()[0]).float()).sigmoid()
+                # 2. Create labels: shape [N_total]
+                pos_labels = torch.ones(pos_index.shape[1], dtype=torch.float32)
+                neg_labels = torch.zeros(neg_index.shape[1], dtype=torch.float32)
+                all_labels = torch.cat([pos_labels, neg_labels], dim=0)
 
-                t_loss = criterion(tg_pred, tg_label)
+                # 3. Shuffle the edges and labels in unison
+                perm = torch.randperm(all_edges.shape[1])
+                shuffled_edges = all_edges[:, perm]
+                shuffled_labels = all_labels[perm].float()
+                
+                # Remap edge indices using node_id_map
+                src_nodes = shuffled_edges[0].tolist()
+                dst_nodes = shuffled_edges[1].tolist()
+
+                # Map raw node IDs → indices in embeddings using node_id_map
+                try:
+                    mapped_src = torch.tensor([node_id_map[int(n)] for n in src_nodes], dtype=torch.long).to(args.device)
+                    mapped_dst = torch.tensor([node_id_map[int(n)] for n in dst_nodes], dtype=torch.long).to(args.device)
+                except KeyError as e:
+                    print(f"KeyError: Node {e} not found in node_id_map.")
+                    continue  # Skip this batch
+
+                # Decode edges
+                src_embeddings = torch.stack([embeddings[int(n)] for n in mapped_src])
+                dst_embeddings = torch.stack([embeddings[int(n)] for n in mapped_dst])
+
+                tg_pred = self.tgc_decoder(src_embeddings, dst_embeddings).squeeze()
+
+
+                t_loss = criterion(tg_pred, shuffled_labels)
                 t_loss.backward()
                 optimizer.step()
                 epoch_losses.append(t_loss.item())
                 # update the model
-                self.model.update_hiddens_all_with(embeddings)
+                self.model.update_hiddens_all_with(x_embeddings)
 
             avg_epoch_loss = np.mean(epoch_losses)
             train_avg_epoch_loss_dict[epoch] = avg_epoch_loss
@@ -240,7 +274,9 @@ class Runner(object):
             patience = 0
             if avg_epoch_loss < min_loss:
                     min_loss = avg_epoch_loss
-                    test_epoch, test_auc, test_ap = self.tgclassification_test(epoch, self.readout_scheme)
+                    auc = roc_auc_score(shuffled_labels.detach().cpu().numpy(), tg_pred.detach().cpu().numpy())
+                    ap = average_precision_score(shuffled_labels.detach().cpu().numpy(), tg_pred.detach().cpu().numpy())
+
                     patience = 0
             else:
                     patience += 1
@@ -255,7 +291,7 @@ class Runner(object):
                                                                                             time.time() - t_epoch_start,
                                                                                             gpu_mem_alloc))
                     logger.info(
-                        "Test: Epoch:{}, AUC: {:.4f}, AP: {:.4f}".format(test_epoch, test_auc, test_ap))
+                        "Test: Epoch:{}, AUC: {:.4f}, AP: {:.4f}".format(epoch, auc, ap))
             
             if isnan(t_loss):
                     print('ATTENTION: nan loss')
@@ -287,17 +323,16 @@ class Runner(object):
         # -----------------------------------
 
         # Final Test
-        test_epoch, test_auc, test_ap = self.tgclassification_test(epoch, self.readout_scheme)
-        logger.info("Final Test: Epoch:{} , AUC: {:.4f}, AP: {:.4f}".format(test_epoch, test_auc, test_ap))
+        # test_epoch, test_auc, test_ap = self.tgclassification_test(epoch, self.readout_scheme)
+        # logger.info("Final Test: Epoch:{} , AUC: {:.4f}, AP: {:.4f}".format(test_epoch, test_auc, test_ap))
 
 
 if __name__ == '__main__':
-    from script.config import args
-    from script.utils.util import set_random, logger, init_logger, disease_path
-    from script.models.load_model import load_model
-    from script.loss import ReconLoss, VGAEloss
-    from script.utils.data_util import loader, prepare_dir
-    from script.inits import prepare
+    from GraphGeneration.models.temporal_gnn.script.config import args
+    from GraphGeneration.models.temporal_gnn.script.utils.util import set_random, logger, init_logger, disease_path
+    from GraphGeneration.models.temporal_gnn.script.models.load_model import load_model
+    from GraphGeneration.models.temporal_gnn.script.utils.data_util import loader, prepare_dir
+    from GraphGeneration.models.temporal_gnn.script.inits import prepare
 
     print("INFO: >>> Temporal Graph Classification <<<")
     print("INFO: Args: ", args)

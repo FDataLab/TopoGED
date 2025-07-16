@@ -34,26 +34,28 @@ def ones(tensor):
 
 
 def prepare(data, t, detection=False):
-    if detection == False:
-        # obtain adj index
-        edge_index = data['edge_index_list'][t].long().to(args.device)  # torch edge index
-        pos_index = data['pedges'][t].long().to(args.device)  # torch edge index
-        neg_index = data['nedges'][t].long().to(args.device)  # torch edge index
-        new_pos_index = data['new_pedges'][t].long().to(args.device)  # torch edge index
-        new_neg_index = data['new_nedges'][t].long().to(args.device)  # torch edge index
-        # 2.Obtain current updated nodes
-        # nodes = list(np.intersect1d(pos_index.numpy(), neg_index.numpy()))
-        # 2.Obtain full related nodes
-        nodes = list(np.union1d(pos_index.cpu().numpy(), neg_index.cpu().numpy()))
+    if not detection:
+        # Edge indices
+        edge_index = data['edge_index_list'][t].long().to(args.device)
+        pos_index = data['pedges'][t].long().to(args.device)
+        neg_index = data['nedges'][t].long().to(args.device)
+        new_pos_index = data['new_pedges'][t].long().to(args.device)
+        new_neg_index = data['new_nedges'][t].long().to(args.device)
+
+        # Combine all edge types to extract involved node IDs
+        all_edges = torch.cat([pos_index, neg_index, new_pos_index, new_neg_index, edge_index], dim=1)
+        unique_nodes = torch.unique(all_edges).cpu().numpy()
+        node_list = sorted(unique_nodes.tolist())
+        node_id_map = {node: idx for idx, node in enumerate(node_list)}
+
         weights = None
-        return edge_index, pos_index, neg_index, nodes, weights, new_pos_index, new_neg_index
+        return edge_index, pos_index, neg_index, node_list, weights, new_pos_index, new_neg_index, node_id_map
 
-    if detection == True:
+    else:
         train_pos_edge_index = data['gdata'][t].train_pos_edge_index.long().to(args.device)
-
         val_pos_edge_index = data['gdata'][t].val_pos_edge_index.long().to(args.device)
         val_neg_edge_index = data['gdata'][t].val_neg_edge_index.long().to(args.device)
-
         test_pos_edge_index = data['gdata'][t].test_pos_edge_index.long().to(args.device)
         test_neg_edge_index = data['gdata'][t].test_neg_edge_index.long().to(args.device)
+
         return train_pos_edge_index, val_pos_edge_index, val_neg_edge_index, test_pos_edge_index, test_neg_edge_index

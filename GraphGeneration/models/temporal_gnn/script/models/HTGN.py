@@ -111,4 +111,4 @@ class HTGN(BaseModel):
         x = self.toHyperX(x, self.c[2])  # to hyper space
         return {
             node_id: x[node_id_map[node_id]] for node_id in node_id_list
-        }
+        }, x

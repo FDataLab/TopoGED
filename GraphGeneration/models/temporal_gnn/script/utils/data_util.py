@@ -171,15 +171,15 @@ def load_continuous_time_dataset(dataset, neg_sample):
 def load_TGC_dataset(dataset):
     print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
     data = {}
-    edgelist_rawfile = '../data/input/raw/{}/{}_edgelist.txt'.format(dataset, dataset)
+    edgelist_rawfile = './data/input/raw/edgelist/{}.txt'.format(dataset, dataset)
     edgelist_df = pd.read_csv(edgelist_rawfile)
-    uniq_ts_list = np.unique(edgelist_df['snapshot'])
-    print("INFO: Number of unique snapshots: {}".format(len(uniq_ts_list)))
+    uniq_ts_list = np.unique(edgelist_df['Snapshot'])
+    print("INFO: Number of unique Snapshots: {}".format(len(uniq_ts_list)))
     adj_time_list = []
     for ts in uniq_ts_list:
         # NOTE: this code does not use any node or edge features
-        ts_edges = edgelist_df.loc[edgelist_df['snapshot'] == ts, ['source', 'destination']]
-        ts_G = nx.from_pandas_edgelist(ts_edges, 'source', 'destination')
+        ts_edges = edgelist_df.loc[edgelist_df['Snapshot'] == ts, ['from', 'to']]
+        ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to')
         ts_A = nx.to_scipy_sparse_array(ts_G)
         adj_time_list.append(ts_A)
 
