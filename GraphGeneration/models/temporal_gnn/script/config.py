@@ -15,6 +15,7 @@ parser.add_argument('--neg_sample', type=str, default='rnd', help='negative samp
 # 2.experiments
 parser.add_argument('--max_epoch', type=int, default=500, help='number of epochs to train.')
 parser.add_argument('--testlength', type=int, default=3, help='length for test, default:3')
+parser.add_argument('--targetsnapshot', type=int, default=3, help='target snapshot we wish to predict, default:3')
 parser.add_argument('--device', type=str, default='cpu', help='training device')
 parser.add_argument('--device_id', type=str, default='0', help='device id for gpu')
 parser.add_argument('--seed', type=int, default=1024, help='random seed')

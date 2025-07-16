@@ -148,13 +148,15 @@ class Runner(object):
         Final inference on the test set
         """
         tg_labels, tg_preds = [], []
-
+        previous_embeddings = None
+        num_previous_edges = None
         for t_test_idx, t in enumerate(self.test_shots[:1]):
            self.model.eval()
            self.tgc_decoder.eval()
            with torch.no_grad():
                 edge_index, pos_index, neg_index, node_list, edge_weight, _, _, node_id_map = prepare(data, t)
-                embeddings, x_embeddings = self.model(edge_index, x=self.x, node_id_list=node_list, node_id_map=node_id_map)
+                embeddings, x_embeddings = self.model(edge_index=edge_index, x=self.x, node_id_list=node_list, node_id_map=node_id_map, 
+                                                      previous_embeddings=previous_embeddings, num_current_edges=len(edge_index), num_previous_edges=num_previous_edges)
                 
                 # 1. Stack edges: shape [2, N_total]
                 all_edges = torch.cat([pos_index, neg_index], dim=1)
@@ -212,7 +214,6 @@ class Runner(object):
         criterion = torch.nn.BCELoss()
 
         # load the TG-model
-        self.model.init_hiddens()
         logger.info("Start training the temporal graph classification model.")
 
         # make sure to have the right device setup
@@ -225,6 +226,8 @@ class Runner(object):
         t_total_start = time.time()
         min_loss = 10
         train_avg_epoch_loss_dict = {}
+        previous_embeddings = None
+        num_previous_edges = None
         for epoch in range(1, args.max_epoch + 1):
             t_epoch_start = time.time()
             epoch_losses = []
@@ -232,7 +235,8 @@ class Runner(object):
                 optimizer.zero_grad()
                 # edge_index, pos_index, neg_index, node_list, weights, new_pos_index, new_neg_index, node_id_map
                 edge_index, pos_index, neg_index, node_list, edge_weight, _, _, node_id_map = prepare(data, t_train)
-                embeddings, x_embeddings = self.model(edge_index, x=self.x, node_id_list=node_list, node_id_map=node_id_map)
+                embeddings, x_embeddings = self.model(edge_index=edge_index, x=self.x, node_id_list=node_list, node_id_map=node_id_map, 
+                                                      previous_embeddings=previous_embeddings, num_current_edges=len(edge_index), num_previous_edges=num_previous_edges)
                 
                 # 1. Stack edges: shape [2, N_total]
                 all_edges = torch.cat([pos_index, neg_index], dim=1)
@@ -270,8 +274,9 @@ class Runner(object):
                 t_loss.backward()
                 optimizer.step()
                 epoch_losses.append(t_loss.item())
-                # update the model
-                self.model.update_hiddens_all_with(x_embeddings)
+                
+                previous_embeddings = x_embeddings
+                num_previous_edges = len(edge_index)
 
             avg_epoch_loss = np.mean(epoch_losses)
             train_avg_epoch_loss_dict[epoch] = avg_epoch_loss

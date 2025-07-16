@@ -42,6 +42,9 @@ from process_data import modifyGraphIds, build_edgebanks_from_start, process_sta
 from create_sub_graphs import create_nn_graph, create_on_graph, create_onn_with_hops_graph
 from torch.utils.data import DataLoader
 
+# Import Loss fn
+from GraphGeneration.scripts.composite_graphlet_loss_fn import GraphletLoss
+
 # Set seeds
 global_seed = args.seed
 random.seed(global_seed)
@@ -192,7 +195,7 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
     return negatives
 
 # ======================= TRAIN MODEL =======================
-def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None, lr=1e-3, epochs=250, batch_size=64):
+def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None, lr=1e-3, epochs=250, batch_size=64, graphs=[], top_k=0):
     """
     Train a MultiHeaded MLP Neural Network for use in edge predictions
     
@@ -214,10 +217,11 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
     model.train()
     optimizer = torch.optim.Adam(list(encoder_model.parameters()) + list(model.parameters()), lr=lr)
     loss_fn = nn.BCELoss()
-
+    graphlet_loss_fn = GraphletLoss()
+    
     X_train = torch.tensor(X_train, dtype=torch.float32).to(device)
     y_train = torch.tensor(y_train, dtype=torch.float32).to(device)
-    train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=batch_size, shuffle=False)
 
     # Can choose to use validation split, typically I don't
     if X_val is not None and y_val is not None:
@@ -252,7 +256,52 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
 
             elif y.dim() == 2 and y.size(1) == 1:  # shape [batch_size, 1]
                 y = y.view(-1)
-            loss = loss_fn(preds, y)
+            
+            # Construct graph based on models
+            if (epoch + 1) % 10 == 0:  # Run graphlet loss every 10 epochs
+                pred_graph = build_graph_edge_type_with_edgebank(embedding, edge_type=edge_type, graph_num=i, p_old_nodes=count_old, top_k=top_k, 
+                                            thresholds=thresholds, embeddings=embeddings, degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, 
+                                            existing_nodes=existing_nodes, mlp=model)
+                pred_graph = pred_graph[-1]
+                old_nodes = set().union(*[g.nodes() for g in graphs[:-1]])
+                new_nodes = set(graphs[-1].nodes()).difference(old_nodes)
+                # Get all previous edges
+                previous_edges = set()
+                for g in graphs[:-1]:
+                    previous_edges.update(g.edges())
+                    
+                if edge_type == "o-n":
+                    target_graph = create_on_graph(new_nodes, old_nodes, graphs[-1])
+                elif edge_type == "n-n":
+                    target_graph = create_nn_graph(new_nodes, graphs[-1])
+                elif edge_type == "o-o-bank":
+                    # Get edges of the current graph
+                    current_graph = graphs[-1]
+                    current_edges = set(current_graph.edges())
+
+                    # Get only new edges (those not in previous graphs)
+                    oo_bank = current_edges & previous_edges
+                    target_graph = nx.DiGraph()
+                    target_graph.add_edges_from(oo_bank)
+                elif edge_type == "o-o-nobank":
+                    current_graph = graphs[-1]
+                    current_edges = set(current_graph.edges())
+
+                    # Get only new edges (those not in previous graphs)
+                    new_edges = current_edges - previous_edges
+                    oo_nobank = set()
+                    for u, v in new_edges:
+                        if u in old_nodes and v in old_nodes:
+                            oo_nobank.add((u, v))
+                    target_graph = nx.DiGraph()
+                    target_graph.add_edges_from(oo_nobank)
+        
+                pred_kernel, true_kernel, distance = my_evaluator.evaluateOrca(pred_graph, target_graph)
+                graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel).unsqueeze(0), to_tensor(true_kernel).unsqueeze(0))
+            else:
+                graphlet_loss = torch.tensor(0.0, device=device)
+                
+            loss = loss_fn(preds, y) + graphlet_loss
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
@@ -296,18 +345,18 @@ def train_multi_head(model, edge_type, X_train, y_train, X_val=None, y_val=None,
                     val_aucroc = roc_auc_score(y_val.cpu().numpy(), preds_val.cpu().numpy())  # Calculate scores
                 
             model.train()
+            
             if (epoch + 1) % 100 == 0:
                 epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f} | Val Loss: {val_loss:.4f} | Val AUCROC: {val_aucroc:.4f}"
                 print(epochMessage)
-                with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/multiheadMLP_performance.txt", "a") as f:
+                with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "a") as f:
                     f.write(epochMessage + "\n")
         else:
             if (epoch + 1) % 100 == 0:
                 epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {train_loss:.4f} | Train AUCROC {train_aucroc:.4f}"
                 print(epochMessage)
-                with open(rf"{file_visualization_path}/{args.dataset}/{args.embeddingType}/multiheadMLP_performance.txt", "a") as f:
+                with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "a") as f:
                     f.write(epochMessage + "\n")
-    
     return model
 
 def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
@@ -397,10 +446,17 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
             curr_embeddings[node] = base_embedding
 
         
-        num_new_edges_oo = 0
-        num_new_edges_oon = 0
-        num_new_edges_on = 0
-        num_new_edges_nn = 0
+        # num_new_edges_oo = 0
+        # num_new_edges_oon = 0
+        # num_new_edges_on = 0
+        # num_new_edges_nn = 0
+        new_edges_count = {
+            'o-o-bank': 0,
+            'o-o-nobank': 0,
+            'o-n': 0,
+            'n-n': 0,
+        }
+
         
         # Generate positive labels
         for u, v in graph.edges(data=False):
@@ -411,16 +467,16 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
                 if u in old_nodes and v in old_nodes:
                     if v in edgebanks[i].get(u, []):
                         edge_type = 'o-o-bank'
-                        num_new_edges_oo += 1
+                        new_edges_count[edge_type] += 1
                     else:
                         edge_type = 'o-o-nobank'
-                        num_new_edges_oon += 1
+                        new_edges_count[edge_type] += 1
                 elif (u in old_nodes and v not in old_nodes) or (u not in old_nodes and v in old_nodes):
                     edge_type = 'o-n'
-                    num_new_edges_on += 1
+                    new_edges_count[edge_type] += 1
                 elif u not in old_nodes and v not in old_nodes:
                     edge_type = 'n-n'
-                    num_new_edges_nn += 1
+                    new_edges_count[edge_type] += 1
 
                 # Now fetch the embeddings
                 try:
@@ -443,10 +499,10 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
         print('Generating negative samples')
             
         # Generate an equal amount of negative labels for each type of edge
-        negative_edges_oo = generate_negative_edges(graph, num_new_edges_oo, edge_type='o-o-bank', edgebank=edgebanks[i + 1])
-        negative_edges_oon = generate_negative_edges(graph, num_new_edges_oon, edge_type='o-o-nobank', edgebank=edgebanks[i + 1])
-        negative_edges_on = generate_negative_edges(graph, num_new_edges_on, edge_type='o-n', edgebank=edgebanks[i + 1])
-        negative_edges_nn = generate_negative_edges(graph, num_new_edges_nn, edge_type='n-n', edgebank=edgebanks[i + 1])
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=edgebanks[i + 1])
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=edgebanks[i + 1])
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=edgebanks[i + 1])
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=edgebanks[i + 1])
 
         tmp_samples_oo = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.cat([curr_embeddings[u], curr_embeddings[v]], dim=0) for u, v in negative_edges_oon]
@@ -546,11 +602,10 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
                 print(f'No samples for edge type: {flag}')
                 continue
     
-            mlp = train_multi_head(mlp, flag, X_train, y_train, X_val=X_val, y_val=y_val, lr=lr, epochs=500, batch_size=64)
+            mlp = train_multi_head(mlp, flag, X_train, y_train, X_val=X_val, y_val=y_val, lr=lr, epochs=500, batch_size=64, top_k=new_edges_count[flag], graphs=prev_graphs)
     
     return mlp  # TODO Let this reduce repeating embedding graphs
         
-    
 def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=None):
     """
     Generate all possible edges that we could add (directed)
@@ -994,7 +1049,139 @@ def build_accumulating_filtration_sequence_with_edgebank(embedding, prev_graphs,
         degree_clusters[degree] = new_embedding  # Add the embedding
 
     return filtration_graphs, node_types, existing_nodes, edge_type_map, edgebank, embeddings, degree_clusters
- 
+
+def build_graph_edge_type_with_edgebank(embedding, edge_type, graph_num, p_old_nodes, top_k, thresholds, embeddings=None, degree_clusters=None, edgebank=None, existing_nodes=None, mlp=None, seed=42):
+    """
+    Our main driver function to build graphs, takes in various arguments to guide the graph construction
+    Specifically, this version uses an MLP to assign edges to two nodes based on the probability of them forming an edge
+    But, this version also creates a new MLP before each new graph construction. A process called "continual learning"
+    
+    Args:
+        embedding (list): The TopER embedding to guide construction of the graph, stores the number of nodes and edges to add to the graph
+        graph_num (int): The current graph number we are on
+        p_old_nodes (int): The number of old nodes that we are going to see in this graph
+        p_new_nodes (int): The number of new nodes that we are going to see in this graph
+        thresholds (list): The thresholds for node degrees 'maxDegree' as dicted by TopER
+        embeddings (dict): The embeddings of all old nodes we have seen up to this point
+        degree_clusters (dict): A dictionary of {'degree': [created_embedding]} that we use to assign the embeddings for new nodes
+        edgebank (dict): A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        existing_nodes (dict): A dict of {node_id: (last_seen_timestamp, last_seen_degree)} used for computing reappearance probabilities
+        mlp (MLP NN): An MLP that predicts the probability of an edge occurring
+        seed (int): The seed for reproducibility purposes, controls our randomness in this strategy
+        
+    Returns:
+        old_graphs (list(nx.DiGraph)): A list of nx Graphs that we built up from our TopER embedding
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+
+
+    if existing_nodes is None:
+        existing_nodes = {}
+
+    W_total = embedding[-1][2] 
+
+    # Sample old nodes
+    probs = compute_reappearance_probabilities(existing_nodes, graph_num)
+    node_ids = list(probs.keys())
+    weights = list(probs.values())
+
+    if graph_num > 0:
+        old_nodes = list(np.random.choice(node_ids, size=p_old_nodes, replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
+    else:
+        old_nodes = []
+           
+    all_nodes = old_nodes
+
+    edges = set()
+    edge_type_map = {}  # For calculating AUC scores later 
+    tmp_graph = nx.DiGraph()  # A graph for computing node embeddings easily
+     
+    node_types = {
+        "old_nodes": old_nodes,
+        "new_nodes": []
+    } 
+    
+     
+    # Add the nodes to the graph
+    for node in old_nodes:
+        tmp_graph.add_node(node)
+        feature_dict_old = {'id': node, 'type': 0}  
+        tmp_graph.nodes[node]['feat'] = feature_dict_old
+    
+    get_node_features(tmp_graph, thresholds, embedding, old_nodes, [])  # Assign maximum degrees
+
+    curr_embeddings = {}
+    for node, data in tmp_graph.nodes(data=True):
+        if node in embeddings:
+            curr_embeddings[node] = embeddings[node]
+        else:
+            new_embedding = degree_clusters.get(data['feat']['maxDegree'], [])
+            
+            # Protects from crashes
+            if new_embedding is None or len(new_embedding) == 0:
+                new_embedding = np.zeros(64) if args.embeddingType == 'Node2Vec' else np.zeros(4)
+
+            curr_embeddings[node] = new_embedding
+
+
+    def sample_edges(src_list, dst_list, count, edge_type=None):
+        sampled = set()
+        attempts = 0
+
+        if args.embedOld == False and edge_type == "o-o-bank" and edgebank is not None:
+            for u in src_list:
+                if u in edgebank:
+                    for v in edgebank[u]:
+                        if v in dst_list and u != v and v in edgebank.get(u, []) and (u, v) not in edges:
+                            sampled.add((u, v))
+                            edge_type_map.setdefault(edge_type, []).append((u, v))
+                            edges.add((u, v))
+                            if len(sampled) >= count:
+                                return list(sampled)
+
+        else:
+            if count > 0:
+                sampled = predict_edges(tmp_graph, edge_type, node_types, edgebank, mlp, curr_embeddings, top_k=count, graph_num=graph_num)
+                
+        return list(sampled)
+
+    # Get edges of each type
+    bank_edges = sample_edges(old_nodes, old_nodes, count=top_k, edge_type=edge_type)
+    tmp_graph.add_edges_from(bank_edges)
+    update_degrees(tmp_graph)
+    
+    edge_pool = (bank_edges)
+    weights = np.random.dirichlet(np.ones(len(edge_pool))) * W_total
+    edge_weight_map = {edge: w for edge, w in zip(edge_pool, weights)}
+
+    G = nx.DiGraph()
+    used_edges = set()
+    edge_type_graphs = []
+
+    for i, (v_target, e_target, w_target) in enumerate(embedding):
+        v_target = int(v_target)
+        e_target = int(e_target)
+
+        current_nodes = set(all_nodes[:v_target])
+        G.add_nodes_from(current_nodes)
+
+        available_edges = [
+            (u, v) for (u, v) in edge_pool
+            if u in current_nodes and v in current_nodes and (u, v) not in used_edges
+        ]
+
+        needed = e_target - G.number_of_edges()
+        selected_edges = available_edges[:needed]
+
+        for (u, v) in selected_edges:
+            G.add_edge(u, v, weight=edge_weight_map[(u, v)])
+            used_edges.add((u, v))
+
+        edge_type_graphs.append(G.copy())  
+                
+    return edge_type_graphs
+
 # # Data Loading and Prep
 
 dataset = args.dataset
@@ -1045,7 +1232,10 @@ mlp_training_graphs = [tmp_target_graphs[i][-1] for i in range(num_trainers)]  #
 # Iterate through each graph in the dataset
 for i in range(num_trainers, len(probabilities)):  # We don't use first two graphs because we need old edges to train on for the MLP, and we need a primer graph
     print('Constructing graph number: ', i + 1)
-    
+    if hasattr(args, 'testLength'):
+        if i != args.testlength:
+            mlp_training_graphs.append(tmp_target_graphs[i][-1])
+            continue
     print(f'Preparing Encoder: {args.embeddingType}')
     old_nodes = set().union(*[g[-1].nodes() for g in tmp_target_graphs[:i+1]]) #Get all old nodes up to current snapshot
     encoder_model = load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions, 
@@ -1075,6 +1265,34 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
         seed= global_seed
     )
 
+
+    k = 10
+    pred_cent = nx.degree_centrality(filtration_sequence[-1])  # predicted graph
+    true_cent = nx.degree_centrality(tmp_target_graphs[i][-1])  # ground truth graph
+
+    # Get true influential node IDs
+    topk_true = sorted(true_cent.items(), key=lambda x: x[1], reverse=True)[:k]
+    topk_true_nodes = {n for n, _ in topk_true}
+
+    # Ensure all nodes are evaluated
+    all_nodes = set(pred_cent.keys()).union(true_cent.keys())
+
+    # Construct true labels and predicted scores
+    y_true = []
+    y_scores = []
+
+    for node in all_nodes:
+        y_true.append(1 if node in topk_true_nodes else 0)
+        y_scores.append(pred_cent.get(node, 0.0))  # 0 if missing in pred
+
+    # Compute AUC
+    auc = roc_auc_score(y_true, y_scores)
+
+    # Save result
+    with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\influential_prediction.txt", "a") as f:
+        f.write(f"{i + 1}, {auc:.4f}\n")
+
+    
     # Evaluate the graph of o-n 
     pred_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, filtration_sequence[-1].copy())
     # true_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, tmp_target_graphs[i][-1].copy())

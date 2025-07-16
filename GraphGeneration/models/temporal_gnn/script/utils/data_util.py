@@ -168,12 +168,13 @@ def load_continuous_time_dataset(dataset, neg_sample):
     return data
 
 
-def load_TGC_dataset(dataset):
+def load_TGC_dataset(dataset, targetsnapshot):
     print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
     data = {}
     edgelist_rawfile = './data/input/raw/edgelist/{}.txt'.format(dataset, dataset)
     edgelist_df = pd.read_csv(edgelist_rawfile)
-    uniq_ts_list = np.unique(edgelist_df['Snapshot'])
+    edgelist_df = edgelist_df[edgelist_df['Snapshot'] <= targetsnapshot]
+    uniq_ts_list = np.unique(edgelist_df[edgelist_df['Snapshot'] <= targetsnapshot]['Snapshot'])
     print("INFO: Number of unique Snapshots: {}".format(len(uniq_ts_list)))
     adj_time_list = []
     for ts in uniq_ts_list:
@@ -213,7 +214,7 @@ def load_TGC_dataset(dataset):
     return data
 
 
-def loader(dataset='enron10', neg_sample=''):
+def loader(dataset='enron10', neg_sample='', targetsnapshot=3):
     # if cached, load directly
     data_root = '../data/input/cached/{}/'.format(dataset)
     filepath = mkdirs(data_root) + '{}.data'.format(dataset)  # the data will be saved here after generation.
@@ -232,10 +233,10 @@ def loader(dataset='enron10', neg_sample=''):
     elif dataset in ['canVote', 'LegisEdgelist', 'wikipedia', 'UNtrade']:
         print("INFO: Loading a continuous-time dynamic graph dataset: {}".format(dataset))
         data = load_continuous_time_dataset(dataset, neg_sample)
-    elif dataset in ['adex', 'aeternity', 'aion', 'aragon', 'bancor', 'centra', 'cindicator', 
+    elif dataset in ['networkadex', 'networkaeternity', 'networkaion', 'networkaragon', 'bancor', 'networkcentra', 'cindicator', 
                      'coindash', 'dgd', 'iconomi',  'mathoverflow', 'RedditB', 'CollegeMsg']:
         print("INFO: Loading a dynamic graph datasets for TG-Classification: {}".format(dataset))
-        data = load_TGC_dataset(dataset)
+        data = load_TGC_dataset(dataset, targetsnapshot)
     else:
         raise ValueError("ERROR: Undefined dataset!")
     torch.save(data, filepath)
