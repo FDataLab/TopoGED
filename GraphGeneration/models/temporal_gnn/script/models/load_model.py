@@ -18,7 +18,7 @@ def load_model(args):
         model = VGAENet()
     elif args.model == 'ROLANDGNN':
         model_dim = {
-            "input_dim": 733,
+            "input_dim": args.num_nodes,
             "hidden_conv_1": 16,
             "hidden_conv_2": 16
         }

@@ -217,7 +217,7 @@ def load_TGC_dataset(dataset, targetsnapshot):
 def loader(dataset='enron10', neg_sample='', targetsnapshot=3):
     # if cached, load directly
     data_root = '../data/input/cached/{}/'.format(dataset)
-    filepath = mkdirs(data_root) + '{}.data'.format(dataset)  # the data will be saved here after generation.
+    filepath = mkdirs(data_root) + '{}_{}.data'.format(dataset, targetsnapshot)  # the data will be saved here after generation.
     print("INFO: Dataset: {}".format(dataset))
     print("DEBUG: Look for data at {}.".format(filepath))
     if os.path.isfile(filepath):

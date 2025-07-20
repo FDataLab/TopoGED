@@ -48,7 +48,7 @@ class MLP(nn.Module):
             edge_input = src_embed + dst_embed
         elif self.input_type == 'Subtraction':
             edge_input = src_embed - dst_embed
-        elif self.input_type == 'Product':
+        elif self.input_type == 'ElementwiseProduct':
             edge_input = src_embed * dst_embed
             
         return self.heads(edge_input).squeeze()
@@ -148,7 +148,6 @@ class Runner(object):
         Final inference on the test set
         """
         tg_labels, tg_preds = [], []
-
         for t_test_idx, t in enumerate(self.test_shots[:1]):
            self.model.eval()
            self.tgc_decoder.eval()
@@ -275,7 +274,7 @@ class Runner(object):
 
             avg_epoch_loss = np.mean(epoch_losses)
             train_avg_epoch_loss_dict[epoch] = avg_epoch_loss
-
+            
             patience = 0
             if avg_epoch_loss < min_loss:
                     min_loss = avg_epoch_loss
@@ -286,16 +285,24 @@ class Runner(object):
                     if epoch > args.min_epoch and patience > args.patience:  # NOTE: args.min_epoch prevents it from stopping early in most cases
                         print('INFO: Early Stopping...')
                         break
+                    test_epoch, test_auc, test_ap = None, None, None
             gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
 
             if epoch == 1 or epoch % args.log_interval == 0:
                     logger.info('==' * 30)
-                    logger.info("Epoch:{}, Loss: {:.4f}, Time: {:.3f}, GPU: {:.1f}MiB".format(epoch, avg_epoch_loss,
+                    logger.info("Epoch:{}, Time: {:.3f}, GPU: {:.1f}MiB".format(epoch, avg_epoch_loss,
                                                                                             time.time() - t_epoch_start,
                                                                                             gpu_mem_alloc))
                     logger.info(
-                        "Test: Epoch:{}, AUC: {:.4f}, AP: {:.4f}".format(test_epoch, test_auc, test_ap))
-            
+                        "Test: Epoch:{}, Loss: {:.4f}, AUC: {}, AP: {}".format(
+                        test_epoch if test_epoch is not None else "N/A",
+                        avg_epoch_loss,
+                        f"{test_auc:.4f}" if test_auc is not None else "N/A",
+                        f"{test_ap:.4f}" if test_ap is not None else "N/A"
+                    ))
+                    epochMessage = f"Epoch {epoch:02d} | Train Loss: {avg_epoch_loss:.4f} | Train AUCROC " + f"{test_auc:.4f}" if test_auc is not None else "N/A"
+                    with open(rf"{file_visualization_path}/{args.dataset}/{args.model}/multiheadMLP_performance_{args.seed}.txt", "a") as f:
+                        f.write(epochMessage + "\n")
             if isnan(t_loss):
                     print('ATTENTION: nan loss')
                     break
@@ -314,14 +321,14 @@ class Runner(object):
         train_avg_epoch_loss_dict = load(open(loss_log_filename, 'rb'))
         train_values = train_avg_epoch_loss_dict.values()
         epoch_range = range(0, epoch)
-        plt.plot(epoch_range, train_values, label='Training Loss')
-        plt.title('Training Loss')
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-        plt.xticks(np.arange(0, epoch, 50))
-        plt.legend(loc='best')
-        plt.show()
-        plt.savefig(f'{partial_results_path}/{args.model}_{args.dataset}_{args.seed}_train_loss.png')
+        # plt.plot(epoch_range, train_values, label='Training Loss')
+        # plt.title('Training Loss')
+        # plt.xlabel('Epochs')
+        # plt.ylabel('Loss')
+        # plt.xticks(np.arange(0, epoch, 50))
+        # plt.legend(loc='best')
+        # plt.show()
+        # plt.savefig(f'{partial_results_path}/{args.model}_{args.dataset}_{args.seed}_train_loss.png')
         # -----------------------------------
         # -----------------------------------
 
@@ -336,19 +343,27 @@ if __name__ == '__main__':
     from GraphGeneration.models.temporal_gnn.script.models.load_model import load_model
     from GraphGeneration.models.temporal_gnn.script.utils.data_util import loader, prepare_dir
     from GraphGeneration.models.temporal_gnn.script.inits import prepare
-
-    print("INFO: >>> Temporal Graph Classification <<<")
-    print("INFO: Args: ", args)
-    print("======================================")
-    print("INFO: Dataset: {}".format(args.dataset))
-    print("INFO: Model: {}".format(args.model))
-    data = loader(dataset=args.dataset, neg_sample=args.neg_sample, targetsnapshot=args.targetsnapshot)
-    args.num_nodes = data['num_nodes']
-    print("INFO: Number of nodes:", args.num_nodes)
-    set_random(args.seed)
-    init_logger(prepare_dir(args.output_folder) + args.model + '_' + args.dataset + '_seed_' + str(args.seed) + '_log.txt')
-    runner = Runner()
-    runner.run()
+    
+    file_visualization_path = "./GraphGeneration/scripts/Visualize"
+    if not os.path.exists(f"{file_visualization_path}/{args.dataset}/{args.model}"):
+        os.makedirs(rf"{file_visualization_path}/{args.dataset}/{args.model}")
+    with open(f"{file_visualization_path}/{args.dataset}/{args.model}/multiheadMLP_performance_{args.seed}.txt", "w") as f:
+        f.write("")
+    print(f"{file_visualization_path}/{args.dataset}/{args.model}/multiheadMLP_performance_{args.seed}.txt")
+    for i in range(20, args.num_snapshots):
+        print("INFO: >>> Temporal Graph Classification <<<")
+        print("INFO: Predict snapshot: ", i)
+        print("INFO: Args: ", args)
+        print("======================================")
+        print("INFO: Dataset: {}".format(args.dataset))
+        print("INFO: Model: {}".format(args.model))
+        data = loader(dataset=args.dataset, neg_sample=args.neg_sample, targetsnapshot=i)
+        args.num_nodes = data['num_nodes']
+        print("INFO: Number of nodes:", args.num_nodes)
+        set_random(args.seed)
+        init_logger(prepare_dir(args.output_folder) + args.model + '_' + args.dataset + '_seed_' + str(args.seed) + '_log.txt')
+        runner = Runner()
+        runner.run()
 
 
 # ----------------------

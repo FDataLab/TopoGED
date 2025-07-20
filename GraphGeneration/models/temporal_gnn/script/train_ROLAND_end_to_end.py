@@ -48,7 +48,7 @@ class MLP(nn.Module):
             edge_input = src_embed + dst_embed
         elif self.input_type == 'Subtraction':
             edge_input = src_embed - dst_embed
-        elif self.input_type == 'Product':
+        elif self.input_type == 'ElementwiseProduct':
             edge_input = src_embed * dst_embed
             
         return self.heads(edge_input).squeeze()
@@ -282,6 +282,7 @@ class Runner(object):
             train_avg_epoch_loss_dict[epoch] = avg_epoch_loss
 
             patience = 0
+            test_epoch, test_auc, test_ap = 0, 0, 0
             if avg_epoch_loss < min_loss:
                     min_loss = avg_epoch_loss
                     test_epoch, test_auc, test_ap = self.tgclassification_test(epoch)
@@ -358,4 +359,4 @@ if __name__ == '__main__':
 
 # ----------------------
 # commands to run:
-# python scripts/train_tgc_end_to_end.py --model=HTGN --seed=710  --dataset=dgd --max_epoch=200
+# python GraphGeneration\models\temporal_gnn\script\train_ROLAND_end_to_end.py --model=ROLANDGNN --seed=710  --dataset=dgd --max_epoch=200 --testlength=1 --targetsnapshot=20

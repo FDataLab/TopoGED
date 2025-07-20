@@ -11,6 +11,7 @@ parser.add_argument('--nfeat', type=int, default=128, help='dim of input feature
 parser.add_argument('--nhid', type=int, default=16, help='dim of hidden embedding')
 parser.add_argument('--nout', type=int, default=16, help='dim of output embedding')
 parser.add_argument('--neg_sample', type=str, default='rnd', help='negative sampling strategy')
+parser.add_argument('--num_snapshots', type=int, default=100, help='num of snapshots')
 
 # 2.experiments
 parser.add_argument('--max_epoch', type=int, default=500, help='number of epochs to train.')
@@ -157,10 +158,10 @@ if args.dataset in ['cindicator']:
     args.testlength = 44  # Total number of snapshots = 221
     args.trainable_feat = 1
 
-if args.dataset in ['CollegeMsg']:
-    args.testlength = 35  # Total number of snapshots = 177
-    args.trainable_feat = 1
+# if args.dataset in ['CollegeMsg']:
+#     args.testlength = 35  # Total number of snapshots = 177
+#     args.trainable_feat = 1
 
-if args.dataset in ['mathoverflow']:
-    args.testlength = 37  # Total number of snapshots = 183
-    args.trainable_feat = 1
+# if args.dataset in ['mathoverflow']:
+#     args.testlength = 37  # Total number of snapshots = 183
+#     args.trainable_feat = 1
