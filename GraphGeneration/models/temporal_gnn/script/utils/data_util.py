@@ -169,7 +169,7 @@ def load_continuous_time_dataset(dataset, neg_sample):
 
 
 def load_TGC_dataset(dataset, targetsnapshot):
-    print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
+    print("INFO: Loading a Graph from `Temporal Edge Prediction` Category: {}".format(dataset))
     data = {}
     edgelist_rawfile = './data/input/raw/edgelist/{}.txt'.format(dataset, dataset)
     edgelist_df = pd.read_csv(edgelist_rawfile)

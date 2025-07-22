@@ -166,7 +166,7 @@ class Runner(object):
                 # 3. Shuffle the edges and labels in unison
                 perm = torch.randperm(all_edges.shape[1])
                 shuffled_edges = all_edges[:, perm]
-                shuffled_labels = all_labels[perm].float()
+                shuffled_labels = all_labels[perm].float().to(args.device)
                 
                 # Remap edge indices using node_id_map
                 src_nodes = shuffled_edges[0].tolist()
@@ -181,9 +181,13 @@ class Runner(object):
                     continue  # Skip this batch
 
                 # Decode edges
-                src_embeddings = torch.stack([embeddings[int(n)] for n in mapped_src])
-                dst_embeddings = torch.stack([embeddings[int(n)] for n in mapped_dst])
-
+                try:
+                    src_embeddings = torch.stack([embeddings[int(n)] for n in mapped_src])
+                    dst_embeddings = torch.stack([embeddings[int(n)] for n in mapped_dst])
+                except KeyError as e:
+                    print(f"KeyError: Node {e} not found in node_id_map.")
+                    continue  # Skip this batch
+                
                 tg_pred = self.tgc_decoder(src_embeddings, dst_embeddings).squeeze()
 
                 # graph classification
@@ -244,7 +248,7 @@ class Runner(object):
                 # 3. Shuffle the edges and labels in unison
                 perm = torch.randperm(all_edges.shape[1])
                 shuffled_edges = all_edges[:, perm]
-                shuffled_labels = all_labels[perm].float()
+                shuffled_labels = all_labels[perm].float().to(args.device)
                 
                 # Remap edge indices using node_id_map
                 src_nodes = shuffled_edges[0].tolist()
@@ -259,8 +263,12 @@ class Runner(object):
                     continue  # Skip this batch
 
                 # Decode edges
-                src_embeddings = torch.stack([embeddings[int(n)] for n in mapped_src])
-                dst_embeddings = torch.stack([embeddings[int(n)] for n in mapped_dst])
+                try:
+                    src_embeddings = torch.stack([embeddings[int(n)] for n in mapped_src])
+                    dst_embeddings = torch.stack([embeddings[int(n)] for n in mapped_dst])
+                except KeyError as e:
+                    print(f"KeyError: Node {e} not found in node_id_map.")
+                    continue  # Skip this batch
 
                 tg_pred = self.tgc_decoder(src_embeddings, dst_embeddings).squeeze()
 
@@ -294,13 +302,18 @@ class Runner(object):
                                                                                             time.time() - t_epoch_start,
                                                                                             gpu_mem_alloc))
                     logger.info(
-                        "Test: Epoch:{}, Loss: {:.4f}, AUC: {}, AP: {}".format(
+                        "snapshot: {}, Test: Epoch:{}, Loss: {:.4f}, AUC: {}, AP: {}".format(
+                        data["predicted_snapshot"],
                         test_epoch if test_epoch is not None else "N/A",
                         avg_epoch_loss,
                         f"{test_auc:.4f}" if test_auc is not None else "N/A",
                         f"{test_ap:.4f}" if test_ap is not None else "N/A"
                     ))
-                    epochMessage = f"Epoch {epoch:02d} | Train Loss: {avg_epoch_loss:.4f} | Train AUCROC " + f"{test_auc:.4f}" if test_auc is not None else "N/A"
+                    epochMessage = (
+                        f"Predicted Snapshot {data['predicted_snapshot']} | Epoch {epoch:02d} | Train Loss: {avg_epoch_loss:.4f} | Train AUCROC "
+                        + (f"{test_auc:.4f}" if test_auc is not None else "N/A")
+                    )
+
                     with open(rf"{file_visualization_path}/{args.dataset}/{args.model}/multiheadMLP_performance_{args.seed}.txt", "a") as f:
                         f.write(epochMessage + "\n")
             if isnan(t_loss):
@@ -350,7 +363,7 @@ if __name__ == '__main__':
     with open(f"{file_visualization_path}/{args.dataset}/{args.model}/multiheadMLP_performance_{args.seed}.txt", "w") as f:
         f.write("")
     print(f"{file_visualization_path}/{args.dataset}/{args.model}/multiheadMLP_performance_{args.seed}.txt")
-    for i in range(20, args.num_snapshots):
+    for i in range(3, args.num_snapshots):
         print("INFO: >>> Temporal Graph Classification <<<")
         print("INFO: Predict snapshot: ", i)
         print("INFO: Args: ", args)
@@ -358,6 +371,7 @@ if __name__ == '__main__':
         print("INFO: Dataset: {}".format(args.dataset))
         print("INFO: Model: {}".format(args.model))
         data = loader(dataset=args.dataset, neg_sample=args.neg_sample, targetsnapshot=i)
+        data["predicted_snapshot"] = i
         args.num_nodes = data['num_nodes']
         print("INFO: Number of nodes:", args.num_nodes)
         set_random(args.seed)
