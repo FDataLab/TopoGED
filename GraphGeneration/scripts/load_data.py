@@ -1,7 +1,12 @@
 import pandas as pd 
+import torch
+import math
 import os
 import sys
-
+import numpy as np
+from GraphGeneration.utils.casting_type import to_tensor
+from GraphGeneration.models.temporal_gnn.script.config import args
+import random
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from utils.loader import Loader
@@ -61,3 +66,136 @@ def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle
     target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraphs', include_weights=False)
     
     return probabilities, features, thresholds, target_graphs
+
+def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
+    """
+    For training the MLP, we need some negative edges that did not occur in the graph to predict
+    
+    Args:
+        G (nx.DiGraph): The graph we are trying to generate samples on, we use its structure to check what edges dont exist
+        num_samples (int): How many negative samples we want to create (we aim for equal amounts of positive and negative)
+        edge_type (string): The type of edge we are attempting to generate negative samples for
+        edgebank (dict):  A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        
+    Returns:
+        list(negatives) (list): A list of negative edges for training the MLP
+    """
+    all_nodes = list(G.nodes())
+    negatives = set()
+    
+    # Remove if unnecessary
+    max_attempts = 250000
+    attempts = 0
+    print(f'For edge type {edge_type}')
+    while len(negatives) < num_samples and attempts < max_attempts:
+        u = random.choice(all_nodes)
+        v = random.choice(all_nodes)
+        
+        # Skip if u == v (self-loops not allowed)
+        if u == v:
+            continue
+        
+        # Filter edges based on edge_type
+        if edge_type == 'o-o-bank':
+            # This may stall, so there is a precaution to stop this
+            if G.nodes[u]['feat']['type'] == 0 and G.nodes[v]['feat']['type'] == 0 and v in edgebank.get(u, []):
+                if not G.has_edge(u, v) and (u, v) not in negatives:
+                    negatives.add((u, v))
+            else:
+                attempts += 1
+        elif edge_type == 'o-o-nobank':
+            if G.nodes[u]['feat']['type'] == 0 and G.nodes[v]['feat']['type'] == 0 and v not in edgebank.get(u, []):
+                if not G.has_edge(u, v) and (u, v) not in negatives:
+                    negatives.add((u, v))
+            else:
+                attempts += 1
+        elif edge_type == 'n-n':
+            if G.nodes[u]['feat']['type'] == 1 and G.nodes[v]['feat']['type'] == 1:
+                if not G.has_edge(u, v) and (u, v) not in negatives:
+                    negatives.add((u, v))
+            else:
+                attempts += 1
+        elif edge_type == 'o-n':
+            if (G.nodes[u]['feat']['type'], G.nodes[v]['feat']['type']) in [(0, 1), (1, 0)]:
+                if not G.has_edge(u, v) and (u, v) not in negatives:
+                    negatives.add((u, v))
+            else:
+                attempts += 1
+                    
+    negatives = list(negatives)
+    if len(negatives) < num_samples:
+        print(f"Only {len(negatives)} unique negative edges found for type {edge_type}, requested {num_samples}")
+
+    return negatives
+
+def generate_training_data(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLES, device):
+    sorted_samples = {
+            'o-o-bank': {'X': [], 'y': []},
+            'o-o-nobank': {'X': [], 'y': []},
+            }  # A dict to sort embeddings for multiheaded MLP training
+    
+    # Generate embedding inputs and labels
+    for i, graph in enumerate(training_graphs[1:]):  # Since we go one graph back for predictions  
+        new_edges_count = {
+            'o-o-bank': 0,
+            'o-o-nobank': 0,
+            'o-n': 0,
+            'n-n': 0,
+        }
+
+        # Generate positive labels
+        for u, v in graph.edges(data=False):
+            try:
+                edge_type = 'any'  # Default/fallback type
+
+                # Determine edge type based on node categories and edgebank
+                if u in old_nodes and v in old_nodes:
+                    if v in all_edgebanks[i].get(u, []):
+                        edge_type = 'o-o-bank'
+                        new_edges_count[edge_type] += 1
+                    else:
+                        edge_type = 'o-o-nobank'
+                        new_edges_count[edge_type] += 1
+                elif (u in old_nodes and v not in old_nodes) or (u not in old_nodes and v in old_nodes):
+                    edge_type = 'o-n'
+                    new_edges_count[edge_type] += 1
+                elif u not in old_nodes and v not in old_nodes:
+                    edge_type = 'n-n'
+                    new_edges_count[edge_type] += 1
+
+                # Store the sample
+                sorted_samples[edge_type]['X'].append(torch.cat([u, v], dim=0))
+                sorted_samples[edge_type]['y'].append(1)
+
+            except Exception as e:
+                print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
+            
+        # Generate an equal amount of negative labels for each type of edge
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i + 1])
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i + 1])
+
+        tmp_samples_oo = [torch.cat([u, v], dim=0) for u, v in negative_edges_oo]
+        tmp_samples_oon = [torch.cat([u, v], dim=0) for u, v in negative_edges_oon]
+        
+        # Add to our samples
+        sorted_samples['o-o-bank']['X'].extend(tmp_samples_oo)
+        sorted_samples['o-o-bank']['y'].extend([0 for _ in range(len(negative_edges_oo))])
+        sorted_samples['o-o-nobank']['X'].extend(tmp_samples_oon)
+        sorted_samples['o-o-nobank']['y'].extend([0 for _ in range(len(negative_edges_oon))])
+        
+        old_nodes.update(graph.nodes())  # Add the old nodes
+        
+    # If we need to remove some samples to prevent OOM crashes
+    total_samples = sum(len(sorted_samples[key]['X']) for key in sorted_samples)
+    if total_samples > MAX_SAMPLES:
+        print(f"Total samples exceed {MAX_SAMPLES}. Truncating samples.")
+        # Randomly sample to reduce to MAX_SAMPLES
+        for edge_type in sorted_samples:
+            num_samples_to_remove = total_samples - MAX_SAMPLES
+            if num_samples_to_remove > 0:
+                indices_to_remove = random.sample(range(len(sorted_samples[edge_type]['X'])), num_samples_to_remove)
+                sorted_samples[edge_type]['X'] = [x for i, x in enumerate(sorted_samples[edge_type]['X']) if i not in indices_to_remove]
+                sorted_samples[edge_type]['y'] = [y for i, y in enumerate(sorted_samples[edge_type]['y']) if i not in indices_to_remove]
+                total_samples = sum(len(sorted_samples[key]['X']) for key in sorted_samples)
+                
+    return sorted_samples, new_edges_count

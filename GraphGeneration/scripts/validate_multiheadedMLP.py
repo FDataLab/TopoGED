@@ -31,6 +31,7 @@ from GraphGeneration.utils.Evaluator import Evaluator
 from GraphGeneration.models.temporal_gnn.script.config import args
 from load_data import load_data
 from utils.visualizers import Visualizer
+
 # Models in use
 from GraphGeneration.models.model import setupMLP, load_encoder_model
 from itertools import product
@@ -54,7 +55,7 @@ np.random.seed(global_seed)
 try:
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        # print("Using CUDA (NVIDIA GPU)")
+        print("Using CUDA (NVIDIA GPU)")
     else:
         device = torch.device("cpu")
         print("Using CPU")
@@ -62,11 +63,7 @@ except Exception:
     device = torch.device("cpu")
     print("Using CPU")
 
-# Dummy encoder_model variable
-# encoder_model = {'o-o-bank': load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions),
-#                  'o-o-nobank': load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions),
-#                  'o-n': load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions),
-#                  'n-n': load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions)}
+# Load the global encoder model
 encoder_model = load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions)
 
 # Each of these are (2 * node_embedding_size)
@@ -131,7 +128,6 @@ def to_tensor(x):
     if isinstance(x, np.ndarray):
         return torch.tensor(x, dtype=torch.float32, device=device)
     return x.to(device=device, dtype=torch.float32) if device else x
-
 
 def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
     """
@@ -447,10 +443,6 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
             curr_embeddings[node] = base_embedding
 
         
-        # num_new_edges_oo = 0
-        # num_new_edges_oon = 0
-        # num_new_edges_on = 0
-        # num_new_edges_nn = 0
         new_edges_count = {
             'o-o-bank': 0,
             'o-o-nobank': 0,
@@ -592,7 +584,7 @@ def train_models(prev_graphs, edgebanks, lr=0.001, seed=42):
     print('Training')
     # We train the heads separately
     if args.strategy == 'MultiheadedMLP':  
-        for flag in flags:
+        for flag in flags[:2]:
             X_train = training_samples[flag]['X']
             y_train = training_samples[flag]['y']
             X_val = valid_samples[flag]['X']
@@ -747,8 +739,7 @@ def compute_reappearance_probabilities(nodes, t_curr, decay_factor=3.0, alpha=1.
         probs[node] /= total
 
     return probs
-
-        
+       
 def get_node_features(graph, thresholds, embedding, old_nodes, new_nodes):
     """
     Assign the maximum degree of a node, either using its last seen degree (if args.oldDegree == True) or randomly giving it one
@@ -806,7 +797,6 @@ def get_node_features(graph, thresholds, embedding, old_nodes, new_nodes):
             graph.nodes[node]['feat']['currDegree'] = 0  # Starts at 0
             graph.nodes[node]['feat']['maxDegree'] = degree_assignment[i]
  
-
 def update_degrees(graph: nx.DiGraph):
     """
     After updating the graph, between edge types, update the nodes current degree feature
@@ -820,7 +810,6 @@ def update_degrees(graph: nx.DiGraph):
     for node in graph.nodes(data=False):
         graph.nodes[node]['feat']['currDegree'] = graph.degree(node)
         
-     
 def update_edgebank(graph, edgebank):
     """
     Update the edgebank based on the current graph
@@ -836,7 +825,6 @@ def update_edgebank(graph, edgebank):
         edgebank.setdefault(u, []).append(v)
         
     return edgebank
-
 
 # ======================= BUILD GRAPH =======================
 def build_accumulating_filtration_sequence_with_edgebank(embedding, prev_graphs, graph_num, 
@@ -1183,15 +1171,14 @@ def build_graph_edge_type_with_edgebank(embedding, edge_type, graph_num, p_old_n
                 
     return edge_type_graphs
 
-# # Data Loading and Prep
+# Data Loading and Prep
 
 dataset = args.dataset
 my_loader = Loader()
 my_evaluator = Evaluator()
 my_visualizer = Visualizer(dataset=dataset, task='regression')
 
-# # Construct csv
-# run_number = 1
+# Construct csv
 structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_pred.csv'
 structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_true.csv'
 structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/structure_diff.csv'
@@ -1202,10 +1189,11 @@ topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_ret
 animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embedOld{args.embedOld}_trainingStyle{args.trainingStyle}_embeddingType{args.embeddingType}/pred_vs_true.mp4'
 
 probabilities, features, thresholds, target_graphs = load_data(args.dataset, args.strategy, args.embedding, args.mlpEncoding, args.embedOld, args.trainingStyle, args.embeddingType)
+
 # Initialize list for predicted graphs
 pred_graphs = []
 
-
+# Start the timer
 start = timeit.default_timer()
 
 # Build the edgebanks for construction
@@ -1215,10 +1203,6 @@ all_edgebanks = build_edgebanks_from_start(tmp_target_graphs)
 print('Starting training')
 num_trainers = 2  # The number of graphs used to initialize
 trainer_graphs = [tmp_target_graphs[i][-1] for i in range(num_trainers)]
-on_graph_history = [] # The history of o-n graph
-old_nodes = set().union(*[g.nodes() for g in trainer_graphs]) #Get all old nodes up to current snapshot
-encoder_model = load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions, 
-                                       HTGN_nodelist=old_nodes)
 embeddings, degree_clusters, existing_nodes, curr_edgebank_pred = process_starter_graph(trainer_graphs, thresholds, encoder_model=encoder_model)  # We need a graph to get things going
 
 curr_edgebank_pred = all_edgebanks[num_trainers]  # We start with an edgebank
@@ -1233,16 +1217,10 @@ mlp_training_graphs = [tmp_target_graphs[i][-1] for i in range(num_trainers)]  #
 # Iterate through each graph in the dataset
 for i in range(num_trainers, len(probabilities)):  # We don't use first two graphs because we need old edges to train on for the MLP, and we need a primer graph
     print('Constructing graph number: ', i + 1)
-    if hasattr(args, 'testLength'):
-        if i != args.testlength:
-            mlp_training_graphs.append(tmp_target_graphs[i][-1])
-            continue
+    
     print(f'Preparing Encoder: {args.embeddingType}')
     old_nodes = set().union(*[g[-1].nodes() for g in tmp_target_graphs[:i+1]]) #Get all old nodes up to current snapshot
-    encoder_model = load_encoder_model(args, device=device, node2vec_dimensions=node2vec_dimensions, 
-                                       HTGN_nodelist=old_nodes)
 
-    
     # Get the number of resources available for this graph
     count_old = probabilities[i][0]
     count_new = probabilities[i][1]
@@ -1258,6 +1236,7 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     print('Training the MLP')
     mlp = train_models(mlp_training_graphs, all_edgebanks, lr=0.001, seed=global_seed)
     print('Finished training the MLP; Beginning Construction')
+    
     # Build the filtration sequence using the current parameters
     filtration_sequence, node_types, existing_nodes, edge_type_map, curr_edgebank_pred, embeddings, degree_clusters = build_accumulating_filtration_sequence_with_edgebank(
         embedding=embedding, prev_graphs=mlp_training_graphs, graph_num=i, p_old_nodes=count_old, p_new_nodes=count_new, 
@@ -1265,39 +1244,10 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
         degree_clusters=degree_clusters, edgebank=curr_edgebank_pred, existing_nodes=existing_nodes, mlp=mlp,
         seed= global_seed
     )
-
-
-    k = 10
-    pred_cent = nx.degree_centrality(filtration_sequence[-1])  # predicted graph
-    true_cent = nx.degree_centrality(tmp_target_graphs[i][-1])  # ground truth graph
-
-    # Get true influential node IDs
-    topk_true = sorted(true_cent.items(), key=lambda x: x[1], reverse=True)[:k]
-    topk_true_nodes = {n for n, _ in topk_true}
-
-    # Ensure all nodes are evaluated
-    all_nodes = set(pred_cent.keys()).union(true_cent.keys())
-
-    # Construct true labels and predicted scores
-    y_true = []
-    y_scores = []
-
-    for node in all_nodes:
-        y_true.append(1 if node in topk_true_nodes else 0)
-        y_scores.append(pred_cent.get(node, 0.0))  # 0 if missing in pred
-
-    # Compute AUC
-    auc = roc_auc_score(y_true, y_scores)
-
-    # Save result
-    with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\influential_prediction.txt", "a") as f:
-        f.write(f"{i + 1}, {auc:.4f}\n")
-
     
     # Evaluate the graph of o-n 
     pred_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, filtration_sequence[-1].copy())
     true_on_graph = create_on_graph(node_types["new_nodes"], old_nodes, tmp_target_graphs[i][-1].copy())
-    on_graph_history.append(true_on_graph.copy())
     
     precison_on, recall_on, f1_on = my_evaluator.calculate_precision_picking_nodes(pred_on_graph, true_on_graph, old_nodes=old_nodes)
     on_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
@@ -1307,28 +1257,6 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     
     with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\picking_nodes_on.txt", "a") as f:
         f.write(f"{i + 1}, {precison_on:.6f}, {recall_on:.6f}, {f1_on:.6f}\n")
-        
-    # Evaluate the graph of oo-nn
-    # pred_oonn_graph = create_onn_with_hops_graph(node_types["new_nodes"], filtration_sequence[-1].copy())
-    # true_oonn_graph = create_onn_with_hops_graph(node_types["new_nodes"], tmp_target_graphs[i][-1].copy())
-    # try:
-    #     pred_kernel, true_kernel, distance = my_evaluator.evaluateOrca(pred_oonn_graph, true_oonn_graph)
-    #     on_kl_divergence_results = my_evaluator.kl_divergence_graphs(pred_oonn_graph, true_oonn_graph, mode="total")
-
-    #     with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_oonn.txt", "a") as f:
-    #         f.write(f"{i + 1}, {on_kl_divergence_results:.6f}\n")
-
-    #     with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_pred_oonn.txt", "a") as f:
-    #         csv_string = ",".join(f"{x:.3f}" for x in pred_kernel) + ","
-    #         f.write(f"{i + 1}," + csv_string + "\n")
-
-    #     with open(rf"{file_visualization_path}\{args.dataset}\{args.embeddingType}\kernel_results_true_oonn.txt", "a") as f:
-    #         csv_string = ",".join(f"{x:.3f}" for x in true_kernel) + ","
-    #         f.write(f"{i + 1}," + csv_string + "\n")
-
-    # except Exception as e:
-    #     print(f"[Error at step {i + 1}] ORCA evaluation failed: {e}")
-
         
     # Evaluate the graph of n-n 
     pred_nn_graph = create_nn_graph(node_types["new_nodes"], filtration_sequence[-1].copy())
@@ -1358,13 +1286,6 @@ for i in range(num_trainers, len(probabilities)):  # We don't use first two grap
     pd.DataFrame([results_pred_structure]).to_csv(structure_pred_file_path, mode='a', header=False, index=False)
     pd.DataFrame([pred_kernel]).to_csv(kernel_pred_file_path, mode='a', header=False, index=False)
     pd.DataFrame([true_kernel]).to_csv(kernel_true_file_path, mode='a', header=False, index=False)
-
-        
-    # Visualize predGraph vs trueGraph
-    # print(len(oldG.nodes()))
-    # print(len(target_oldG))
-    # print(f"snapshot {i}")
-    # my_visualizer.display_pred_graph_vs_true_graph(oldG[-1], target_oldG)
     
     # Append the last graph from the filtration (assumed to be the "predicted" one)
     pred_graphs.append(filtration_sequence)  # The kernel distance will be part of our structure evaluation

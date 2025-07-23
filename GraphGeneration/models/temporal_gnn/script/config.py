@@ -60,6 +60,10 @@ parser.add_argument("--oldDegree", type=str, required=False, default='False' ,ch
 parser.add_argument("--trainingStyle", type=str, required=False, default='TrueGraphs', choices=['TrueGraphs', 'PredGraphs', 'MixedGraphs'], help="When training the MLP, decides if you use real graphs, predicted graphs (with first real as starter), or real then pred for MLP training")
 parser.add_argument("--embeddingType", type=str, required=False, default='Node2Vec', choices=['Linear', 'Node2Vec', 'LSTM', 'GCLSTM', 'HTGN'], help="How nodes should be embedded. Either with Node2Vec or with a Linear mutliplication of adjacency matrix by node feature matrix")
 
+# TopoGED mode
+parser.add_argument('--use_predict_probs', action='store_true', help='Use prediction probabilities to predict the next snapshot')
+parser.add_argument('--use_predict_graph_prediction', action='store_true', help='Use prediction graph description to predict the next snapshot')
+
 args = parser.parse_args()
 
 # set the running device

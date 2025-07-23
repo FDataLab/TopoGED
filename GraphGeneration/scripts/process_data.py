@@ -178,7 +178,6 @@ def build_edgebanks_from_start(graphs, days=5):
                 u_key = u
                 v_key = v
                 curr_edgebank.setdefault(u_key, []).append(v_key)  # Add edge from u to v
-                curr_edgebank.setdefault(v_key, []).append(u_key)  # Add edge from u to v
 
         edgebanks.append(curr_edgebank)  # Append the current edgebank to the list
 
