@@ -118,7 +118,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
     Returns:
         dict of {node_id: final temporal embedding}
     """
-    # Step 1: Collect per-timestep node embeddings
+    # Collect per-timestep node embeddings
     node_history = defaultdict(list)
     old_nodes = set()
     null_embed = torch.tensor([0]*(node2vec_dimensions + 4), dtype=torch.float32).to(device)
@@ -131,7 +131,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
             if node not in snapshot_embeddings:
                 node_history[node].append(null_embed)
         old_nodes = old_nodes | set(G.nodes())
-    # Step 2: Run LSTM on each node's time-series embedding
+    # Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
     return final_node_embeddings
 

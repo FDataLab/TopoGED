@@ -1,3 +1,5 @@
+import random
+
 def get_node_features(graph, thresholds, embedding, old_nodes, new_nodes):
     """
     Assign the maximum degree of a node, either using its last seen degree (if args.oldDegree == True) or randomly giving it one
