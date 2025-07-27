@@ -94,20 +94,16 @@ class Runner(object):
         self.test_graphs = [self.target_graphs[i][-1] for i in range(val_end, self.num_snapshots)]
 
     # ======================= TRAIN MODEL =======================
-    def train_multi_head(self, edge_type, X_train, y_train, X_val=None, y_val=None, epochs=250, batch_size=64, top_k=0):
+    def train_multi_head(self, training_samples, validation_samples, epochs=250, batch_size=64, training_new_edges_count=0):
         """
         Train a MultiHeaded MLP Neural Network for use in edge predictions
         
         Args:
             model (MultiheadedMLP): The Multiheaded MLP to train now
-            edge_type (string): The type of edge we are training on, dictates what head to train
-            X_train (np.array): The training features. A tuple of two node embeddings
-            y_train (np.array): The training labels (aiming for a mix of positive and negative labels)
-            X_val (np.array): The validation features for training verification
-            y_val (np.array): The validation labels for training verification
+            training_samples: The dictionary store the pos, neg edges of each snapshot, using for training
+            validation_samples: The dictionary store the pos, neg edges of each snapshot, using for validation
             epochs (int): The number of epochs to train for
             batch_size (int): The batch size to use for the training data
-            
         Returns:
             link_prediction_decoder (Multiheaded MLP): The trained MLP
         """
@@ -119,143 +115,99 @@ class Runner(object):
         
         # Train
         for epoch in range(epochs):
-            train_loss = []
+            train_loss = {
+                    'o-o-bank': [],
+                    'o-o-nobank': [],
+                    'o-n': [],
+                    'n-n': [],
+                }
+            train_auc = {
+                    'o-o-bank': [],
+                    'o-o-nobank': [],
+                    'o-n': [],
+                    'n-n': [],
+                }
             # For computing AUC Scores
             train_preds = []
             train_labels = []
-            for snapshot in range(1, len(self.training_graphs)):
-                curr_X = [x.cpu().detach().numpy() if torch.is_tensor(x) else x for x in X_train[snapshot]]
-                curr_X = np.array(curr_X)
-                curr_y = np.array(y_train[snapshot])
+            for snapshot in range(2, len(self.training_graphs)):
+                for flag in ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']:
+                    curr_X_train = training_samples[flag]['X'][snapshot]
+                    curr_y_train = training_samples[flag]['y'][snapshot]
+                    
+                    if len(curr_X_train) == 0 or len(curr_y_train) == 0:
+                        print(f'No samples for edge type: {flag}')
+                        continue
+                    
+                    curr_X_train = [x.cpu().detach().numpy() if torch.is_tensor(x) else x for x in curr_X_train]
+                    curr_X_train = np.array(curr_X_train)
+                    curr_y_train = np.array(curr_y_train)
 
-                X_train_curr, y_train_curr = shuffle(curr_X, curr_y, random_state=self.seed)
-                print('y_train_curr:', y_train_curr)
-                temp_X_train = torch.tensor(X_train_curr, dtype=torch.float32).to(device)
-                temp_y_train = torch.tensor(y_train_curr, dtype=torch.float32).to(device)
-                train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=batch_size, shuffle=False)
-                for (x, y) in train_loader:
-                    optimizer.zero_grad()
-                    node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model, device=device)
+                    X_train_curr, curr_y_train = shuffle(curr_X_train, curr_y_train, random_state=self.seed)
+                    temp_X_train = torch.tensor(X_train_curr, dtype=torch.float32).to(device)
+                    temp_y_train = torch.tensor(curr_y_train, dtype=torch.float32).to(device)
+                    train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=batch_size, shuffle=True)
                     
-                    # Get current embeddings
-                    src_nodes = [int(n) for n in x[:, 0].tolist()]                
-                    dst_nodes = [int(n) for n in x[:, 1].tolist()]
-                    src_embed = torch.stack([node_embeddings[n] for n in src_nodes])
-                    dst_embed = torch.stack([node_embeddings[n] for n in dst_nodes])
+                    for (x, y) in train_loader:
+                        optimizer.zero_grad()
+                        node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model, device=device)
+                        
+                        # Get current embeddings
+                        src_nodes = [int(n) for n in x[:, 0].tolist()]                
+                        dst_nodes = [int(n) for n in x[:, 1].tolist()]
+                        
+                        any_node = next(iter(node_embeddings))
+                        embed_dim = len(node_embeddings[any_node])
+                        src_embed = torch.stack([
+                            node_embeddings[n] if n in node_embeddings and flag in ['o-n', 'n-n']
+                            else torch.zeros(embed_dim, device=node_embeddings[any_node].device)
+                            for n in src_nodes
+                        ])
 
-                    if src_embed.dim() == 1:
-                        src_embed = src_embed.unsqueeze(1)  
-                    if dst_embed.dim() == 1:
-                        dst_embed = dst_embed.unsqueeze(1) 
-                        
-                    preds = self.link_prediction_decoder(src_embed=src_embed, dst_embed=dst_embed, edge_type=edge_type)
-                    
-                    if preds.dim() == 0:
-                        preds = preds.unsqueeze(0)
-                    if y.dim() == 0:  # scalar value like torch.tensor(0.5)
-                        y = y.unsqueeze(0)  # make it [1]
-                    elif y.dim() == 2 and y.size(1) == 1:  # shape [batch_size, 1]
-                        y = y.view(-1)
-                    
-                    # Construct graph based on models
-                    # if (epoch + 1) % 10 == 0:  # Run graphlet loss every 10 epochs
-                    #     pred_graph = self.build_graph_edge_type_with_edgebank(target_snapshot_graph_description, edge_type=edge_type, graph_num=self.current_target_snapshot, 
-                    #                                                           self.current_target_count_old_nodes=self.current_target_count_old_nodes, top_k=top_k, thresholds=self.thresholds, embeddings=node_embeddings, 
-                    #                                                           edgebank=self.all_edgebanks[i], mlp=self.link_prediction_decoder)
-                    #     pred_graph = pred_graph[-1]
-                    #     old_nodes = set().union(*[g.nodes() for g in self.training_graphs[:-1]])
-                        
-                    #     # Get all previous edges
-                    #     previous_edges = set()
-                    #     for g in self.training_graphs[:-1]:
-                    #         previous_edges.update(g.edges())
+                        dst_embed = torch.stack([
+                            node_embeddings[n] if n in node_embeddings and flag in ['o-n', 'n-n']
+                            else torch.zeros(embed_dim, device=node_embeddings[any_node].device)
+                            for n in dst_nodes
+                        ])
+
+                        if src_embed.dim() == 1:
+                            src_embed = src_embed.unsqueeze(1)  
+                        if dst_embed.dim() == 1:
+                            dst_embed = dst_embed.unsqueeze(1) 
                             
-                    #     if edge_type == "o-o-bank":
-                    #         # Get edges of the current graph
-                    #         current_graph = self.training_graphs[-1]
-                    #         current_edges = set(current_graph.edges())
-
-                    #         # Get only new edges (those not in previous self.training_graphs)
-                    #         oo_bank = current_edges & previous_edges
-                    #         target_graph = nx.DiGraph()
-                    #         target_graph.add_edges_from(oo_bank)
-                    #     elif edge_type == "o-o-nobank":
-                    #         current_graph = self.training_graphs[-1]
-                    #         current_edges = set(current_graph.edges())
-
-                    #         # Get only new edges (those not in previous self.training_graphs)
-                    #         new_edges = current_edges - previous_edges
-                    #         oo_nobank = set()
-                    #         for u, v in new_edges:
-                    #             if u in old_nodes and v in old_nodes:
-                    #                 oo_nobank.add((u, v))
-                    #         target_graph = nx.DiGraph()
-                    #         target_graph.add_edges_from(oo_nobank)
-                
-                    #     pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(pred_graph, target_graph)
-                    #     graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel, device).unsqueeze(0), to_tensor(true_kernel, device).unsqueeze(0))
-                    # else:
-                    graphlet_loss = torch.tensor(0.0, device=device)
+                        preds = self.link_prediction_decoder(src_embed=src_embed, dst_embed=dst_embed, edge_type=flag)
                         
-                    loss = 0.5*loss_fn(preds, y) + 0.5*graphlet_loss
-                    loss.backward()
-                    optimizer.step()
-                    train_loss.append(loss.item())
-                    
-                    # Add to our labels for evaluation
-                    train_preds.extend(preds.detach().cpu().numpy())
-                    train_labels.extend(y.detach().cpu().numpy())
-
-            if len(np.unique(train_labels)) < 2:
-                train_aucroc = float('inf')
-            else:
-                train_aucroc = roc_auc_score(train_labels, train_preds)  # Calculate scores
-
-            if X_val is not None and y_val is not None:
-                self.link_prediction_decoder.eval()
-                with torch.no_grad():
-                    node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model, device=device)
-                    
-                    # Get current embeddings
-                    src_nodes = [int(n) for n in x[:, 0].tolist()]                
-                    dst_nodes = [int(n) for n in x[:, 1].tolist()]
-                    src_embed = torch.stack([node_embeddings[n] for n in src_nodes])
-                    dst_embed = torch.stack([node_embeddings[n] for n in dst_nodes])
-
-                    if src_embed.dim() == 1:
-                        src_embed = src_embed.unsqueeze(1)  
-                    if dst_embed.dim() == 1:
-                        dst_embed = dst_embed.unsqueeze(1) 
+                        if preds.dim() == 0:
+                            preds = preds.unsqueeze(0)
+                        if y.dim() == 0:  # scalar value like torch.tensor(0.5)
+                            y = y.unsqueeze(0)  # make it [1]
+                        elif y.dim() == 2 and y.size(1) == 1:  # shape [batch_size, 1]
+                            y = y.view(-1)
                         
-                    preds_val = self.link_prediction_decoder(src_embed=src_embed, dst_embed=dst_embed, edge_type=edge_type)
-                    
-                    if preds_val.dim() == 0:
-                        preds_val = preds_val.unsqueeze(0)
-                    if y.dim() == 0:  # scalar value like torch.tensor(0.5)
-                        y = y.unsqueeze(0)  # make it [1]
-                    elif y.dim() == 2 and y.size(1) == 1:  # shape [batch_size, 1]
-                        y = y.view(-1)
+                        graphlet_loss = torch.tensor(0.0, device=device)
+                            
+                        loss = 0.5*loss_fn(preds, y) + 0.5*graphlet_loss
+                        loss.backward()
+                        optimizer.step()
+                        train_loss[flag].append(loss.item())
+                        
+                        # Add to our labels for evaluation
+                        train_preds.extend(preds.detach().cpu().numpy())
+                        train_labels.extend(y.detach().cpu().numpy())
 
-                    # Calculate the loss and accuracy
-                    val_loss = loss_fn(preds_val, y_val).item()
-                    if len(np.unique(y_val)) < 2:
-                        val_aucroc = float('inf')
+                    if len(np.unique(train_labels)) < 2:
+                        train_auc.append(0)
                     else:
-                        val_aucroc = roc_auc_score(y_val.cpu().numpy(), preds_val.cpu().numpy())  # Calculate scores
-                    
-                self.link_prediction_decoder.train()
-                
+                        train_auc[flag].append(roc_auc_score(train_labels, train_preds))  # Calculate scores
+                        
+            for flag in ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']:
                 if (epoch + 1) % 100 == 0 or epoch == 0:
-                    epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {np.mean(train_loss):.4f} | Train AUCROC {train_aucroc:.4f} | Val Loss: {val_loss:.4f} | Val AUCROC: {val_aucroc:.4f}"
+                    epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(train_loss[flag]):.4f} | Train AUCROC {np.mean(train_auc[flag]):.4f}"
                     print(epochMessage)
                     with open(rf"{self.file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "a") as f:
                         f.write(epochMessage + "\n")
-            else:
-                if (epoch + 1) % 100 == 0:
-                    epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {edge_type} | Train Loss: {np.mean(train_loss):.4f} | Train AUCROC {train_aucroc:.4f}"
-                    print(epochMessage)
-                    with open(rf"{self.file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "a") as f:
-                        f.write(epochMessage + "\n")
+            
+
         return self.link_prediction_decoder
 
     def train_models(self):
@@ -271,11 +223,10 @@ class Runner(object):
         """
         MAX_SAMPLES = 1000000  # 1 Million
 
-        old_nodes = set(self.training_graphs[0].nodes())  # A set of old nodes used to differentiate node types
         old_training_nodes = set().union(*[g.nodes() for g in self.training_graphs]) 
         
         # Prepare training data
-        training_sorted_samples, training_new_edges_count = generate_training_data_cached(training_graphs=self.training_graphs, old_nodes=old_nodes, 
+        training_sorted_samples, training_new_edges_count = generate_training_data_cached(training_graphs=self.training_graphs,
                                                 all_edgebanks=self.all_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=args.dataset, seed=global_seed, saved_data_file_path=self.saved_input)
 
         # Prepare validation data
@@ -288,21 +239,9 @@ class Runner(object):
                                                 all_edgebanks=self.all_edgebanks[self.train_end], MAX_SAMPLES=MAX_SAMPLES, dataset=args.dataset, seed=global_seed, type_data="test", saved_data_file_path=self.saved_input)
         
         print('Training') 
-        for flag in ['o-o-bank', 'o-o-nobank']:
-            X_train = training_sorted_samples[flag]['X']
-            y_train = training_sorted_samples[flag]['y']
-            X_val = validation_sorted_samples[flag]['X']
-            y_val = validation_sorted_samples[flag]['y']
-            X_test = test_sorted_samples[flag]['X']
-            y_test = test_sorted_samples[flag]['y']
     
-            if len(X_train) == 0 or len(y_train) == 0:
-                print(len(X_train), len(y_train))
-                print(f'No samples for edge type: {flag}')
-                continue
-    
-            self.link_prediction_decoder = self.train_multi_head(edge_type=flag, X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, 
-                                                                 epochs=500, batch_size=64, top_k=training_new_edges_count[flag])
+        self.link_prediction_decoder = self.train_multi_head(training_samples=training_sorted_samples, validation_samples=validation_sorted_samples, 
+                                                                 epochs=500, batch_size=64, training_new_edges_count=training_new_edges_count)
         
         return self.link_prediction_decoder
             

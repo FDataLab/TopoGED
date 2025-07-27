@@ -70,7 +70,7 @@ def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle
     
     return probabilities, features, thresholds, target_graphs
 
-def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
+def generate_negative_edges(G, num_samples, edge_type, old_nodes, edgebank=None):
     """
     For training the MLP, we need some negative edges that did not occur in the graph to predict
     
@@ -101,25 +101,25 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
         # Filter edges based on edge_type
         if edge_type == 'o-o-bank':
             # This may stall, so there is a precaution to stop this
-            if G.nodes[u]['feat']['type'] == 0 and G.nodes[v]['feat']['type'] == 0 and v in edgebank.get(u, []):
+            if u in old_nodes and v in old_nodes and v in edgebank.get(u, []):
                 if not G.has_edge(u, v):
                     negatives.add((u, v))
             else:
                 attempts += 1
         elif edge_type == 'o-o-nobank':
-            if G.nodes[u]['feat']['type'] == 0 and G.nodes[v]['feat']['type'] == 0 and v not in edgebank.get(u, []):
+            if u in old_nodes and v in old_nodes and v not in edgebank.get(u, []):
                 if not G.has_edge(u, v):
                     negatives.add((u, v))
             else:
                 attempts += 1
         elif edge_type == 'n-n':
-            if G.nodes[u]['feat']['type'] == 1 and G.nodes[v]['feat']['type'] == 1:
+            if u not in old_nodes and v not in old_nodes:
                 if not G.has_edge(u, v) and (u, v) not in negatives:
                     negatives.add((u, v))
             else:
                 attempts += 1
         elif edge_type == 'o-n':
-            if (G.nodes[u]['feat']['type'], G.nodes[v]['feat']['type']) in [(0, 1), (1, 0)]:
+            if (u in old_nodes and v not in old_nodes) or (u not in old_nodes and v in old_nodes):
                 if not G.has_edge(u, v) and (u, v) not in negatives:
                     negatives.add((u, v))
             else:
@@ -131,13 +131,15 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
 
     return negatives
 
-def generate_training_data(training_graphs, old_nodes, all_edgebanks):
+def generate_training_data(training_graphs, all_edgebanks):
     sorted_samples = {
         'o-o-bank': {'X': [], 'y': []},
         'o-o-nobank': {'X': [], 'y': []},
         'o-n': {'X': [], 'y': []},
         'n-n': {'X': [], 'y': []},
         }  # A dict to sort embeddings for multiheaded MLP training
+    
+    old_nodes = set()
     
     # Generate embedding inputs and labels
     for i, graph in enumerate(training_graphs):    
@@ -185,10 +187,10 @@ def generate_training_data(training_graphs, old_nodes, all_edgebanks):
                 print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
             
         # Generate an equal amount of negative labels for each type of edge
-        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i])
-        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i])
-        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks[i])
-        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks[i])
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i], old_nodes=old_nodes)
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i], old_nodes=old_nodes)
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks[i], old_nodes=old_nodes)
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks[i], old_nodes=old_nodes)
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
@@ -213,7 +215,7 @@ def generate_training_data(training_graphs, old_nodes, all_edgebanks):
     return sorted_samples, new_edges_count
 
 
-def generate_training_data_cached(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLES, dataset, seed, saved_data_file_path):
+def generate_training_data_cached(training_graphs, all_edgebanks, MAX_SAMPLES, dataset, seed, saved_data_file_path):
     cache_path = saved_data_file_path + "/" + dataset + "_" + str(seed)
     if os.path.exists(cache_path):
         with open(cache_path, 'rb') as f:
@@ -221,7 +223,7 @@ def generate_training_data_cached(training_graphs, old_nodes, all_edgebanks, MAX
             return pickle.load(f)
 
     # Generate the data
-    data = generate_training_data(training_graphs, old_nodes, all_edgebanks)
+    data = generate_training_data(training_graphs, all_edgebanks)
 
     # Save it
     with open(cache_path, 'wb') as f:
@@ -280,10 +282,10 @@ def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks,
                 print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
             
         # Generate an equal amount of negative labels for each type of edge
-        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks)
-        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks)
-        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks)
-        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks)
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks, old_nodes=old_training_nodes)
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
