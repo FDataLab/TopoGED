@@ -113,8 +113,8 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
 
     return top_edges
 
-def sample_edges(src_list, dst_list, count, edgebank, edges, 
-                 tmp_graph, node_types, link_prediction_decoder, curr_embeddings, graph_num, device, edge_type=None):
+def sample_edges(src_list, dst_list, count,  edges, 
+                 tmp_graph, node_types, link_prediction_decoder, curr_embeddings, graph_num, device, edgebank=None, edge_type=None):
     sampled = set()
     attempts = 0
 

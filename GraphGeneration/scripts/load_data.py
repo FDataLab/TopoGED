@@ -1,11 +1,8 @@
 import pandas as pd 
 import torch
-import math
 import os
 import sys
-import numpy as np
 import pickle
-from GraphGeneration.utils.casting_type import to_tensor
 from GraphGeneration.models.temporal_gnn.script.config import args
 import random
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -15,8 +12,13 @@ from utils.loader import Loader
 
 def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle, embeddingType):
     my_loader = Loader()
+    output_dir = os.path.abspath(f'data/input/cached/{dataset}')
     
-    # Construct csv
+    # Create cached file path for cached model, cached data training
+    cached_model_dataset_folder = os.path.join(output_dir, 'saved_models/')
+    cached_data_dataset_folder = os.path.join(output_dir, 'saved_data/')
+
+    # Construct output evaluation csv
     structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_pred.csv'
     structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_true.csv'
     structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_diff.csv'
@@ -28,7 +30,7 @@ def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle
 
     # Create file paths if needed
     for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 
-                kernel_true_file_path, edge_file_path, topER_file_path, animation_path]:
+                kernel_true_file_path, edge_file_path, topER_file_path, animation_path, cached_model_dataset_folder, cached_data_dataset_folder]:
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
     columns_structure = ['Graph Number', 'Average Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortivity Coefficient',
@@ -177,8 +179,8 @@ def generate_training_data(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLE
     return sorted_samples, new_edges_count
 
 
-def generate_training_data_cached(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLES, dataset, seed):
-    cache_path = dataset + "_" + str(seed)
+def generate_training_data_cached(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLES, dataset, seed, saved_data_file_path):
+    cache_path = saved_data_file_path + "/" + dataset + "_" + str(seed)
     if os.path.exists(cache_path):
         with open(cache_path, 'rb') as f:
             print(f"Loading training data from cache: {cache_path}")
@@ -257,8 +259,8 @@ def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks,
                 
     return sorted_samples, new_edges_count
 
-def generate_validation_data_cached(training_graphs, old_training_nodes, all_edgebanks, MAX_SAMPLES, dataset, seed, type_data):
-    cache_path = dataset + "_" + type_data + "_" + str(seed)
+def generate_validation_data_cached(training_graphs, old_training_nodes, all_edgebanks, MAX_SAMPLES, dataset, seed, type_data, saved_data_file_path):
+    cache_path = saved_data_file_path + "/" + dataset + "_" + type_data + "_" + str(seed)
     if os.path.exists(cache_path):
         with open(cache_path, 'rb') as f:
             print(f"Loading training validation data from cache: {cache_path}")

@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 import torch
 from node2vec import Node2Vec
+from GraphGeneration.models.temporal_gnn.script.config import args
 
 # Set up device
 try:
@@ -17,7 +18,7 @@ except Exception:
     print("Using CPU")
 
 # Node2Vec Parameters
-node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features 
+node2vec_dimensions = args.nfeat  # We add features onto the end since Node2Vec doesn't embed features 
 node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
 node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
 node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
@@ -121,7 +122,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
     # Collect per-timestep node embeddings
     node_history = defaultdict(list)
     old_nodes = set()
-    null_embed = torch.tensor([0]*(node2vec_dimensions + 4), dtype=torch.float32).to(device)
+    null_embed = torch.tensor([0]*(node2vec_dimensions + node2vec_batch_words), dtype=torch.float32).to(device)
     for G in graph_snapshots:
         snapshot_embeddings = compute_node2vec_embeddings(G)
         for node, emb in snapshot_embeddings.items():
@@ -160,7 +161,7 @@ def get_GCN_data(graph_snapshots):
     x_list = []
     edge_index_list = []
 
-    F = node2vec_dimensions + 4 # number of features per node (change this if you want more features)
+    F = node2vec_dimensions # number of features per node (change this if you want more features)
 
     for G in graph_snapshots:
         node2vec_embeddings = compute_node2vec_embeddings(G)
