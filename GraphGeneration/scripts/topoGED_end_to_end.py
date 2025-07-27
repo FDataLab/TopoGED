@@ -287,54 +287,14 @@ class Runner(object):
         test_sorted_samples, training_new_edges_count = generate_validation_data_cached(training_graphs=self.test_graphs, old_training_nodes=old_training_nodes, 
                                                 all_edgebanks=self.all_edgebanks[self.train_end], MAX_SAMPLES=MAX_SAMPLES, dataset=args.dataset, seed=global_seed, type_data="test", saved_data_file_path=self.saved_input)
         
-        
-        # Set up the training, validation, test data       
-        print('Data setup')
-        
-        # Set up the training and validation data
-        training_samples = {
-            'o-o-bank': {'X': [], 'y': []},
-            'o-o-nobank': {'X': [], 'y': []},
-        }
-        
-        validation_samples = {
-            'o-o-bank': {'X': [], 'y': []},
-            'o-o-nobank': {'X': [], 'y': []},
-        }
-        
-        test_samples = {
-            'o-o-bank': {'X': [], 'y': []},
-            'o-o-nobank': {'X': [], 'y': []},
-        }
-           
-        # Sort all necessary data
-        for flag in ['o-o-bank', 'o-o-nobank']:
-            curr_training_X = training_sorted_samples[flag]['X']
-            curr_training_y = training_sorted_samples[flag]['y']
-            curr_validation_X = validation_sorted_samples[flag]['X']
-            curr_validation_y = validation_sorted_samples[flag]['y']
-            curr_test_X = test_sorted_samples[flag]['X']
-            curr_test_y = test_sorted_samples[flag]['y']
-
-            if len(curr_training_X) == 0 or len(curr_training_y) == 0:
-                continue           
-
-            # Shuffle training, validation, test               
-            training_samples[flag]['X'] = curr_training_X
-            training_samples[flag]['y'] = curr_training_y
-            validation_samples[flag]['X'] = curr_validation_X
-            validation_samples[flag]['y'] = curr_validation_y
-            test_samples[flag]['X'] = curr_test_X
-            test_samples[flag]['y'] = curr_test_y
-        
         print('Training') 
         for flag in ['o-o-bank', 'o-o-nobank']:
-            X_train = training_samples[flag]['X']
-            y_train = training_samples[flag]['y']
-            X_val = validation_samples[flag]['X']
-            y_val = validation_samples[flag]['y']
-            X_test = test_samples[flag]['X']
-            y_test = test_samples[flag]['y']
+            X_train = training_sorted_samples[flag]['X']
+            y_train = training_sorted_samples[flag]['y']
+            X_val = validation_sorted_samples[flag]['X']
+            y_val = validation_sorted_samples[flag]['y']
+            X_test = test_sorted_samples[flag]['X']
+            y_test = test_sorted_samples[flag]['y']
     
             if len(X_train) == 0 or len(y_train) == 0:
                 print(len(X_train), len(y_train))
