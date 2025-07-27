@@ -112,6 +112,18 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
                     negatives.add((u, v))
             else:
                 attempts += 1
+        elif edge_type == 'n-n':
+            if G.nodes[u]['feat']['type'] == 1 and G.nodes[v]['feat']['type'] == 1:
+                if not G.has_edge(u, v) and (u, v) not in negatives:
+                    negatives.add((u, v))
+            else:
+                attempts += 1
+        elif edge_type == 'o-n':
+            if (G.nodes[u]['feat']['type'], G.nodes[v]['feat']['type']) in [(0, 1), (1, 0)]:
+                if not G.has_edge(u, v) and (u, v) not in negatives:
+                    negatives.add((u, v))
+            else:
+                attempts += 1
                     
     negatives = list(negatives)
     if len(negatives) < num_samples:
@@ -119,20 +131,24 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
 
     return negatives
 
-def generate_training_data(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLES):
+def generate_training_data(training_graphs, old_nodes, all_edgebanks):
     sorted_samples = {
-            'o-o-bank': {'X': [], 'y': []},
-            'o-o-nobank': {'X': [], 'y': []},
-            }  # A dict to sort embeddings for multiheaded MLP training
+        'o-o-bank': {'X': [], 'y': []},
+        'o-o-nobank': {'X': [], 'y': []},
+        'o-n': {'X': [], 'y': []},
+        'n-n': {'X': [], 'y': []},
+        }  # A dict to sort embeddings for multiheaded MLP training
     
     # Generate embedding inputs and labels
     for i, graph in enumerate(training_graphs):    
         new_edges_count = {
             'o-o-bank': 0,
             'o-o-nobank': 0,
+            'o-n': 0,
+            'n-n': 0,
         }
         
-        for edge_type in ['o-o-bank', 'o-o-nobank']:
+        for edge_type in ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']:
             sorted_samples[edge_type]['X'].append([])
             sorted_samples[edge_type]['y'].append([])
         
@@ -149,6 +165,16 @@ def generate_training_data(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLE
                     else:
                         edge_type = 'o-o-nobank'
                         new_edges_count[edge_type] += 1
+                elif (u in old_nodes and v not in old_nodes):
+                    edge_type = 'o-n'
+                    new_edges_count[edge_type] += 1
+                elif (u not in old_nodes and v in old_nodes):
+                    edge_type = 'o-n'
+                    new_edges_count[edge_type] += 1
+                    u, v = v, u
+                elif u not in old_nodes and v not in old_nodes:
+                    edge_type = 'n-n'
+                    new_edges_count[edge_type] += 1
 
                 # Store the sample
                 if edge_type != "any":
@@ -161,15 +187,23 @@ def generate_training_data(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLE
         # Generate an equal amount of negative labels for each type of edge
         negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i])
         negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i])
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks[i])
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks[i])
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
+        tmp_samples_on = [torch.tensor([u, v]) for u, v in negative_edges_on]
+        tmp_samples_nn = [torch.tensor([u, v]) for u, v in negative_edges_nn]
         
         # Add to our samples
         sorted_samples['o-o-bank']['X'][i].extend(tmp_samples_oo)
         sorted_samples['o-o-bank']['y'][i].extend([0 for _ in range(len(negative_edges_oo))])
         sorted_samples['o-o-nobank']['X'][i].extend(tmp_samples_oon)
         sorted_samples['o-o-nobank']['y'][i].extend([0 for _ in range(len(negative_edges_oon))])
+        sorted_samples['o-n']['X'][i].extend(tmp_samples_on)
+        sorted_samples['o-n']['y'][i].extend([0 for _ in range(len(negative_edges_on))])
+        sorted_samples['n-n']['X'][i].extend(tmp_samples_nn)
+        sorted_samples['n-n']['y'][i].extend([0 for _ in range(len(negative_edges_nn))])
         
         old_nodes.update(graph.nodes())  # Add the old nodes
     
@@ -187,7 +221,7 @@ def generate_training_data_cached(training_graphs, old_nodes, all_edgebanks, MAX
             return pickle.load(f)
 
     # Generate the data
-    data = generate_training_data(training_graphs, old_nodes, all_edgebanks, MAX_SAMPLES)
+    data = generate_training_data(training_graphs, old_nodes, all_edgebanks)
 
     # Save it
     with open(cache_path, 'wb') as f:
@@ -198,16 +232,24 @@ def generate_training_data_cached(training_graphs, old_nodes, all_edgebanks, MAX
 
 def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks, MAX_SAMPLES):
     sorted_samples = {
-            'o-o-bank': {'X': [], 'y': []},
-            'o-o-nobank': {'X': [], 'y': []},
-            }  # A dict to sort embeddings for multiheaded MLP training
+        'o-o-bank': {'X': [], 'y': []},
+        'o-o-nobank': {'X': [], 'y': []},
+        'o-n': {'X': [], 'y': []},
+        'n-n': {'X': [], 'y': []},
+        }  # A dict to sort embeddings for multiheaded MLP training
     
     # Generate embedding inputs and labels
-    for i, graph in enumerate(training_graphs[1:]):  # Since we go one graph back for predictions  
+    for i, graph in enumerate(training_graphs):  # Since we go one graph back for predictions  
         new_edges_count = {
             'o-o-bank': 0,
             'o-o-nobank': 0,
+            'o-n': 0,
+            'n-n': 0,
         }
+        
+        for edge_type in ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']:
+            sorted_samples[edge_type]['X'].append([])
+            sorted_samples[edge_type]['y'].append([])
 
         # Generate positive labels
         for u, v in graph.edges(data=False):
@@ -222,11 +264,17 @@ def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks,
                     else:
                         edge_type = 'o-o-nobank'
                         new_edges_count[edge_type] += 1
+                elif (u in old_training_nodes and v not in old_training_nodes) or (u not in old_training_nodes and v in old_training_nodes):
+                    edge_type = 'o-n'
+                    new_edges_count[edge_type] += 1
+                elif u not in old_training_nodes and v not in old_training_nodes:
+                    edge_type = 'n-n'
+                    new_edges_count[edge_type] += 1
 
                 # Store the sample
                 if edge_type != "any":
-                    sorted_samples[edge_type]['X'].append(torch.tensor([u, v]))
-                    sorted_samples[edge_type]['y'].append(1)
+                    sorted_samples[edge_type]['X'][i].append(torch.tensor([u, v]))
+                    sorted_samples[edge_type]['y'][i].append(1)
 
             except Exception as e:
                 print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
@@ -234,29 +282,24 @@ def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks,
         # Generate an equal amount of negative labels for each type of edge
         negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks)
         negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks)
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks)
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks)
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
+        tmp_samples_on = [torch.tensor([u, v]) for u, v in negative_edges_on]
+        tmp_samples_nn = [torch.tensor([u, v]) for u, v in negative_edges_nn]
         
         # Add to our samples
-        sorted_samples['o-o-bank']['X'].extend(tmp_samples_oo)
-        sorted_samples['o-o-bank']['y'].extend([0 for _ in range(len(negative_edges_oo))])
-        sorted_samples['o-o-nobank']['X'].extend(tmp_samples_oon)
-        sorted_samples['o-o-nobank']['y'].extend([0 for _ in range(len(negative_edges_oon))])
+        sorted_samples['o-o-bank']['X'][i].extend(tmp_samples_oo)
+        sorted_samples['o-o-bank']['y'][i].extend([0 for _ in range(len(negative_edges_oo))])
+        sorted_samples['o-o-nobank']['X'][i].extend(tmp_samples_oon)
+        sorted_samples['o-o-nobank']['y'][i].extend([0 for _ in range(len(negative_edges_oon))])
+        sorted_samples['o-n']['X'][i].extend(tmp_samples_on)
+        sorted_samples['o-n']['y'][i].extend([0 for _ in range(len(negative_edges_on))])
+        sorted_samples['n-n']['X'][i].extend(tmp_samples_nn)
+        sorted_samples['n-n']['y'][i].extend([0 for _ in range(len(negative_edges_nn))])
     
-    # If we need to remove some samples to prevent OOM crashes
-    total_samples = sum(len(sorted_samples[key]['X']) for key in sorted_samples)
-    if total_samples > MAX_SAMPLES:
-        print(f"Total samples exceed {MAX_SAMPLES}. Truncating samples.")
-        # Randomly sample to reduce to MAX_SAMPLES
-        for edge_type in sorted_samples:
-            num_samples_to_remove = total_samples - MAX_SAMPLES
-            if num_samples_to_remove > 0:
-                indices_to_remove = random.sample(range(len(sorted_samples[edge_type]['X'])), num_samples_to_remove)
-                sorted_samples[edge_type]['X'] = [x for i, x in enumerate(sorted_samples[edge_type]['X']) if i not in indices_to_remove]
-                sorted_samples[edge_type]['y'] = [y for i, y in enumerate(sorted_samples[edge_type]['y']) if i not in indices_to_remove]
-                total_samples = sum(len(sorted_samples[key]['X']) for key in sorted_samples)
-                
     return sorted_samples, new_edges_count
 
 def generate_validation_data_cached(training_graphs, old_training_nodes, all_edgebanks, MAX_SAMPLES, dataset, seed, type_data, saved_data_file_path):

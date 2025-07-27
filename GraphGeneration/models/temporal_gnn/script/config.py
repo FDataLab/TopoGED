@@ -20,7 +20,7 @@ parser.add_argument('--targetsnapshot', type=int, default=3, help='target snapsh
 parser.add_argument('--seed', type=int, default=1024, help='random seed')
 parser.add_argument('--repeat', type=int, default=1, help='running times')
 parser.add_argument('--patience', type=int, default=50, help='patience for early stop')
-parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=5e-7, help='weight for L2 loss on basic models.')
 parser.add_argument('--output_folder', type=str, default='', help='need to be modified')
 parser.add_argument('--use_htc', type=int, default=1, help='use htc or not, default: 1')

@@ -94,7 +94,7 @@ class Runner(object):
         self.test_graphs = [self.target_graphs[i][-1] for i in range(val_end, self.num_snapshots)]
 
     # ======================= TRAIN MODEL =======================
-    def train_multi_head(self, edge_type, X_train, y_train, X_val=None, y_val=None, lr=1e-3, epochs=250, batch_size=64, top_k=0):
+    def train_multi_head(self, edge_type, X_train, y_train, X_val=None, y_val=None, epochs=250, batch_size=64, top_k=0):
         """
         Train a MultiHeaded MLP Neural Network for use in edge predictions
         
@@ -105,22 +105,17 @@ class Runner(object):
             y_train (np.array): The training labels (aiming for a mix of positive and negative labels)
             X_val (np.array): The validation features for training verification
             y_val (np.array): The validation labels for training verification
-            lr (float): The learning rate to use for the model
             epochs (int): The number of epochs to train for
             batch_size (int): The batch size to use for the training data
             
         Returns:
             link_prediction_decoder (Multiheaded MLP): The trained MLP
         """
+        lr = args.lr
         self.link_prediction_decoder.train()
         optimizer = torch.optim.Adam(list(self.encoder_model.parameters()) + list(self.link_prediction_decoder.parameters()), lr=lr)
         loss_fn = nn.BCELoss()
         graphlet_loss_fn = GraphletLoss()
-
-        # Can choose to use validation split, typically I don't
-        if X_val is not None and y_val is not None:
-            X_val = torch.tensor(X_val, dtype=torch.float32).to(device)
-            y_val = torch.tensor(y_val, dtype=torch.float32).to(device)
         
         # Train
         for epoch in range(epochs):
@@ -232,7 +227,7 @@ class Runner(object):
                     if dst_embed.dim() == 1:
                         dst_embed = dst_embed.unsqueeze(1) 
                         
-                    pred_val = self.link_prediction_decoder(src_embed=src_embed, dst_embed=dst_embed, edge_type=edge_type)
+                    preds_val = self.link_prediction_decoder(src_embed=src_embed, dst_embed=dst_embed, edge_type=edge_type)
                     
                     if preds_val.dim() == 0:
                         preds_val = preds_val.unsqueeze(0)
@@ -263,7 +258,7 @@ class Runner(object):
                         f.write(epochMessage + "\n")
         return self.link_prediction_decoder
 
-    def train_models(self, lr=0.001):
+    def train_models(self):
         """
         Create and train the models used for graph construction, these will be used for later graph construction
         
@@ -323,16 +318,6 @@ class Runner(object):
 
             if len(curr_training_X) == 0 or len(curr_training_y) == 0:
                 continue           
-            
-            # Cast validation to Numpy for sklearn
-            curr_validation_X = [x.cpu().detach().numpy() if torch.is_tensor(x) else x for x in curr_validation_X]
-            curr_validation_X = np.array(curr_validation_X)
-            curr_validation_y = np.array(curr_validation_y)
-            
-            # Cast test to Numpy for sklearn
-            curr_test_X = [x.cpu().detach().numpy() if torch.is_tensor(x) else x for x in curr_test_X]
-            curr_test_X = np.array(curr_test_X)
-            curr_test_y = np.array(curr_test_y)
 
             # Shuffle training, validation, test               
             training_samples[flag]['X'] = curr_training_X
@@ -357,7 +342,7 @@ class Runner(object):
                 continue
     
             self.link_prediction_decoder = self.train_multi_head(edge_type=flag, X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, 
-                                                                 lr=lr, epochs=500, batch_size=64, top_k=training_new_edges_count[flag])
+                                                                 epochs=500, batch_size=64, top_k=training_new_edges_count[flag])
         
         return self.link_prediction_decoder
             
@@ -560,7 +545,7 @@ class Runner(object):
         else:
             # Train the Decoder and Encoder model
             print('Training the Link Prediction Decoder and Encoder')
-            self.link_prediction_decoder = self.train_models(lr=args.lr)
+            self.link_prediction_decoder = self.train_models()
             print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
             
             # saving the trained model
@@ -605,4 +590,4 @@ if __name__ == '__main__':
     runner.run()
 
 # To run the script
-# python GraphGeneration/scripts/topoGED_end_to_end.py --embeddingType=LSTM --dataset=CollegeMsg --nfeat=126
+# python GraphGeneration/scripts/topoGED_end_to_end.py --embeddingType=LSTM --dataset=CollegeMsg --nfeat=64
