@@ -6,7 +6,7 @@ from sklearn.utils import shuffle
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn as nn
-
+import pandas as pd
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -17,6 +17,8 @@ from GraphGeneration.models.temporal_gnn.script.config import args
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached
 from GraphGeneration.utils.sampling_edges_utils import sample_edges
 from GraphGeneration.utils.graph_construction_utils import compute_reappearance_probabilities, get_node_features, update_degrees
+from create_sub_graphs import create_nn_graph, create_on_graph
+
 # Models in use
 from GraphGeneration.models.model import setupMLP, load_encoder_model
 
@@ -55,7 +57,11 @@ class Runner(object):
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
         self.saved_input = os.path.abspath(f'data/input/cached/{args.dataset}/saved_data')
-        
+        common_suffix = f"multiMLP_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embeddingType{self.embeddingType}"
+        self.structure_dir = f"GraphGeneration/output/results/structure/{args.dataset}/{common_suffix}"
+        self.kernel_dir = f"GraphGeneration/output/results/kernel/{args.dataset}/{common_suffix}"
+        self.topER_dir = f"GraphGeneration/output/results/topER/{args.dataset}/{common_suffix}"
+
         # Current target snapshot we want to predict
         self.current_target_snapshot = 2
         
@@ -88,7 +94,7 @@ class Runner(object):
         self.validation_graphs = [self.target_graphs[i][-1] for i in range(self.train_end, val_end)]
         self.test_graphs = [self.target_graphs[i][-1] for i in range(val_end, self.num_snapshots)]
 
-    # ======================= TRAIN LINK PREDICTION MODEL =======================
+    # ======================= TRAIN MODEL =======================
     def train_multi_head(self, edge_type, X_train, y_train, X_val=None, y_val=None, lr=1e-3, epochs=250, batch_size=64, top_k=0):
         """
         Train a MultiHeaded MLP Neural Network for use in edge predictions
@@ -370,6 +376,7 @@ class Runner(object):
             
         Returns:
             filtration_graphs (list(nx.DiGraph)): A list of nx Graphs that we built up from our TopER current_target_graph_description
+            node_types (dict): A dictionary that stores 'old_nodes' and 'new_nodes' organized into lists
         """
         random.seed(self.seed)
         np.random.seed(self.seed)
@@ -498,8 +505,43 @@ class Runner(object):
 
             filtration_graphs.append(G.copy())
 
-        return filtration_graphs
+        return filtration_graphs, node_types
 
+    # ======================= Evaluate =======================
+    def evaluate(self, pred_graph, true_graph, node_types):
+        # Evaluate the graph of o-n 
+        pred_on_graph = create_on_graph(node_types["new_nodes"], self.current_target_old_nodes, pred_graph.copy())
+        true_on_graph = create_on_graph(node_types["new_nodes"], self.current_target_old_nodes, true_graph.copy())
+        
+        on_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
+
+        with open(rf"{self.file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_on.txt", "a") as f:
+            f.write(f"{self.current_target_snapshot + 1}, {on_kl_divergence_results:.6f}\n")
+            
+        # Evaluate the graph of n-n 
+        pred_nn_graph = create_nn_graph(node_types["new_nodes"], pred_graph.copy())
+        true_nn_graph = create_nn_graph(node_types["new_nodes"], true_graph.copy())
+
+        nn_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_nn_graph, true_nn_graph, mode="total")
+
+        with open(rf"{self.file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_nn.txt", "a") as f:
+            f.write(f"{self.current_target_snapshot + 1}, {nn_kl_divergence_results:.6f}\n")
+            
+        # Evaluate the graph of old nodes
+        oldG = pred_graph.subgraph(self.current_target_old_nodes).copy()
+        target_oldG = true_graph.subgraph(self.current_target_old_nodes).copy()
+
+        # results_edges = self.evaluator.evaluateEdges(pred_graph, true_graph, curr_edgebank_pred, all_edgebanks[i], graph_num=i)
+        results_true_structure = self.evaluator.evaluateSingleStructure(target_oldG, graph_num=self.current_target_snapshot)
+        results_pred_structure = self.evaluator.evaluateSingleStructure(oldG, graph_num=self.current_target_snapshot)
+        pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(oldG, target_oldG)
+        
+        # Store all results
+        pd.DataFrame([results_true_structure]).to_csv(f"{self.structure_dir}/structure_true.csv", mode='a', header=False, index=False)
+        pd.DataFrame([results_pred_structure]).to_csv(f"{self.structure_dir}/structure_pred.csv", mode='a', header=False, index=False)
+        pd.DataFrame([pred_kernel]).to_csv(f"{self.kernel_dir}/kernel_pred.csv", mode='a', header=False, index=False)
+        pd.DataFrame([true_kernel]).to_csv(f"{self.kernel_dir}/kernel_true.csv", mode='a', header=False, index=False)
+        
     def run(self):             
         print("INFO: Dataset: {}".format(args.dataset))
         encoder_model_path = os.path.join(self.saved_input, rf"saved_models/encoder_{args.embeddingType}_{self.seed}")
@@ -551,7 +593,10 @@ class Runner(object):
             self.current_target_count_oon = self.probabilities[i][5]
             
             # Build the filtration sequence using the current parameters
-            filtration_sequence = self.build_accumulating_filtration_sequence_with_edgebank()
+            filtration_sequence, node_types = self.build_accumulating_filtration_sequence_with_edgebank()
+            
+            # Evaluate generated graph
+            self.evaluate(pred_graph=filtration_sequence[-1], true_graph=self.target_graphs[i], node_types=node_types)
             
             # Add to the old graphs
             self.old_graphs.append(self.target_graphs[i])
