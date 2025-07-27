@@ -11,7 +11,6 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from utils.loader import Loader
 from GraphGeneration.utils.Evaluator import Evaluator
 from GraphGeneration.models.temporal_gnn.script.config import args
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached
@@ -57,7 +56,7 @@ class Runner(object):
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
         self.saved_input = os.path.abspath(f'data/input/cached/{args.dataset}/saved_data')
-        common_suffix = f"multiMLP_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embeddingType{self.embeddingType}"
+        common_suffix = f"multiMLP_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embeddingType{args.embeddingType}"
         self.structure_dir = f"GraphGeneration/output/results/structure/{args.dataset}/{common_suffix}"
         self.kernel_dir = f"GraphGeneration/output/results/kernel/{args.dataset}/{common_suffix}"
         self.topER_dir = f"GraphGeneration/output/results/topER/{args.dataset}/{common_suffix}"
@@ -141,7 +140,7 @@ class Runner(object):
                 train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=batch_size, shuffle=False)
                 for (x, y) in train_loader:
                     optimizer.zero_grad()
-                    node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model)
+                    node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model, device=device)
                     
                     # Get current embeddings
                     src_nodes = [int(n) for n in x[:, 0].tolist()]                
@@ -220,7 +219,7 @@ class Runner(object):
             if X_val is not None and y_val is not None:
                 self.link_prediction_decoder.eval()
                 with torch.no_grad():
-                    node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model)
+                    node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model, device=device)
                     
                     # Get current embeddings
                     src_nodes = [int(n) for n in x[:, 0].tolist()]                
@@ -428,7 +427,7 @@ class Runner(object):
         get_node_features(tmp_graph, self.thresholds, current_target_graph_description, old_nodes, new_nodes)  
 
         # Assign embeddings for all the training_nodes
-        curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs, encoder_model=self.sencoder_model)
+        curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs, encoder_model=self.sencoder_model, device=device)
         
         # Assign zero vector for new nodes
         for new_node in new_nodes:
@@ -445,7 +444,7 @@ class Runner(object):
                  curr_embeddings=curr_embeddings, graph_num=self.current_target_snapshot, device=device, edge_type="o-o-bank")
         tmp_graph.add_edges_from(oo_bank_edges)
         update_degrees(tmp_graph)
-        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.sencoder_model)
+        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.sencoder_model, device=device)
         curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
 
         # Phase 2: o-o-nobank
@@ -454,7 +453,7 @@ class Runner(object):
                  curr_embeddings=curr_embeddings, graph_num=self.current_target_snapshot, device=device, edge_type="o-o-nobank")
         tmp_graph.add_edges_from(oo_nobank_edges)
         update_degrees(tmp_graph)
-        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model)
+        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model, device=device)
         curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
 
         # Phase 3: o-n
@@ -472,7 +471,7 @@ class Runner(object):
                  curr_embeddings=curr_embeddings, graph_num=self.current_target_snapshot, device=device, edge_type="n-n")
         tmp_graph.add_edges_from(nn_edges)
         update_degrees(tmp_graph)
-        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model)
+        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model, device=device)
         curr_embeddings.update(new_embeddings)  # Final update  
         
         edge_pool = (oo_bank_edges + oo_nobank_edges + on_edges + nn_edges)
@@ -602,7 +601,6 @@ class Runner(object):
             self.old_graphs.append(self.target_graphs[i])
             
 if __name__ == '__main__':
-    print("INFO: Dataset: {}".format(args.dataset))
     runner = Runner()
     runner.run()
 
