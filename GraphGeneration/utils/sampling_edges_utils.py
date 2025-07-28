@@ -22,17 +22,46 @@ def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=
     candidates = []  # The edges that we could add
 
     # Different processing depending on available nodes for the edge
+
+    # Degree constraint checker
+    def can_add_edge(u, v):
+        return (
+            u in graph.nodes and v in graph.nodes and
+            u != v and
+            not graph.has_edge(u, v) and
+            graph.degree(u) < graph.nodes[u]['feat']['maxDegree'] and
+            graph.degree(v) < graph.nodes[v]['feat']['maxDegree']
+        )
+
     if flag == 'o-n':
-        candidates = [(node_1, node_2) for node_1, node_2 in product(nodes_1, nodes_2) if node_1 != node_2 and (node_1, node_2) not in graph.edges() and ((node_1 in edgebank.keys() and node_2 not in edgebank.keys()) or (node_1 not in edgebank.keys() and node_2 in edgebank.keys()))and (graph.degree(node_1) < graph.nodes[node_1]['feat']['maxDegree']) and (graph.degree(node_2) < graph.nodes[node_2]['feat']['maxDegree'])]
+        # Edge between one old and one new node, and only one of them is in edgebank
+        candidates = [
+            (u, v) for u, v in product(nodes_1, nodes_2)
+            if can_add_edge(u, v) and (
+                (u in edgebank and v not in edgebank) or (u not in edgebank and v in edgebank)
+            )
+        ]
+
     elif flag == 'o-o-nobank':
-        candidates = [(node_1, node_2) for node_1, node_2 in product(nodes_1, nodes_1) if node_1 != node_2 and (node_1, node_2) not in graph.edges() and node_2 not in edgebank.get(node_1, []) and (graph.degree(node_1) < graph.nodes[node_1]['feat']['maxDegree']) and (graph.degree(node_2) < graph.nodes[node_2]['feat']['maxDegree'])]
+        # Edge between two old nodes that are not in edgebank
+        candidates = [
+            (u, v) for u, v in product(nodes_1, nodes_1)
+            if can_add_edge(u, v) and v not in edgebank.get(u, [])
+        ]
+
     elif flag == 'o-o-bank':
-        candidates = [(node_1, node_2) for node_1, node_2 in product(nodes_1, nodes_1) if node_1 != node_2 and (node_1, node_2) not in graph.edges() and node_2 in edgebank.get(node_1, []) and (graph.degree(node_1) < graph.nodes[node_1]['feat']['maxDegree']) and (graph.degree(node_2) < graph.nodes[node_2]['feat']['maxDegree'])]
+        # Edge between two old nodes that are in edgebank
+        candidates = [
+            (u, v) for u, v in product(nodes_1, nodes_1)
+            if can_add_edge(u, v) and v in edgebank.get(u, [])
+        ]
+
     elif flag == 'n-n':
-        for u in nodes_1:
-            for v in nodes_1:
-                if u != v and not graph.has_edge(u, v) and (graph.degree(u) < graph.nodes[u]['feat']['maxDegree']) and (graph.degree(v) < graph.nodes[v]['feat']['maxDegree']):  # Skip edges that already exist in the graph
-                    candidates.append((u, v))
+        # Edge between two new nodes
+        candidates = [
+            (u, v) for u, v in product(nodes_1, nodes_1)
+            if can_add_edge(u, v)
+        ]
     
     return candidates
 
@@ -63,7 +92,7 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
         candidate_edges = generate_candidates(graph, nodes_1=available_nodes, nodes_2=None, flag=edge_type, edgebank=edgebank)
 
     elif edge_type == 'o-n':
-        nodes = node_types['old_nodes'] + node_types['new_nodes']  # Since all nodes are valid candidates
+        nodes = node_types['old_nodes'].union(node_types['new_nodes'])  # Since all nodes are valid candidates
         candidate_edges = generate_candidates(graph, nodes_1=nodes, nodes_2=nodes, flag=edge_type, edgebank=edgebank) #TODO kha: check this
     
     # Predict edge probabilities using the MLP
@@ -113,24 +142,12 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
 
     return top_edges
 
-def sample_edges(src_list, dst_list, count,  edges, 
-                 tmp_graph, node_types, link_prediction_decoder, curr_embeddings, graph_num, device, edgebank=None, edge_type=None):
+def sample_edges(count, tmp_graph, node_types, link_prediction_decoder, 
+                 curr_embeddings, graph_num, device, edgebank=None, edge_type=None):
     sampled = set()
-    attempts = 0
 
-    if args.embedOld == False and edge_type == "o-o-bank" and edgebank is not None:
-        for u in src_list:
-            if u in edgebank:
-                for v in edgebank[u]:
-                    if v in dst_list and u != v and v in edgebank.get(u, []) and (u, v) not in edges:
-                        sampled.add((u, v))
-                        edges.add((u, v))
-                        if len(sampled) >= count:
-                            return list(sampled)
-
-    else:
-        if count > 0:
-            sampled = predict_edges(tmp_graph, edge_type, node_types, edgebank, link_prediction_decoder, 
-                                    curr_embeddings, top_k=count, graph_num=graph_num, device=device)
+    if count > 0:
+        sampled = predict_edges(tmp_graph, edge_type, node_types, edgebank, link_prediction_decoder, 
+                                curr_embeddings, top_k=count, graph_num=graph_num, device=device)
             
     return list(sampled)

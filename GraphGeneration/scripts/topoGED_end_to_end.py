@@ -14,7 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from GraphGeneration.utils.Evaluator import Evaluator
 from GraphGeneration.models.temporal_gnn.script.config import args
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached
-from GraphGeneration.utils.sampling_edges_utils import sample_edges
+from GraphGeneration.utils.sampling_edges_utils import predict_edges
 from GraphGeneration.utils.graph_construction_utils import compute_reappearance_probabilities, get_node_features, update_degrees
 from create_sub_graphs import create_nn_graph, create_on_graph
 
@@ -63,6 +63,9 @@ class Runner(object):
 
         # Current target snapshot we want to predict
         self.current_target_snapshot = 2
+        
+        # All the edge types
+        self.all_edge_types = ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']
         
         # Load the global encoder & decoder model
         self.encoder_model, input_dim = load_encoder_model(args, device=device, node2vec_dimensions=args.nfeat + node2vec_batch_words, hidden_dim=64)
@@ -130,8 +133,16 @@ class Runner(object):
             # For computing AUC Scores
             train_preds = []
             train_labels = []
-            for snapshot in range(2, len(self.training_graphs)):
-                for flag in ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']:
+            node_types = {
+                "old_nodes": set(self.training_graphs[0].nodes()),
+                "new_nodes": set()
+            } 
+            for snapshot in range(1, len(self.training_graphs)):
+                self.current_target_count = {
+                    edge_type: self.probabilities[snapshot][j + 2]
+                    for j, edge_type in enumerate(self.all_edge_types)
+                }
+                for flag in self.all_edge_types:
                     curr_X_train = training_samples[flag]['X'][snapshot]
                     curr_y_train = training_samples[flag]['y'][snapshot]
                     
@@ -148,9 +159,13 @@ class Runner(object):
                     temp_y_train = torch.tensor(curr_y_train, dtype=torch.float32).to(device)
                     train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=batch_size, shuffle=True)
                     
+                    # Training graphs for predicting current snapshot
+                    training_graphs = self.training_graphs[:snapshot]
+                    tmp_graph = nx.DiGraph() # Graph we try to predict
+                    
                     for (x, y) in train_loader:
                         optimizer.zero_grad()
-                        node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs[:snapshot], encoder_model=self.encoder_model, device=device)
+                        node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=training_graphs, encoder_model=self.encoder_model, device=device)
                         
                         # Get current embeddings
                         src_nodes = [int(n) for n in x[:, 0].tolist()]                
@@ -158,6 +173,16 @@ class Runner(object):
                         
                         any_node = next(iter(node_embeddings))
                         embed_dim = len(node_embeddings[any_node])
+                        
+                        # Add new nodes to the node_types
+                        for n in src_nodes:
+                            if n not in node_embeddings and flag in ['o-n', 'n-n']:
+                                node_types["new_nodes"].add(n)
+                                
+                        for n in dst_nodes:
+                            if n not in node_embeddings and flag in ['o-n', 'n-n']:
+                                node_types["new_nodes"].add(n)
+                        
                         src_embed = torch.stack([
                             node_embeddings[n] if n in node_embeddings and flag in ['o-n', 'n-n']
                             else torch.zeros(embed_dim, device=node_embeddings[any_node].device)
@@ -183,10 +208,8 @@ class Runner(object):
                             y = y.unsqueeze(0)  # make it [1]
                         elif y.dim() == 2 and y.size(1) == 1:  # shape [batch_size, 1]
                             y = y.view(-1)
-                        
-                        graphlet_loss = torch.tensor(0.0, device=device)
                             
-                        loss = 0.5*loss_fn(preds, y) + 0.5*graphlet_loss
+                        loss = loss_fn(preds, y)
                         loss.backward()
                         optimizer.step()
                         train_loss[flag].append(loss.item())
@@ -195,12 +218,25 @@ class Runner(object):
                         train_preds.extend(preds.detach().cpu().numpy())
                         train_labels.extend(y.detach().cpu().numpy())
 
+                    # Assign embeddings for all the training_nodes
+                    curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=training_graphs, encoder_model=self.encoder_model, device=device)
+                    sampled_edges = predict_edges(tmp_graph, edge_type=flag, node_types=node_types, edgebank=self.all_edgebanks[snapshot], link_prediction_decoder=self.link_prediction_decoder, 
+                                old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=snapshot, device=device)
+                    tmp_graph.add_edges_from(list(sampled_edges))
+                    if len(training_graphs) == snapshot:
+                        training_graphs.append(tmp_graph)
+                    else:
+                        training_graphs[-1] = tmp_graph 
+                    
                     if len(np.unique(train_labels)) < 2:
                         train_auc.append(0)
                     else:
                         train_auc[flag].append(roc_auc_score(train_labels, train_preds))  # Calculate scores
+                    
+                    node_types["old_nodes"].update(self.training_graphs[snapshot].nodes())  # Add the old nodes
+                    node_types["new_nodes"] = set() # reset new nodes
                         
-            for flag in ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']:
+            for flag in self.all_edge_types:
                 if (epoch + 1) % 100 == 0 or epoch == 0:
                     epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(train_loss[flag]):.4f} | Train AUCROC {np.mean(train_auc[flag]):.4f}"
                     print(epochMessage)
@@ -286,10 +322,8 @@ class Runner(object):
             max_id = 0
 
         new_nodes = list(range(max_id + 1, max_id + 1 + self.current_target_count_new_nodes))
-        
         all_nodes = old_nodes + new_nodes
 
-        edges = set()
         tmp_graph = nx.DiGraph()  # A graph for computing node embeddings easily
         
         node_types = {
@@ -311,7 +345,7 @@ class Runner(object):
         get_node_features(tmp_graph, self.thresholds, current_target_graph_description, old_nodes, new_nodes)  
 
         # Assign embeddings for all the training_nodes
-        curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs, encoder_model=self.sencoder_model, device=device)
+        curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs, encoder_model=self.encoder_model, device=device)
         
         # Assign zero vector for new nodes
         for new_node in new_nodes:
@@ -319,46 +353,20 @@ class Runner(object):
             
         # SAMPLE EDGES STEP
         # Get edges of each type
-        oo_bank_edges = []
-        oo_nobank_edges = []
+        edge_pool = []
         
-        # Phase 1: o-o-bank
-        oo_bank_edges = sample_edges(src_list=old_nodes, dst_list=old_nodes, count=self.current_target_count_oo, edgebank=edgebank, edges=edges, 
-                 tmp_graph=tmp_graph, node_types=node_types, link_prediction_decoder=self.link_prediction_decoder, 
-                 curr_embeddings=curr_embeddings, graph_num=self.current_target_snapshot, device=device, edge_type="o-o-bank")
-        tmp_graph.add_edges_from(oo_bank_edges)
-        update_degrees(tmp_graph)
-        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.sencoder_model, device=device)
-        curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
-
-        # Phase 2: o-o-nobank
-        oo_nobank_edges = sample_edges(src_list=old_nodes, dst_list=old_nodes, count=self.current_target_count_oon, edges=edges, 
-                 tmp_graph=tmp_graph, node_types=node_types, link_prediction_decoder=self.link_prediction_decoder, 
-                 curr_embeddings=curr_embeddings, graph_num=self.current_target_snapshot, device=device, edge_type="o-o-nobank")
-        tmp_graph.add_edges_from(oo_nobank_edges)
-        update_degrees(tmp_graph)
-        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model, device=device)
-        curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
-
-        # Phase 3: o-n
-        on_edges = sample_edges(src_list=old_nodes, dst_list=new_nodes, count=self.current_target_count_on, edges=edges, 
-                 tmp_graph=tmp_graph, node_types=node_types, link_prediction_decoder=self.link_prediction_decoder, 
-                 curr_embeddings=curr_embeddings, graph_num=self.current_target_snapshot, device=device, edge_type="o-n")
-        tmp_graph.add_edges_from(on_edges)
-        update_degrees(tmp_graph)
-        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model)
-        curr_embeddings.update(new_embeddings)  # Recompute old and new node embeddings
-
-        # Phase 4: n-n
-        nn_edges = sample_edges(src_list=new_nodes, dst_list=new_nodes, count=self.current_target_count_nn, edges=edges, 
-                 tmp_graph=tmp_graph, node_types=node_types, link_prediction_decoder=self.link_prediction_decoder, 
-                 curr_embeddings=curr_embeddings, graph_num=self.current_target_snapshot, device=device, edge_type="n-n")
-        tmp_graph.add_edges_from(nn_edges)
-        update_degrees(tmp_graph)
-        new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model, device=device)
-        curr_embeddings.update(new_embeddings)  # Final update  
+        # Sample edges 4 phases
+        for flag in self.all_edge_types:
+            sampled_edges = predict_edges(tmp_graph, edge_type=flag, node_types=node_types, edgebank=edgebank, link_prediction_decoder=self.link_prediction_decoder, 
+                                curr_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=self.current_target_snapshot, device=device)
         
-        edge_pool = (oo_bank_edges + oo_nobank_edges + on_edges + nn_edges)
+            tmp_graph.add_edges_from(sampled_edges)
+            update_degrees(tmp_graph)
+            new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model, device=device)
+            curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
+        
+            edge_pool = edge_pool.extend(sampled_edges)
+            
         weights = np.random.dirichlet(np.ones(len(edge_pool))) * W_total
         edge_weight_map = {edge: w for edge, w in zip(edge_pool, weights)}
 
@@ -470,10 +478,10 @@ class Runner(object):
             # Get the true count of 4 edges type and number of new, old nodes of the target snapshot
             self.current_target_count_old_nodes = self.probabilities[i][0]
             self.current_target_count_new_nodes = self.probabilities[i][1]
-            self.current_target_count_oo = self.probabilities[i][2]
-            self.current_target_count_nn = self.probabilities[i][3]
-            self.current_target_count_on = self.probabilities[i][4]
-            self.current_target_count_oon = self.probabilities[i][5]
+            self.current_target_count = {
+                    edge_type: self.probabilities[i][j + 2]
+                    for j, edge_type in enumerate(self.all_edge_types)
+                }
             
             # Build the filtration sequence using the current parameters
             filtration_sequence, node_types = self.build_accumulating_filtration_sequence_with_edgebank()
