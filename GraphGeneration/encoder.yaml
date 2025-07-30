@@ -10,6 +10,7 @@ model:
     node2vec_min_count: 1 # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
     node2vec_batch_words: 4 # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
     node2vec_workers: 1 # Number of workers (threads)
+  hidden_dim: 64
 
 training:
   batch_size: 64
@@ -17,3 +18,4 @@ training:
   epochs: 500
 
 dataset: CollegeMsg
+seed: 1024
