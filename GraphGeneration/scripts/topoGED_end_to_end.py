@@ -1,3 +1,4 @@
+import math
 import numpy as np 
 import networkx as nx
 import random
@@ -15,6 +16,7 @@ from GraphGeneration.utils.Evaluator import Evaluator
 from GraphGeneration.models.temporal_gnn.script.config import args
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached
 from GraphGeneration.utils.sampling_edges_utils import predict_edges
+from GraphGeneration.utils.casting_type import to_tensor
 from GraphGeneration.utils.graph_construction_utils import compute_reappearance_probabilities, get_node_features, update_degrees
 from create_sub_graphs import create_nn_graph, create_on_graph
 
@@ -68,7 +70,12 @@ class Runner(object):
         self.all_edge_types = ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']
         
         # Load the global encoder & decoder model
-        self.encoder_model, input_dim = load_encoder_model(args, device=device, node2vec_dimensions=args.nfeat + node2vec_batch_words, hidden_dim=64)
+        self.encoder_model, input_dim = load_encoder_model(args, device=device, node2vec_dimensions=args.nfeat, hidden_dim=64)
+        
+        # Check if there is any add-on features we will plug at the end of encoder embedding
+        if args.embedding in ['NodeType', 'Position']:
+            input_dim += 1
+             
         self.link_prediction_decoder = setupMLP(embedding_dim=input_dim*2, embedding=args.embedding, mlpEncoding=args.mlpEncoding, embedOld=args.embedOld)
         self.link_prediction_decoder.to(device)
         
@@ -133,15 +140,28 @@ class Runner(object):
             # For computing AUC Scores
             train_preds = []
             train_labels = []
-            node_types = {
-                "old_nodes": set(self.training_graphs[0].nodes()),
-                "new_nodes": set()
-            } 
-            for snapshot in range(1, len(self.training_graphs)):
+            
+            for snapshot in range(2, len(self.training_graphs)):
+                print("INFO: Training on snapshot", snapshot)
+                
+                node_types = { 
+                    "old_nodes": set().union(*(graph.nodes() for graph in self.training_graphs[:snapshot])),
+                    "new_nodes": set()
+                } 
+                
+                # Prepare current target graph count
+                self.current_target_count_old_nodes = self.probabilities[snapshot][0]
+                self.current_target_count_new_nodes = self.probabilities[snapshot][1]
                 self.current_target_count = {
                     edge_type: self.probabilities[snapshot][j + 2]
                     for j, edge_type in enumerate(self.all_edge_types)
                 }
+                
+                constructing_graph = nx.DiGraph() # Graph we try to predict
+                    
+                # Adding old nodes to constructing_graph
+                constructing_graph.add_nodes_from(node_types['old_nodes'])
+                
                 for flag in self.all_edge_types:
                     curr_X_train = training_samples[flag]['X'][snapshot]
                     curr_y_train = training_samples[flag]['y'][snapshot]
@@ -161,7 +181,6 @@ class Runner(object):
                     
                     # Training graphs for predicting current snapshot
                     training_graphs = self.training_graphs[:snapshot]
-                    tmp_graph = nx.DiGraph() # Graph we try to predict
                     
                     for (x, y) in train_loader:
                         optimizer.zero_grad()
@@ -178,28 +197,28 @@ class Runner(object):
                         for n in src_nodes:
                             if n not in node_embeddings and flag in ['o-n', 'n-n']:
                                 node_types["new_nodes"].add(n)
+                                constructing_graph.add_node(n)
+                                node_embeddings[n] = torch.zeros(embed_dim, device=node_embeddings[any_node].device)
                                 
                         for n in dst_nodes:
                             if n not in node_embeddings and flag in ['o-n', 'n-n']:
                                 node_types["new_nodes"].add(n)
+                                constructing_graph.add_node(n)
+                                node_embeddings[n] = torch.zeros(embed_dim, device=node_embeddings[any_node].device)
                         
                         src_embed = torch.stack([
-                            node_embeddings[n] if n in node_embeddings and flag in ['o-n', 'n-n']
-                            else torch.zeros(embed_dim, device=node_embeddings[any_node].device)
-                            for n in src_nodes
+                            node_embeddings[n] for n in src_nodes
                         ])
 
                         dst_embed = torch.stack([
-                            node_embeddings[n] if n in node_embeddings and flag in ['o-n', 'n-n']
-                            else torch.zeros(embed_dim, device=node_embeddings[any_node].device)
-                            for n in dst_nodes
+                            node_embeddings[n] for n in dst_nodes
                         ])
 
                         if src_embed.dim() == 1:
                             src_embed = src_embed.unsqueeze(1)  
                         if dst_embed.dim() == 1:
                             dst_embed = dst_embed.unsqueeze(1) 
-                            
+                        
                         preds = self.link_prediction_decoder(src_embed=src_embed, dst_embed=dst_embed, edge_type=flag)
                         
                         if preds.dim() == 0:
@@ -209,7 +228,14 @@ class Runner(object):
                         elif y.dim() == 2 and y.size(1) == 1:  # shape [batch_size, 1]
                             y = y.view(-1)
                             
-                        loss = loss_fn(preds, y)
+                        # Constructing target graph
+                        pred_graph, _ = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=snapshot)
+                        pred_graph = pred_graph[-1]
+                        pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(pred_graph, self.training_graphs[snapshot])
+                        graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel, device=device).unsqueeze(0), to_tensor(true_kernel, device=device).unsqueeze(0))
+                        
+                        loss = 0.5*loss_fn(preds, y) + 0.5*graphlet_loss
+                        # loss = loss_fn(preds, y)
                         loss.backward()
                         optimizer.step()
                         train_loss[flag].append(loss.item())
@@ -220,21 +246,22 @@ class Runner(object):
 
                     # Assign embeddings for all the training_nodes
                     curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=training_graphs, encoder_model=self.encoder_model, device=device)
-                    sampled_edges = predict_edges(tmp_graph, edge_type=flag, node_types=node_types, edgebank=self.all_edgebanks[snapshot], link_prediction_decoder=self.link_prediction_decoder, 
+                    constructing_graph = get_node_features(constructing_graph.copy(), self.training_graphs[:snapshot], self.thresholds, self.graph_descriptions[snapshot], node_types["old_nodes"], node_types["new_nodes"])
+                    sampled_edges = predict_edges(constructing_graph, edge_type=flag, node_types=node_types, edgebank=self.all_edgebanks[snapshot], link_prediction_decoder=self.link_prediction_decoder, 
                                 old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=snapshot, device=device)
-                    tmp_graph.add_edges_from(list(sampled_edges))
+                    constructing_graph.add_edges_from(list(sampled_edges))
+                    update_degrees(constructing_graph)
+                    
+                    # Update the training_graphs to involve with the constructing graph
                     if len(training_graphs) == snapshot:
-                        training_graphs.append(tmp_graph)
+                        training_graphs.append(constructing_graph)
                     else:
-                        training_graphs[-1] = tmp_graph 
+                        training_graphs[-1] = constructing_graph 
                     
                     if len(np.unique(train_labels)) < 2:
                         train_auc.append(0)
                     else:
                         train_auc[flag].append(roc_auc_score(train_labels, train_preds))  # Calculate scores
-                    
-                    node_types["old_nodes"].update(self.training_graphs[snapshot].nodes())  # Add the old nodes
-                    node_types["new_nodes"] = set() # reset new nodes
                         
             for flag in self.all_edge_types:
                 if (epoch + 1) % 100 == 0 or epoch == 0:
@@ -282,7 +309,7 @@ class Runner(object):
         return self.link_prediction_decoder
             
     # ======================= BUILD GRAPH =======================
-    def build_accumulating_filtration_sequence_with_edgebank(self):
+    def build_accumulating_filtration_sequence_with_edgebank(self, current_target_snapshot):
         """
         Our main driver function to build graphs, takes in various arguments to guide the graph construction
         Specifically, this version uses an MLP to assign edges to two nodes based on the probability of them forming an edge
@@ -301,51 +328,44 @@ class Runner(object):
         np.random.seed(self.seed)
         
         # Get the edgebank up to the current target snapshot
-        edgebank = self.all_edgebanks[self.current_target_snapshot]
-        current_target_graph_description = self.graph_descriptions[self.current_target_snapshot]
+        edgebank = self.all_edgebanks[current_target_snapshot]
+        current_target_graph_description = self.graph_descriptions[current_target_snapshot]
+        prev_graphs = [graph[-1] for graph in self.target_graphs[:current_target_snapshot]]
         
         V_total = int(current_target_graph_description[-1][0])
         E_total = int(current_target_graph_description[-1][1])
         W_total = current_target_graph_description[-1][2] 
 
         # Sample old nodes
-        probs = compute_reappearance_probabilities(self.current_target_old_nodes, self.current_target_snapshot)
+        probs = compute_reappearance_probabilities(graphs=prev_graphs,
+                                                   t_curr=current_target_snapshot)
         node_ids = list(probs.keys())
         weights = list(probs.values())
 
         old_nodes = list(np.random.choice(node_ids, size=self.current_target_count_old_nodes, replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
 
         # Create new node IDs
-        if self.current_target_old_nodes:
-            max_id = max(self.current_target_old_nodes)
+        current_target_old_nodes = set().union(*[g[-1].nodes() for g in self.target_graphs[:current_target_snapshot]])
+        if current_target_old_nodes:
+            max_id = max(current_target_old_nodes)
         else:
             max_id = 0
 
         new_nodes = list(range(max_id + 1, max_id + 1 + self.current_target_count_new_nodes))
         all_nodes = old_nodes + new_nodes
 
-        tmp_graph = nx.DiGraph()  # A graph for computing node embeddings easily
+        constructing_graph = nx.DiGraph()  # A graph for computing node embeddings easily
         
         node_types = {
             "old_nodes": old_nodes,
             "new_nodes": new_nodes
         } 
         
-        # Add the nodes to the graph
-        for node in old_nodes:
-            tmp_graph.add_node(node)
-            feature_dict_old = {'id': node, 'type': 0}  
-            tmp_graph.nodes[node]['feat'] = feature_dict_old
-        for node in new_nodes:
-            tmp_graph.add_node(node)
-            feature_dict_new = {'id': node, 'type': 1}  
-            tmp_graph.nodes[node]['feat'] = feature_dict_new
-            
         # Assign maximum degrees
-        get_node_features(tmp_graph, self.thresholds, current_target_graph_description, old_nodes, new_nodes)  
+        constructing_graph = get_node_features(constructing_graph, prev_graphs, self.thresholds, current_target_graph_description, old_nodes, new_nodes)  
 
         # Assign embeddings for all the training_nodes
-        curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs, encoder_model=self.encoder_model, device=device)
+        curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs, encoder_model=self.encoder_model, device=device)
         
         # Assign zero vector for new nodes
         for new_node in new_nodes:
@@ -357,15 +377,15 @@ class Runner(object):
         
         # Sample edges 4 phases
         for flag in self.all_edge_types:
-            sampled_edges = predict_edges(tmp_graph, edge_type=flag, node_types=node_types, edgebank=edgebank, link_prediction_decoder=self.link_prediction_decoder, 
-                                curr_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=self.current_target_snapshot, device=device)
+            sampled_edges = predict_edges(constructing_graph, edge_type=flag, node_types=node_types, edgebank=edgebank, link_prediction_decoder=self.link_prediction_decoder, 
+                                old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=current_target_snapshot, device=device)
         
-            tmp_graph.add_edges_from(sampled_edges)
-            update_degrees(tmp_graph)
-            new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=self.training_graphs + [tmp_graph], encoder_model=self.encoder_model, device=device)
+            constructing_graph.add_edges_from(sampled_edges)
+            update_degrees(constructing_graph)
+            new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs + [constructing_graph], encoder_model=self.encoder_model, device=device)
             curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
         
-            edge_pool = edge_pool.extend(sampled_edges)
+            edge_pool = edge_pool + sampled_edges
             
         weights = np.random.dirichlet(np.ones(len(edge_pool))) * W_total
         edge_weight_map = {edge: w for edge, w in zip(edge_pool, weights)}
@@ -469,9 +489,9 @@ class Runner(object):
             print("INFO: >>> Temporal Graph Construction <<<")
             print("INFO: Predict snapshot: ", i)
             print("======================================")
-            
-            self.current_target_snapshot = i
 
+            self.current_target_snapshot = i
+            
             # Get all old nodes
             self.current_target_old_nodes = set().union(*[g[-1].nodes() for g in self.old_graphs])
             
@@ -484,7 +504,7 @@ class Runner(object):
                 }
             
             # Build the filtration sequence using the current parameters
-            filtration_sequence, node_types = self.build_accumulating_filtration_sequence_with_edgebank()
+            filtration_sequence, node_types = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=i)
             
             # Evaluate generated graph
             self.evaluate(pred_graph=filtration_sequence[-1], true_graph=self.target_graphs[i], node_types=node_types)

@@ -1,4 +1,5 @@
 from collections import defaultdict
+import math
 import numpy as np 
 import networkx as nx
 import torch
@@ -89,12 +90,12 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
             node2vec_emb = mean_vector
             
         # Add on features since Node2Vec doesn't account for features
-        feat_dict = G.nodes[node]['feat']
-        sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
-        sorted_values = [feat_dict[k] for k in sorted_keys]
-        node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
-        combined = torch.cat([node2vec_emb, node_feat], dim=0)
-        embeddings[node] = combined
+        # feat_dict = G.nodes[node]['feat']
+        # sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
+        # sorted_values = [feat_dict[k] for k in sorted_keys]
+        # node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
+        # combined = torch.cat([node2vec_emb, node_feat], dim=0)
+        embeddings[node] = node2vec_emb
     
     return embeddings
 
@@ -110,7 +111,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
     # Collect per-timestep node embeddings
     node_history = defaultdict(list)
     old_nodes = set()
-    null_embed = torch.tensor([0]*(node2vec_dimensions + node2vec_batch_words), dtype=torch.float32).to(device)
+    null_embed = torch.tensor([0]*(node2vec_dimensions), dtype=torch.float32).to(device)
     for G in graph_snapshots:
         snapshot_embeddings = compute_node2vec_embeddings(G, device)
         for node, emb in snapshot_embeddings.items():
@@ -120,6 +121,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
             if node not in snapshot_embeddings:
                 node_history[node].append(null_embed)
         old_nodes = old_nodes | set(G.nodes())
+    
     # Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
     return final_node_embeddings
@@ -203,6 +205,15 @@ def compute_embedding(embeddingType, graphs, device, encoder_model=None):
     elif embeddingType == 'LSTM':       
         # graph_snapshots = [G_0, G_1, ..., G_T]  # each G must have node['feat']
         final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model, device)
+        cos_val = torch.tensor([[math.cos(len(graphs))]], dtype=torch.float32, device=device)
+        for node in final_embeddings:
+            if final_embeddings[node].dim() == 1:
+                final_embeddings[node] = final_embeddings[node].unsqueeze(0) 
+
+            final_embeddings[node] = torch.cat([final_embeddings[node], cos_val], dim=1) 
+            final_embeddings[node] = final_embeddings[node].squeeze(0)
+
+            
     elif embeddingType == 'GCLSTM':
         final_embeddings = compute_node_embeddings_GCLSTM(graphs, encoder_model)
     elif embeddingType == 'HTGN':
