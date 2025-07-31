@@ -531,4 +531,4 @@ if __name__ == '__main__':
     runner.run()
 
 # To run the script
-# python GraphGeneration/scripts/topoGED_end_to_end.py --embeddingType=LSTM 
+# python GraphGeneration/scripts/topoGED_end_to_end.py 
