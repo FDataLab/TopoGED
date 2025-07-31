@@ -92,12 +92,20 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
         candidate_edges = generate_candidates(graph, nodes_1=available_nodes, nodes_2=None, flag=edge_type, edgebank=edgebank)
 
     elif edge_type == 'o-n':
-        nodes = node_types['old_nodes'].union(node_types['new_nodes'])  # Since all nodes are valid candidates
+        nodes = set(node_types['old_nodes']).union(node_types['new_nodes'])  # Since all nodes are valid candidates
         candidate_edges = generate_candidates(graph, nodes_1=nodes, nodes_2=nodes, flag=edge_type, edgebank=edgebank) #TODO kha: check this
     
     # Predict edge probabilities using the MLP
     edge_probs = []
+    any_node = next(iter(old_node_embeddings))
+    embed_dim = len(old_node_embeddings[any_node])
+    
     for u, v in candidate_edges:
+        if u not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
+            old_node_embeddings[u] = torch.zeros(embed_dim, device=device)
+        if v not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
+            old_node_embeddings[v] = torch.zeros(embed_dim, device=device)
+            
         src_embed = old_node_embeddings[u]
         dst_embed = old_node_embeddings[v]
 
@@ -112,21 +120,8 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
             src_embed = src_embed.unsqueeze(0)
         if dst_embed.dim() == 1:
             dst_embed = dst_embed.unsqueeze(0)
-
-        # Append onto the end
-        if 'NodeType' in args.embedding:
-            src_type = torch.tensor([[1.0]] if u in node_types['new_nodes'] else [[0.0]], device=device)
-            dst_type = torch.tensor([[1.0]] if v in node_types['new_nodes'] else [[0.0]], device=device)
-            src_embed = torch.cat([src_embed, src_type], dim=1)
-            dst_embed = torch.cat([dst_embed, dst_type], dim=1)
-
-        if 'Position' in args.embedding:
-            cos_val = torch.tensor([[math.cos(graph_num)]], dtype=torch.float32, device=device)
-            src_embed = torch.cat([src_embed, cos_val], dim=1)
-            dst_embed = torch.cat([dst_embed, cos_val], dim=1)
             
         # Predict edge probability
-
         prob = link_prediction_decoder(src_embed, dst_embed, edge_type)
         
         edge_probs.append((u, v, prob.item()))

@@ -105,14 +105,14 @@ void count4() {
 	int frac,frac_prev;
 
 	// precompute triangles that span over edges
-	printf("stage 1 - precomputing common nodes\n");
+	// printf("stage 1 - precomputing common nodes\n");
 	int *tri = (int*)calloc(m,sizeof(int));
 	frac_prev=-1;
 	for (int i=0;i<m;i++) {
 		frac = 100LL*i/m;
 		if (frac!=frac_prev) {
-			printf("%d%%\r",frac);
-			fflush(stdout);
+			// printf("%d%%\r",frac);
+			// fflush(stdout);
 			frac_prev=frac;
 		}
 		int x=edges[i].a, y=edges[i].b;
@@ -123,19 +123,19 @@ void count4() {
 		}
 	}
 	endTime = clock();
-	printf("%.2f\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
+	// printf("%.2f\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
 	startTime = endTime;
 
 	// count full graphlets
-	printf("stage 2 - counting full graphlets\n");
+	// printf("stage 2 - counting full graphlets\n");
 	int64 *C4 = (int64*)calloc(n,sizeof(int64));
 	int *neigh = (int*)malloc(n*sizeof(int)), nn;
 	frac_prev=-1;
 	for (int x=0;x<n;x++) {
 		frac = 100LL*x/n;
 		if (frac!=frac_prev) {
-			printf("%d%%\r",frac);
-			fflush(stdout);
+			// printf("%d%%\r",frac);
+			// fflush(stdout);
 			frac_prev=frac;
 		}
 		for (int nx=0;nx<deg[x];nx++) {
@@ -160,19 +160,19 @@ void count4() {
 		}
 	}
 	endTime = clock();
-	printf("%.2f\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
+	// printf("%.2f\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
 	startTime = endTime;
 
 	// set up a system of equations relating orbits for every node
-	printf("stage 3 - building systems of equations\n");
+	// printf("stage 3 - building systems of equations\n");
 	int *common = (int*)calloc(n,sizeof(int));
 	int *common_list = (int*)malloc(n*sizeof(int)), nc=0;
 	frac_prev=-1;
 	for (int x=0;x<n;x++) {
 		frac = 100LL*x/n;
 		if (frac!=frac_prev) {
-			printf("%d%%\r",frac);
-			fflush(stdout);
+			// printf("%d%%\r",frac);
+			// fflush(stdout);
 			frac_prev=frac;
 		}
 
@@ -245,10 +245,10 @@ void count4() {
 	}
 
 	endTime = clock();
-	printf("%.2f\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
+	// printf("%.2f\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
 
 	endTime_all = endTime;
-	printf("total: %.2f\n", (double)(endTime_all-startTime_all)/CLOCKS_PER_SEC);
+	// printf("total: %.2f\n", (double)(endTime_all-startTime_all)/CLOCKS_PER_SEC);
 }
 
 
@@ -261,13 +261,13 @@ void count5() {
 	int frac,frac_prev;
 
 	// precompute common nodes
-	printf("stage 1 - precomputing common nodes\n");
+	// printf("stage 1 - precomputing common nodes\n");
 	frac_prev=-1;
 	for (int x=0;x<n;x++) {
 		frac = 100LL*x/n;
 		if (frac!=frac_prev) {
-			printf("%d%%\r",frac);
-			fflush(stdout);
+			// printf("%d%%\r",frac);
+			// fflush(stdout);
 			frac_prev=frac;
 		}
 		for (int n1=0;n1<deg[x];n1++) {
@@ -297,11 +297,11 @@ void count5() {
 		}
 	}
 	endTime = clock();
-	printf("%.2f sec\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
+	// printf("%.2f sec\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
 	startTime = endTime;
 
 	// count full graphlets
-	printf("stage 2 - counting full graphlets\n");
+	// printf("stage 2 - counting full graphlets\n");
 	int64 *C5 = (int64*)calloc(n,sizeof(int64));
 	int *neigh = (int*)malloc(n*sizeof(int)), nn;
 	int *neigh2 = (int*)malloc(n*sizeof(int)), nn2;
@@ -309,8 +309,8 @@ void count5() {
 	for (int x=0;x<n;x++) {
 		frac = 100LL*x/n;
 		if (frac!=frac_prev) {
-			printf("%d%%\r",frac);
-			fflush(stdout);
+			// printf("%d%%\r",frac);
+			// fflush(stdout);
 			frac_prev=frac;
 		}
 		for (int nx=0;nx<deg[x];nx++) {
@@ -346,7 +346,7 @@ void count5() {
 		}
 	}
 	endTime = clock();
-	printf("%.2f sec\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
+	// printf("%.2f sec\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
 	startTime = endTime;
 
 	int *common_x = (int*)calloc(n,sizeof(int));
@@ -355,13 +355,13 @@ void count5() {
 	int *common_a_list = (int*)malloc(n*sizeof(int)), nca=0;
 
 	// set up a system of equations relating orbit counts
-	printf("stage 3 - building systems of equations\n");
+	// printf("stage 3 - building systems of equations\n");
 	frac_prev=-1;
 	for (int x=0;x<n;x++) {
 		frac = 100LL*x/n;
 		if (frac!=frac_prev) {
-			printf("%d%%\r",frac);
-			fflush(stdout);
+			// printf("%d%%\r",frac);
+			// fflush(stdout);
 			frac_prev=frac;
 		}
 
@@ -659,10 +659,10 @@ void count5() {
 		orbit[x][15] = (f_15-1*orbit[x][59]-2*orbit[x][52]-1*orbit[x][51]-2*orbit[x][45]-2*orbit[x][35]-2*orbit[x][34]-2*orbit[x][27]);
 	}
 	endTime = clock();
-	printf("%.2f sec\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
+	// printf("%.2f sec\n", (double)(endTime-startTime)/CLOCKS_PER_SEC);
 
 	endTime_all = endTime;
-	printf("total: %.2f sec\n", (double)(endTime_all-startTime_all)/CLOCKS_PER_SEC);
+	// printf("total: %.2f sec\n", (double)(endTime_all-startTime_all)/CLOCKS_PER_SEC);
 }
 
 
@@ -711,9 +711,9 @@ int init(int argc, char *argv[]) {
 		edges[i]=PAIR(a,b);
 	}
 	for (int i=0;i<n;i++) d_max=max(d_max,deg[i]);
-	printf("nodes: %d\n",n);
-	printf("edges: %d\n",m);
-	printf("max degree: %d\n",d_max);
+	// printf("nodes: %d\n",n);
+	// printf("edges: %d\n",m);
+	// printf("max degree: %d\n",d_max);
 	fin.close();
 	if ((int)(set<PAIR>(edges,edges+m).size())!=m) {
 		cerr << "Input file contains duplicate undirected edges." << endl;

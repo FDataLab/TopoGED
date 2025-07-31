@@ -29,11 +29,7 @@ def setupMLP(embedding_dim, embedding, mlpEncoding, embedOld):
     
     return mlp
 
-def load_encoder_model(args, device, node2vec_dimensions, hidden_dim=64, HTGN_nodelist=[]):
-    # Input size changes if we are doing different methods, this keeps it consistent
-    if args.embedding in ['Position', 'NodeType']:
-        hidden_dim += 1
-        
+def load_encoder_model(args, device, node2vec_dimensions, hidden_dim=64, HTGN_nodelist=[]):       
     if args.embeddingType == 'LSTM':
         model = SimpleNodeLSTM(input_dim=node2vec_dimensions, hidden_dim=hidden_dim).to(device)
     elif args.embeddingType == 'GCLSTM':
