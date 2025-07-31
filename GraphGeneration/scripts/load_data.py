@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.loader import Loader
 
 
-def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle, embeddingType):
+def load_data(dataset, embedding, mlpEncoding, embeddingType):
     my_loader = Loader()
     output_dir = os.path.abspath(f'data/input/cached/{dataset}')
     
@@ -19,14 +19,14 @@ def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle
     cached_data_dataset_folder = os.path.join(output_dir, 'saved_data/')
 
     # Construct output evaluation csv
-    structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_pred.csv'
-    structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_true.csv'
-    structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_diff.csv'
-    kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/kernel_pred.csv'
-    kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/kernel_true.csv'
-    edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/edge_analysis.csv'
-    topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/toper_diff.csv'
-    animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/pred_vs_true.mp4'
+    structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_pred.csv'
+    structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_true.csv'
+    structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_diff.csv'
+    kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_pred.csv'
+    kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_true.csv'
+    edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/edge_analysis.csv'
+    topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/toper_diff.csv'
+    animation_path = f'GraphGeneration/output/results/animations/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/pred_vs_true.mp4'
 
     # Create file paths if needed
     for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 

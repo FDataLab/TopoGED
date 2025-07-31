@@ -131,7 +131,6 @@ def update_degrees(graph: nx.DiGraph):
         if 'feat' not in graph.nodes[node]:
             graph.nodes[node]['feat'] = {'id': node}  
             graph.nodes[node]['feat']['currDegree'] = 0
-            graph.nodes[node]['feat']['maxDegree'] = assigned_degree
         else:
             graph.nodes[node]['feat']['currDegree'] = graph.degree(node)
      

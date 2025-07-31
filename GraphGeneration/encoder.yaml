@@ -1,4 +1,4 @@
-model:
+encoder_model:
   name: topoGED
   node2vec_setup:
     node2vec_dimensions: 64 # We add features onto the end since Node2Vec doesn't embed features
@@ -11,6 +11,11 @@ model:
     node2vec_batch_words: 4 # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
     node2vec_workers: 1 # Number of workers (threads)
   hidden_dim: 64
+  nodeEmbeddingType: "LSTM"
+  addOnFeature: "Position"
+
+decoder_model:
+  encode_links: "Concat"
 
 training:
   batch_size: 64

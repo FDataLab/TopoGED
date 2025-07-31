@@ -14,7 +14,6 @@ import yaml
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from GraphGeneration.utils.Evaluator import Evaluator
-from GraphGeneration.models.temporal_gnn.script.config import args
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached
 from GraphGeneration.utils.casting_type import to_tensor
 from GraphGeneration.utils.sampling_edges_utils import predict_edges
@@ -63,11 +62,11 @@ class Runner(object):
         
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
-        self.saved_input = os.path.abspath(f'data/input/cached/{args.dataset}/saved_data')
-        common_suffix = f"multiMLP_{args.strategy}_embedding{args.embedding}_mlpEncoding{args.mlpEncoding}_embeddingType{args.embeddingType}"
-        self.structure_dir = f"GraphGeneration/output/results/structure/{args.dataset}/{common_suffix}"
-        self.kernel_dir = f"GraphGeneration/output/results/kernel/{args.dataset}/{common_suffix}"
-        self.topER_dir = f"GraphGeneration/output/results/topER/{args.dataset}/{common_suffix}"
+        self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data')
+        common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}'
+        self.structure_dir = f'GraphGeneration/output/results/structure/{encoder_config["dataset"]}/{common_suffix}'
+        self.kernel_dir = f'GraphGeneration/output/results/kernel/{encoder_config["dataset"]}/{common_suffix}'
+        self.topER_dir = f'GraphGeneration/output/results/topER/{encoder_config["dataset"]}/{common_suffix}'
 
         # Current target snapshot we want to predict
         self.current_target_snapshot = 2
@@ -76,13 +75,19 @@ class Runner(object):
         self.all_edge_types = ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']
         
         # Load the global encoder & decoder model
-        self.encoder_model, input_dim = load_encoder_model(args, device=device, node2vec_dimensions=encoder_config["model"]["node2vec_setup"]["node2vec_dimensions"], 
-                                                           hidden_dim=encoder_config["model"]["hidden_dim"])
-        self.link_prediction_decoder = setupMLP(embedding_dim=input_dim*2, embedding=args.embedding, mlpEncoding=args.mlpEncoding, embedOld=args.embedOld)
+        self.encoder_model, input_dim = load_encoder_model(encoder_config, device=device, node2vec_dimensions=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"], 
+                                                           hidden_dim=encoder_config["encoder_model"]["hidden_dim"])
+        
+        # Check if there is any add-on features we will plug at the end of encoder embedding
+        if encoder_config["encoder_model"]["addOnFeature"] in ['NodeType', 'Position']:
+            input_dim += 1
+        
+        self.link_prediction_decoder = setupMLP(embedding_dim=input_dim*2, mlpEncoding=encoder_config["decoder_model"]["encode_links"])
         self.link_prediction_decoder.to(device)
         
         # Load all the snapshot true data 
-        self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(args.dataset, args.strategy, args.embedding, args.mlpEncoding, args.embedOld, args.trainingStyle, args.embeddingType)
+        self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
+                                                                                                     encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"])
         
         # Modify the graph ids to 1,2,3,...
         self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds)
@@ -106,7 +111,7 @@ class Runner(object):
         self.test_graphs = [self.target_graphs[i][-1] for i in range(self.val_end, self.num_snapshots)]
 
     # ======================= TRAIN MODEL =======================
-    def train_multi_head(self, training_samples, validation_samples, epochs=250, batch_size=64, training_new_edges_count=0):
+    def train_multi_head(self, training_samples, validation_samples, training_new_edges_count=0):
         """
         Train a MultiHeaded MLP Neural Network for use in edge predictions
         
@@ -114,19 +119,17 @@ class Runner(object):
             model (MultiheadedMLP): The Multiheaded MLP to train now
             training_samples: The dictionary store the pos, neg edges of each snapshot, using for training
             validation_samples: The dictionary store the pos, neg edges of each snapshot, using for validation
-            epochs (int): The number of epochs to train for
-            batch_size (int): The batch size to use for the training data
         Returns:
             link_prediction_decoder (Multiheaded MLP): The trained MLP
         """
-        lr = args.lr
+        lr = encoder_config["training"]["lr"]
         self.link_prediction_decoder.train()
         optimizer = torch.optim.Adam(list(self.encoder_model.parameters()) + list(self.link_prediction_decoder.parameters()), lr=lr)
         loss_fn = nn.BCELoss()
         graphlet_loss_fn = GraphletLoss()
         
         # Train
-        for epoch in range(epochs):
+        for epoch in range(encoder_config["training"]["epochs"]):
             train_loss = {
                     'o-o-bank': [],
                     'o-o-nobank': [],
@@ -179,14 +182,14 @@ class Runner(object):
                     X_train_curr, curr_y_train = shuffle(curr_X_train, curr_y_train, random_state=self.seed)
                     temp_X_train = torch.tensor(X_train_curr, dtype=torch.float32).to(device)
                     temp_y_train = torch.tensor(curr_y_train, dtype=torch.float32).to(device)
-                    train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=batch_size, shuffle=True)
+                    train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=encoder_config["training"]["batch_size"], shuffle=True)
                     
                     # Training graphs for predicting current snapshot
                     training_graphs = self.training_graphs[:snapshot]
                     
                     for (x, y) in train_loader:
                         optimizer.zero_grad()
-                        node_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=training_graphs, encoder_model=self.encoder_model, device=device)
+                        node_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=training_graphs, encoder_model=self.encoder_model, device=device)
                         
                         # Get current embeddings
                         src_nodes = [int(n) for n in x[:, 0].tolist()]                
@@ -253,7 +256,7 @@ class Runner(object):
                         train_labels.extend(y.detach().cpu().numpy())
 
                     # Constructing temp graph
-                    curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=training_graphs, encoder_model=self.encoder_model, device=device)
+                    curr_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=training_graphs, encoder_model=self.encoder_model, device=device)
                     constructing_graph = get_node_features(constructing_graph.copy(), self.training_graphs[:snapshot], self.thresholds, self.graph_descriptions[snapshot], node_types["old_nodes"], node_types["new_nodes"])
                     sampled_edges = predict_edges(constructing_graph, edge_type=flag, node_types=node_types, edgebank=self.all_edgebanks[snapshot], link_prediction_decoder=self.link_prediction_decoder, 
                                 old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=snapshot, device=device)
@@ -275,7 +278,7 @@ class Runner(object):
                 if (epoch + 1) % 100 == 0 or epoch == 0:
                     epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(train_loss[flag]):.4f} | Train AUCROC {np.mean(train_auc[flag]):.4f}"
                     print(epochMessage)
-                    with open(rf"{self.file_visualization_path}\{args.dataset}\{args.embeddingType}\multiheadMLP_performance.txt", "a") as f:
+                    with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance.txt', "a") as f:
                         f.write(epochMessage + "\n")
             
 
@@ -298,21 +301,21 @@ class Runner(object):
         
         # Prepare training data
         training_sorted_samples, training_new_edges_count = generate_training_data_cached(training_graphs=self.training_graphs,
-                                                all_edgebanks=self.all_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=args.dataset, seed=self.seed, saved_data_file_path=self.saved_input)
+                                                all_edgebanks=self.all_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, saved_data_file_path=self.saved_input)
 
         # Prepare validation data
         # We pass all_edgebanks of the training snapshots edgebanks
         validation_sorted_samples, training_new_edges_count = generate_validation_data_cached(training_graphs=self.validation_graphs, old_training_nodes=old_training_nodes, 
-                                                all_edgebanks=self.all_edgebanks[self.train_end], MAX_SAMPLES=MAX_SAMPLES, dataset=args.dataset, seed=self.seed, type_data="validation", saved_data_file_path=self.saved_input)
+                                                all_edgebanks=self.all_edgebanks[self.train_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="validation", saved_data_file_path=self.saved_input)
         # Prepare test data
         # We pass all_edgebanks of the training snapshots edgebanks
         test_sorted_samples, training_new_edges_count = generate_validation_data_cached(training_graphs=self.test_graphs, old_training_nodes=old_training_nodes, 
-                                                all_edgebanks=self.all_edgebanks[self.val_end], MAX_SAMPLES=MAX_SAMPLES, dataset=args.dataset, seed=self.seed, type_data="test", saved_data_file_path=self.saved_input)
+                                                all_edgebanks=self.all_edgebanks[self.val_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="test", saved_data_file_path=self.saved_input)
         
         print('Training') 
     
         self.link_prediction_decoder = self.train_multi_head(training_samples=training_sorted_samples, validation_samples=validation_sorted_samples, 
-                                                                 epochs=500, batch_size=64, training_new_edges_count=training_new_edges_count)
+                                                            training_new_edges_count=training_new_edges_count)
         
         return self.link_prediction_decoder
             
@@ -376,7 +379,7 @@ class Runner(object):
         constructing_graph = get_node_features(constructing_graph, prev_graphs, self.thresholds, current_target_graph_description, old_nodes, new_nodes)  
 
         # Assign embeddings for all the training_nodes
-        curr_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs, encoder_model=self.encoder_model, device=device)
+        curr_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=prev_graphs, encoder_model=self.encoder_model, device=device)
         
         # Assign zero vector for new nodes
         for new_node in new_nodes:
@@ -393,7 +396,7 @@ class Runner(object):
         
             constructing_graph.add_edges_from(sampled_edges)
             update_degrees(constructing_graph)
-            new_embeddings = compute_embedding(embeddingType=args.embeddingType, graphs=prev_graphs + [constructing_graph], encoder_model=self.encoder_model, device=device)
+            new_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=prev_graphs + [constructing_graph], encoder_model=self.encoder_model, device=device)
             curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
         
             edge_pool = edge_pool + sampled_edges
@@ -437,7 +440,7 @@ class Runner(object):
         
         on_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
 
-        with open(rf"{self.file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_on.txt", "a") as f:
+        with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\kl_results_on.txt', "a") as f:
             f.write(f"{self.current_target_snapshot + 1}, {on_kl_divergence_results:.6f}\n")
             
         # Evaluate the graph of n-n 
@@ -446,7 +449,7 @@ class Runner(object):
 
         nn_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_nn_graph, true_nn_graph, mode="total")
 
-        with open(rf"{self.file_visualization_path}\{args.dataset}\{args.embeddingType}\kl_results_nn.txt", "a") as f:
+        with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\kl_results_nn.txt', "a") as f:
             f.write(f"{self.current_target_snapshot + 1}, {nn_kl_divergence_results:.6f}\n")
             
         # Evaluate the graph of old nodes
@@ -465,8 +468,8 @@ class Runner(object):
         pd.DataFrame([true_kernel]).to_csv(f"{self.kernel_dir}/kernel_true.csv", mode='a', header=False, index=False)
         
     def run(self):             
-        print("INFO: Dataset: {}".format(args.dataset))
-        encoder_model_path = os.path.join(self.saved_input, rf"saved_models/encoder_{args.embeddingType}_{self.seed}")
+        print("INFO: Dataset: {}".format(encoder_config["dataset"]))
+        encoder_model_path = os.path.join(self.saved_input, rf'saved_models/encoder_{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.seed}')
         decoder_model_path = os.path.join(self.saved_input, rf"saved_data/decoder_MLP_{self.seed}")
 
         if os.path.exists(encoder_model_path) and os.path.exists(decoder_model_path):
@@ -528,4 +531,4 @@ if __name__ == '__main__':
     runner.run()
 
 # To run the script
-# python GraphGeneration/scripts/topoGED_end_to_end.py --embeddingType=LSTM --dataset=CollegeMsg --nfeat=64
+# python GraphGeneration/scripts/topoGED_end_to_end.py --embeddingType=LSTM 

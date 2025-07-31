@@ -56,19 +56,19 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
     """
     node2vec = Node2Vec(
         G,
-        dimensions=encoder_config["model"]["node2vec_setup"]["node2vec_dimensions"],
-        walk_length=encoder_config["model"]["node2vec_setup"]["node2vec_walk_length"],
-        num_walks=encoder_config["model"]["node2vec_setup"]["node2vec_num_walks"],
-        workers=encoder_config["model"]["node2vec_setup"]["node2vec_workers"],
-        p=encoder_config["model"]["node2vec_setup"]["node2vec_p"],
-        q=encoder_config["model"]["node2vec_setup"]["node2vec_q"],
+        dimensions=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"],
+        walk_length=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_walk_length"],
+        num_walks=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_num_walks"],
+        workers=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_workers"],
+        p=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_p"],
+        q=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_q"],
         quiet=True
     )
     
     model = node2vec.fit(
-        window=encoder_config["model"]["node2vec_setup"]["node2vec_window"], 
-        min_count=encoder_config["model"]["node2vec_setup"]["node2vec_min_count"], 
-        batch_words=encoder_config["model"]["node2vec_setup"]["node2vec_batch_words"]
+        window=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_window"], 
+        min_count=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_min_count"], 
+        batch_words=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_batch_words"]
     )  # Perform Node2Vec
 
     # Used to generate an embedding for isolated nodes
@@ -105,7 +105,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
     # Collect per-timestep node embeddings
     node_history = defaultdict(list)
     old_nodes = set()
-    null_embed = torch.tensor([0]*(encoder_config["model"]["node2vec_setup"]["node2vec_dimensions"]),
+    null_embed = torch.tensor([0]*(encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"]),
                               dtype=torch.float32).to(device)
     for G in graph_snapshots:
         snapshot_embeddings = compute_node2vec_embeddings(G, device)
@@ -146,7 +146,7 @@ def get_GCN_data(graph_snapshots):
     x_list = []
     edge_index_list = []
 
-    F = encoder_config["model"]["node2vec_setup"]["node2vec_dimensions"] # number of features per node (change this if you want more features)
+    F = encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"] # number of features per node (change this if you want more features)
 
     for G in graph_snapshots:
         node2vec_embeddings = compute_node2vec_embeddings(G)
