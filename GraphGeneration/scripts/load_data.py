@@ -282,10 +282,14 @@ def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks,
                 print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
             
         # Generate an equal amount of negative labels for each type of edge
-        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks, old_nodes=old_training_nodes)
-        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks, old_nodes=old_training_nodes)
-        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks, old_nodes=old_training_nodes)
-        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', 
+                                                    edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', 
+                                                     edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', 
+                                                    edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', 
+                                                    edgebank=all_edgebanks, old_nodes=old_training_nodes)
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
