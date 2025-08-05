@@ -653,12 +653,6 @@ class Runner(object):
             print('Training the Link Prediction Decoder and Encoder')
             self.link_prediction_decoder, self.encoder_model = self.train_models()
             print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
-            
-            # saving the trained model
-            print("INFO: Saving the model...")
-            torch.save(self.link_prediction_decoder.state_dict(), self.model_path)
-            torch.save(self.encoder_model.state_dict(), self.model_path)
-            print("INFO: The model is saved. Done.")
        
         # Old graphs that we know up to now
         self.old_graphs = [self.target_graphs[0], self.target_graphs[1]]
