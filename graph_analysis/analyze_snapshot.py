@@ -2,63 +2,48 @@ import os
 import sys
 
 import numpy as np
+import yaml
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from utils.loader import Loader
 import argparse
 from GraphGeneration.scripts.load_data import load_data
 import matplotlib.pyplot as plt
+from GraphGeneration.scripts.process_data import modifyGraphIds, build_edgebanks_from_start
 
-# Process arguments
-parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, required=False, default='CollegeMsg', choices=['CollegeMsg', 'mathoverflow', 'networkadex', 'networkaeternity', 'networkaion', 'networkaragon', 'networkbancor', 'networkcentra', 'networkcoindash', 'Reddit_B', 'networkcindicator', 'networkiconomi', 'networkdgd'])
-parser.add_argument("--strategy", type=str, required=False, default='MultiheadedMLP', choices=['MultiheadedMLP', 'SingleMLP', 'Multiheaded_LSTM_oo'], help="The type of MLP NN to use")
-parser.add_argument("--embedding", type=str, required=False, default='Position', choices=['Position', 'NodeType', 'Position+NodeType', 'None'], help="Allows appending positional encodings or an integer node type onto the end of the embeddings")
-parser.add_argument("--mlpEncoding", type=str, required=False, default='Concat', choices=['Concat', 'Product', 'Addition', 'Subtraction'], help="How you want to input node embeddings to the MLP")  # Product and addition lead to potential noise as we use directed graphs
-parser.add_argument("--embedOld", type=str, required=False, default='True', choices=['True', 'False'], help="If you want to let the MLP predict edge type \'o-o-bank\', otherwise these edges are randomly added")
-parser.add_argument("--oldDegree", type=str, required=False, default='False' ,choices=['True', 'False'], help="If you want reappearing nodes to reuse their most recent degree")
-parser.add_argument("--trainingStyle", type=str, required=False, default='TrueGraphs', choices=['TrueGraphs', 'PredGraphs', 'MixedGraphs'], help="When training the MLP, decides if you use real graphs, predicted graphs (with first real as starter), or real then pred for MLP training")
-parser.add_argument("--embeddingType", type=str, required=False, default='Node2Vec', choices=['Linear', 'Node2Vec', 'LSTM'], help="How nodes should be embedded. Either with Node2Vec or with a Linear mutliplication of adjacency matrix by node feature matrix")
-parser.add_argument("--snapshot", type=int, required=False, default=2)
-args = parser.parse_args()
+# Load YAML config
+with open("GraphGeneration/encoder.yaml", "r") as file:
+    encoder_config = yaml.safe_load(file)
+    print(encoder_config)
 
-my_loader = Loader()
-probabilities, features, thresholds, target_graphs = load_data(args.dataset, args.strategy, args.embedding, args.mlpEncoding, args.embedOld, args.trainingStyle, args.embeddingType)
-print(probabilities)
-def visualize_edge_type_counts(dataset, max_snapshot=30):
-    # Limit to available snapshots
-    max_snapshot = min(max_snapshot, len(probabilities))
+# Load all the snapshot true data 
+probabilities, graph_descriptions, thresholds, target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
+                                                                                                encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"])
 
-    # Create the sliced dataframe
-    df = {
-        'snapshot': [i for i in range(max_snapshot)],
-        'OO-bank edges': [probabilities[i][2] for i in range(max_snapshot)],
-        'OO-nobank edges': [probabilities[i][5] for i in range(max_snapshot)],
-        'ON edges': [probabilities[i][4] for i in range(max_snapshot)],
-        'NN edges': [probabilities[i][3] for i in range(max_snapshot)],
-    }
+# Modify the graph ids to 1,2,3,...
+target_graphs, _ = modifyGraphIds(target_graphs, thresholds)
 
-    snapshots = df['snapshot']
-    width = 0.2  # width of each bar
-    x = np.arange(len(snapshots))  # base positions for each snapshot
+# Build the edgebanks for construction
+all_edgebanks = build_edgebanks_from_start(target_graphs) 
+print(all_edgebanks[1])
+for snapshot in range(len(target_graphs)):
+    count = 0
+    # Get the last graphs from up to 5 previous snapshots
+    prev_graphs = [graph[-1] for graph in target_graphs[max(snapshot - 5, 0): snapshot]]
+    prev_edges = set().union(*(graph.edges() for graph in prev_graphs))
 
-    # Plot
-    plt.figure(figsize=(10, 6))
-    plt.bar(x - 1.5 * width, df['OO-bank edges'], width=width, label='OO-bank', color='#4CAF50')
-    plt.bar(x - 0.5 * width, df['OO-nobank edges'], width=width, label='OO-nobank', color='#2196F3')
-    plt.bar(x + 0.5 * width, df['ON edges'], width=width, label='ON', color='#FFC107')
-    plt.bar(x + 1.5 * width, df['NN edges'], width=width, label='NN', color='#F44336')
+    # Count overlapping edges
+    for edge in target_graphs[snapshot][-1].edges():
+        if edge in prev_edges:
+            count += 1
 
-    # Labels and title
-    plt.xlabel("Snapshot")
-    plt.ylabel("Edge Count")
-    plt.title(f"{dataset} Edge Type Counts per Snapshot")
-    plt.xticks(x, snapshots)
-    plt.grid(axis='y', linestyle='--', alpha=0.5)
-    plt.legend()
+    # Get total edgebank size for current snapshot
+    total_edgebank = sum(len(all_edgebanks[snapshot][u]) for u in all_edgebanks[snapshot])
 
-    plt.tight_layout()
-    plt.show()
-
-
-    
-visualize_edge_type_counts(args.dataset)
+    # Write the result
+    with open("graph_analysis/analyze_oobank_count.txt", "a") as f:
+        f.write(
+            f"Snapshot: {snapshot}, "
+            f"EdgeBank: {total_edgebank}, "
+            f"#oobank_probs: {probabilities[snapshot][2]}, "
+            f"#oobank_re_cal: {count}\n"
+        )

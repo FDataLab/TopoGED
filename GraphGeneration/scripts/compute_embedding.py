@@ -68,7 +68,8 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
     model = node2vec.fit(
         window=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_window"], 
         min_count=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_min_count"], 
-        batch_words=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_batch_words"]
+        batch_words=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_batch_words"],
+        workers=1 
     )  # Perform Node2Vec
 
     # Used to generate an embedding for isolated nodes
