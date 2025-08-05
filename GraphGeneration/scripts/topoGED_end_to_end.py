@@ -255,7 +255,8 @@ class Runner(object):
         current_model_auc = 0 #we take average of all edge types
         
         for flag in self.all_edge_types:
-            epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag}  | Validation AUCROC {np.mean(train_auc[flag]):.4f}"
+            gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
+            epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag}  | Validation AUCROC {np.mean(train_auc[flag]):.4f} | GPU: {gpu_mem_alloc:.1f}MiB"
             current_model_auc += np.mean(train_auc[flag])
             print(epochMessage)
             with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance.txt', "a") as f:
@@ -306,7 +307,7 @@ class Runner(object):
             train_preds = []
             train_labels = []
             
-            for snapshot in range(2, 15):
+            for snapshot in range(2, 16):
                 print("INFO: Training on snapshot", snapshot)
                 
                 # Prepare current target graph count
@@ -437,9 +438,10 @@ class Runner(object):
             self.run_validation(validation_samples=validation_samples, batch_size=encoder_config["training"]["batch_size"], epoch=epoch)
             
             # Record the Training Loss, AUC 
+            gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
             for flag in self.all_edge_types:
                 if (epoch + 1) % 20 == 0 or epoch == 0:
-                    epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(train_loss[flag]):.4f} | Train AUCROC {np.mean(train_auc[flag]):.4f}"
+                    epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(train_loss[flag]):.4f} | Train AUCROC {np.mean(train_auc[flag]):.4f} | GPU: {gpu_mem_alloc:.1f}MiB"
                     print(epochMessage)
                     with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance.txt', "a") as f:
                         f.write(epochMessage + "\n")
@@ -644,8 +646,8 @@ class Runner(object):
             
             self.link_prediction_decoder.eval()
             self.encoder_model.eval()
-            print(f"✅ Link Prediction Decoder loaded from: {decoder_model_path}")
-            print(f"✅ Ecoder loaded from: {encoder_model_path}")
+            print(f"Link Prediction Decoder loaded from: {decoder_model_path}")
+            print(f"Encoder loaded from: {encoder_model_path}")
         else:
             # Train the Decoder and Encoder model
             print('Training the Link Prediction Decoder and Encoder')
