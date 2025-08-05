@@ -5,17 +5,11 @@ import networkx as nx
 import torch
 from node2vec import Node2Vec
 from GraphGeneration.models.temporal_gnn.script.config import args
+import yaml
 
-# Node2Vec Parameters
-node2vec_dimensions = args.nfeat  # We add features onto the end since Node2Vec doesn't embed features 
-node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
-node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
-node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
-node2vec_q = 1.0  # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
-node2vec_window = 10  # The context size (Higher is broader learning)
-node2vec_min_count = 1  # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
-node2vec_batch_words = 4  # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
-node2vec_workers = 1  # Number of workers (threads)
+# Load YAML config
+with open("GraphGeneration/encoder.yaml", "r") as file:
+    encoder_config = yaml.safe_load(file)
 
 def compute_linear_gnn_embeddings(G: nx.DiGraph, device):
     """
@@ -62,19 +56,20 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
     """
     node2vec = Node2Vec(
         G,
-        dimensions=node2vec_dimensions,
-        walk_length=node2vec_walk_length,
-        num_walks=node2vec_num_walks,
-        workers=node2vec_workers,
-        p=node2vec_p,
-        q=node2vec_q,
+        dimensions=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"],
+        walk_length=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_walk_length"],
+        num_walks=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_num_walks"],
+        workers=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_workers"],
+        p=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_p"],
+        q=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_q"],
         quiet=True
     )
     
     model = node2vec.fit(
-        window=node2vec_window, 
-        min_count=node2vec_min_count, 
-        batch_words=node2vec_batch_words
+        window=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_window"], 
+        min_count=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_min_count"], 
+        batch_words=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_batch_words"],
+        workers=1 
     )  # Perform Node2Vec
 
     # Used to generate an embedding for isolated nodes
@@ -111,7 +106,8 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
     # Collect per-timestep node embeddings
     node_history = defaultdict(list)
     old_nodes = set()
-    null_embed = torch.tensor([0]*(node2vec_dimensions), dtype=torch.float32).to(device)
+    null_embed = torch.tensor([0]*(encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"]),
+                              dtype=torch.float32).to(device)
     for G in graph_snapshots:
         snapshot_embeddings = compute_node2vec_embeddings(G, device)
         for node, emb in snapshot_embeddings.items():
@@ -151,7 +147,7 @@ def get_GCN_data(graph_snapshots):
     x_list = []
     edge_index_list = []
 
-    F = node2vec_dimensions # number of features per node (change this if you want more features)
+    F = encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"] # number of features per node (change this if you want more features)
 
     for G in graph_snapshots:
         node2vec_embeddings = compute_node2vec_embeddings(G)

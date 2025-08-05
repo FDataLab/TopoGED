@@ -173,7 +173,7 @@ def build_edgebanks_from_start(graphs, days=5):
         curr_edgebank = {}
 
         # Add edges from all previous graphs (not the current graph)
-        for j in range(max(i - days, 0), i):  # Loop through all previous graphs (graphs 0 to i-1)
+        for j in range(max(i - days, 0), i):  # Loop through all previous graphs (graphs i - days to i-1)
             for u, v in graphs[j][-1].edges():  # Accessing the graph directly
                 u_key = u
                 v_key = v

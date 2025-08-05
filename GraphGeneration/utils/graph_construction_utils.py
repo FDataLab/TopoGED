@@ -44,7 +44,7 @@ def compute_reappearance_probabilities(graphs, t_curr, decay_factor=3.0, alpha=1
 
     return probs
        
-def get_node_features(constructing_graph, previous_graphs, thresholds, embedding, old_nodes, new_nodes):
+def get_node_features(constructing_graph, previous_graphs, thresholds, graph_description, old_nodes, new_nodes):
     """
     Assign the maximum degree of a node, either using its last seen degree (if args.oldDegree == True) or randomly giving it one
     
@@ -78,7 +78,7 @@ def get_node_features(constructing_graph, previous_graphs, thresholds, embedding
             degree = G.degree(node)
             existing_nodes[node] = (t, degree)
     
-    degree_counts = [embedding[i][0] for i in range(0, len(embedding))]
+    degree_counts = [graph_description[i][0] for i in range(0, len(graph_description))]
     
     degree_dict = {thresholds[i]: degree_counts[i] for i in range(len(thresholds))}
     
@@ -86,7 +86,7 @@ def get_node_features(constructing_graph, previous_graphs, thresholds, embedding
     
     for degree, count in degree_dict.items():
         degree_assignment.extend([degree] * count)
-        
+    # print(degree_assignment)
     random.shuffle(degree_assignment)
     
 
@@ -97,13 +97,9 @@ def get_node_features(constructing_graph, previous_graphs, thresholds, embedding
         suitable_degrees = [d for d in degree_assignment if d >= old_degree]
         if suitable_degrees:
             assigned_degree = min(suitable_degrees)
+            degree_assignment.remove(assigned_degree)
         else:
             assigned_degree = degree_assignment.pop()
-
-        if not degree_assignment:
-            pass
-        else:
-            degree_assignment.remove(assigned_degree)
         
         constructing_graph.nodes[node]['feat']['currDegree'] = 0
         constructing_graph.nodes[node]['feat']['maxDegree'] = assigned_degree
@@ -131,7 +127,6 @@ def update_degrees(graph: nx.DiGraph):
         if 'feat' not in graph.nodes[node]:
             graph.nodes[node]['feat'] = {'id': node}  
             graph.nodes[node]['feat']['currDegree'] = 0
-            graph.nodes[node]['feat']['maxDegree'] = assigned_degree
         else:
             graph.nodes[node]['feat']['currDegree'] = graph.degree(node)
      
