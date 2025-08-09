@@ -11,17 +11,17 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Dataset class for embeddings with flexibility for both train and test sets
 class EmbeddingDataset(Dataset):
-    def __init__(self, embeddings):
-        self.embeddings = embeddings
-    
+    def __init__(self, embeddings, k):
+        self.embeddings = embeddings  # shape: [num_days, features]
+        self.k = k
+
     def __len__(self):
-        return len(self.embeddings) - 1  # We want to predict the next embedding
-    
+        return len(self.embeddings) - self.k
+
     def __getitem__(self, idx):
-        x = torch.Tensor(self.embeddings[idx]).unsqueeze(0)  # Add sequence dimension
-        y = torch.Tensor(self.embeddings[idx + 1])  # Next embedding as target
+        x = self.embeddings[idx : idx + self.k]       # shape: [k, features]
+        y = self.embeddings[idx + self.k]             # shape: [features]
         return x, y
-    
     
 class BinaryDataset(Dataset):
     def __init__(self, embeddings, truth):
