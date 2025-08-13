@@ -11,17 +11,16 @@ parser.add_argument('--nfeat', type=int, default=128, help='dim of input feature
 parser.add_argument('--nhid', type=int, default=16, help='dim of hidden embedding')
 parser.add_argument('--nout', type=int, default=16, help='dim of output embedding')
 parser.add_argument('--neg_sample', type=str, default='rnd', help='negative sampling strategy')
+parser.add_argument('--num_snapshots', type=int, default=100, help='num of snapshots')
 
 # 2.experiments
 parser.add_argument('--max_epoch', type=int, default=500, help='number of epochs to train.')
 parser.add_argument('--testlength', type=int, default=3, help='length for test, default:3')
 parser.add_argument('--targetsnapshot', type=int, default=3, help='target snapshot we wish to predict, default:3')
-parser.add_argument('--device', type=str, default='cpu', help='training device')
-parser.add_argument('--device_id', type=str, default='0', help='device id for gpu')
 parser.add_argument('--seed', type=int, default=1024, help='random seed')
 parser.add_argument('--repeat', type=int, default=1, help='running times')
 parser.add_argument('--patience', type=int, default=50, help='patience for early stop')
-parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=5e-7, help='weight for L2 loss on basic models.')
 parser.add_argument('--output_folder', type=str, default='', help='need to be modified')
 parser.add_argument('--use_htc', type=int, default=1, help='use htc or not, default: 1')
@@ -59,15 +58,11 @@ parser.add_argument("--oldDegree", type=str, required=False, default='False' ,ch
 parser.add_argument("--trainingStyle", type=str, required=False, default='TrueGraphs', choices=['TrueGraphs', 'PredGraphs', 'MixedGraphs'], help="When training the MLP, decides if you use real graphs, predicted graphs (with first real as starter), or real then pred for MLP training")
 parser.add_argument("--embeddingType", type=str, required=False, default='Node2Vec', choices=['Linear', 'Node2Vec', 'LSTM', 'GCLSTM', 'HTGN'], help="How nodes should be embedded. Either with Node2Vec or with a Linear mutliplication of adjacency matrix by node feature matrix")
 
-args = parser.parse_args()
+# TopoGED mode
+parser.add_argument('--use_predict_probs', action='store_true', help='Use prediction probabilities to predict the next snapshot')
+parser.add_argument('--use_predict_graph_prediction', action='store_true', help='Use prediction graph description to predict the next snapshot')
 
-# set the running device
-if int(args.device_id) >= 0 and torch.cuda.is_available():
-    args.device = torch.device("cuda".format(args.device_id))
-    print('INFO: using gpu:{} to train the model'.format(args.device_id))
-else:
-    args.device = torch.device("cpu")
-    print('INFO: using cpu to train the model')
+args = parser.parse_args()
 
 args.output_folder = '../data/output/log/{}/{}/'.format(args.dataset, args.model)
 args.result_txt = '../data/output/results/{}_{}_result.txt'.format(args.dataset, args.model)
@@ -157,10 +152,10 @@ if args.dataset in ['cindicator']:
     args.testlength = 44  # Total number of snapshots = 221
     args.trainable_feat = 1
 
-if args.dataset in ['CollegeMsg']:
-    args.testlength = 35  # Total number of snapshots = 177
-    args.trainable_feat = 1
+# if args.dataset in ['CollegeMsg']:
+#     args.testlength = 35  # Total number of snapshots = 177
+#     args.trainable_feat = 1
 
-if args.dataset in ['mathoverflow']:
-    args.testlength = 37  # Total number of snapshots = 183
-    args.trainable_feat = 1
+# if args.dataset in ['mathoverflow']:
+#     args.testlength = 37  # Total number of snapshots = 183
+#     args.trainable_feat = 1

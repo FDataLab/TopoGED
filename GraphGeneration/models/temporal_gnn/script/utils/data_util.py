@@ -169,7 +169,7 @@ def load_continuous_time_dataset(dataset, neg_sample):
 
 
 def load_TGC_dataset(dataset, targetsnapshot):
-    print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
+    print("INFO: Loading a Graph from `Temporal Edge Prediction` Category: {}".format(dataset))
     data = {}
     edgelist_rawfile = './data/input/raw/edgelist/{}.txt'.format(dataset, dataset)
     edgelist_df = pd.read_csv(edgelist_rawfile)
@@ -217,7 +217,7 @@ def load_TGC_dataset(dataset, targetsnapshot):
 def loader(dataset='enron10', neg_sample='', targetsnapshot=3):
     # if cached, load directly
     data_root = '../data/input/cached/{}/'.format(dataset)
-    filepath = mkdirs(data_root) + '{}.data'.format(dataset)  # the data will be saved here after generation.
+    filepath = mkdirs(data_root) + '{}_{}.data'.format(dataset, targetsnapshot)  # the data will be saved here after generation.
     print("INFO: Dataset: {}".format(dataset))
     print("DEBUG: Look for data at {}.".format(filepath))
     if os.path.isfile(filepath):

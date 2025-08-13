@@ -18,7 +18,10 @@ from math import isnan
 from sklearn.metrics import roc_auc_score, average_precision_score
 from pickle import dump, load
 import matplotlib.pyplot as plt
-
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
+path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../'))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
@@ -71,7 +74,7 @@ def extra_dataset_attributes_loading(args):
     Load and process additional dataset attributes for TG-Classification
     This includes graph labels and node features for the nodes of each snapshot
     """
-    partial_path = f'../data/input/raw/{args.dataset}/'
+    partial_path = f'./data/input/raw/labels/{args.dataset}/'
    
     # load graph lables
     label_filename = f'{partial_path}/{args.dataset}_labels.csv'
@@ -112,10 +115,10 @@ class Runner(object):
         logger.info('INFO: total length: {}, train length: {}, test length: {}'.format(self.len, len(self.train_shots), args.testlength))
 
         self.model = load_model(args).to(args.device)
-        self.model_path = '../saved_models/{}/{}_{}_seed_{}.pth'.format(args.dataset, args.dataset,
-                                                                   args.model, args.seed)
-        logger.info("The model is going to be loaded from {}".format(self.model_path))
-        self.model.load_state_dict(torch.load(self.model_path))
+        # self.model_path = '../saved_models/{}/{}_{}_seed_{}.pth'.format(args.dataset, args.dataset,
+        #                                                            args.model, args.seed)
+        # logger.info("The model is going to be loaded from {}".format(self.model_path))
+        # self.model.load_state_dict(torch.load(self.model_path))
 
         # load the graph labels
         self.t_graph_labels, self.t_graph_feat = extra_dataset_attributes_loading(args)
@@ -274,12 +277,11 @@ class Runner(object):
 
 
 if __name__ == '__main__':
-    from script.config import args
-    from script.utils.util import set_random, logger, init_logger, disease_path
-    from script.models.load_model import load_model
-    from script.loss import ReconLoss, VGAEloss
-    from script.utils.data_util import loader, prepare_dir
-    from script.inits import prepare
+    from GraphGeneration.models.temporal_gnn.script.config import args
+    from GraphGeneration.models.temporal_gnn.script.utils.util import set_random, logger, init_logger, disease_path
+    from GraphGeneration.models.temporal_gnn.script.models.load_model import load_model
+    from GraphGeneration.models.temporal_gnn.script.utils.data_util import loader, prepare_dir
+    from GraphGeneration.models.temporal_gnn.script.inits import prepare
 
     print("INFO: >>> Temporal Graph Classification <<<")
     print("INFO: Args: ", args)

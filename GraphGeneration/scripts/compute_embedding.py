@@ -1,23 +1,13 @@
 from collections import defaultdict
+import math
 import numpy as np 
 import networkx as nx
 import torch
 from node2vec import Node2Vec
-
-# Set up device
-try:
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        print("Using CUDA (NVIDIA GPU)")
-    else:
-        device = torch.device("cpu")
-        print("Using CPU")
-except Exception:
-    device = torch.device("cpu")
-    print("Using CPU")
+from GraphGeneration.models.temporal_gnn.script.config import args
 
 # Node2Vec Parameters
-node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features 
+node2vec_dimensions = args.nfeat  # We add features onto the end since Node2Vec doesn't embed features 
 node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
 node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
 node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
@@ -27,7 +17,7 @@ node2vec_min_count = 1  # Minimum number of occurrences for a node to be conside
 node2vec_batch_words = 4  # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
 node2vec_workers = 1  # Number of workers (threads)
 
-def compute_linear_gnn_embeddings(G: nx.DiGraph):
+def compute_linear_gnn_embeddings(G: nx.DiGraph, device):
     """
     An embedding method inspired by LinearGNNs from GraphAny where Z=AX given A is the adjacency matrix and X is the node feature matrix
     One of two available methods
@@ -59,7 +49,7 @@ def compute_linear_gnn_embeddings(G: nx.DiGraph):
     
     return embeddings
 
-def compute_node2vec_embeddings(G: nx.DiGraph):
+def compute_node2vec_embeddings(G: nx.DiGraph, device):
     """
     Use Node2Vec to embed nodes in the constructed graph. Appends node features onto the end since Node2Vec does not account for features
     One of two available methods
@@ -100,17 +90,17 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
             node2vec_emb = mean_vector
             
         # Add on features since Node2Vec doesn't account for features
-        feat_dict = G.nodes[node]['feat']
-        sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
-        sorted_values = [feat_dict[k] for k in sorted_keys]
-        node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
-        combined = torch.cat([node2vec_emb, node_feat], dim=0)
-        embeddings[node] = combined
+        # feat_dict = G.nodes[node]['feat']
+        # sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
+        # sorted_values = [feat_dict[k] for k in sorted_keys]
+        # node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
+        # combined = torch.cat([node2vec_emb, node_feat], dim=0)
+        embeddings[node] = node2vec_emb
     
     return embeddings
 
 # LSTM embeddings  
-def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
+def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
     """
     Args:
         graph_snapshots (list of nx.DiGraph): temporal graphs with node['feat'] ready
@@ -118,12 +108,12 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
     Returns:
         dict of {node_id: final temporal embedding}
     """
-    # Step 1: Collect per-timestep node embeddings
+    # Collect per-timestep node embeddings
     node_history = defaultdict(list)
     old_nodes = set()
-    null_embed = torch.tensor([0]*(node2vec_dimensions + 4), dtype=torch.float32).to(device)
+    null_embed = torch.tensor([0]*(node2vec_dimensions), dtype=torch.float32).to(device)
     for G in graph_snapshots:
-        snapshot_embeddings = compute_node2vec_embeddings(G)
+        snapshot_embeddings = compute_node2vec_embeddings(G, device)
         for node, emb in snapshot_embeddings.items():
             node_history[node].append(emb) # TODO: Check nodeId if the same for every snapshot
         
@@ -131,7 +121,8 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
             if node not in snapshot_embeddings:
                 node_history[node].append(null_embed)
         old_nodes = old_nodes | set(G.nodes())
-    # Step 2: Run LSTM on each node's time-series embedding
+    
+    # Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
     return final_node_embeddings
 
@@ -160,7 +151,7 @@ def get_GCN_data(graph_snapshots):
     x_list = []
     edge_index_list = []
 
-    F = node2vec_dimensions + 4 # number of features per node (change this if you want more features)
+    F = node2vec_dimensions # number of features per node (change this if you want more features)
 
     for G in graph_snapshots:
         node2vec_embeddings = compute_node2vec_embeddings(G)
@@ -206,14 +197,23 @@ def compute_node_embeddings_HTGN(graph_snapshots, HTGN_model):
     final_node_embeddings = HTGN_model(edge_index=edge_index_list[-1], x=None, node_id_list=node_id_list, node_id_map=node_id_map)
     return final_node_embeddings
 
-def compute_embedding(embeddingType, graphs, encoder_model=None):
+def compute_embedding(embeddingType, graphs, device, encoder_model=None):
     if embeddingType == 'Node2Vec':
-        final_embeddings = compute_node2vec_embeddings(graphs[-1])
+        final_embeddings = compute_node2vec_embeddings(graphs[-1], device)
     elif embeddingType == 'Linear':
-        final_embeddings = compute_linear_gnn_embeddings(graphs[-1])
+        final_embeddings = compute_linear_gnn_embeddings(graphs[-1], device)
     elif embeddingType == 'LSTM':       
         # graph_snapshots = [G_0, G_1, ..., G_T]  # each G must have node['feat']
-        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model)
+        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model, device)
+        cos_val = torch.tensor([[math.cos(len(graphs))]], dtype=torch.float32, device=device)
+        for node in final_embeddings:
+            if final_embeddings[node].dim() == 1:
+                final_embeddings[node] = final_embeddings[node].unsqueeze(0) 
+
+            final_embeddings[node] = torch.cat([final_embeddings[node], cos_val], dim=1) 
+            final_embeddings[node] = final_embeddings[node].squeeze(0)
+
+            
     elif embeddingType == 'GCLSTM':
         final_embeddings = compute_node_embeddings_GCLSTM(graphs, encoder_model)
     elif embeddingType == 'HTGN':

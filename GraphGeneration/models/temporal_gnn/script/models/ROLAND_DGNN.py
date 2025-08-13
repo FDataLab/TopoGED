@@ -6,24 +6,11 @@ reference: https://github.com/manuel-dileo/dynamic-gnn
 
 import torch
 import torch.nn.functional as F
-from torch.nn import BCEWithLogitsLoss, GRUCell
+from torch.nn import GRUCell
 from torch_geometric.data import Data
-from sklearn.metrics import roc_auc_score, average_precision_score
-
-import copy
-
-from torch_geometric.utils import negative_sampling
-import torch_geometric.transforms as T
-from torch_geometric.utils import train_test_split_edges
-from torch_geometric.transforms import RandomLinkSplit, NormalizeFeatures, Constant
-from torch_geometric.utils import from_networkx
 from torch_geometric.nn import GCNConv, Linear
-
 import torch
-import networkx as nx
-import numpy as np
-
-import json
+from GraphGeneration.models.temporal_gnn.script.config import args
 
 
 class ROLANDGNN(torch.nn.Module):
@@ -38,9 +25,9 @@ class ROLANDGNN(torch.nn.Module):
         self.dropout = dropout
         self.update = update
         if update == 'moving':
-            self.tau = torch.Tensor([0])
+            self.tau = torch.Tensor([0]).to(args.device)
         elif update == 'learnable':
-            self.tau = torch.nn.Parameter(torch.Tensor([0]))
+            self.tau = torch.nn.Parameter(torch.Tensor([0]).to(args.device)).to(args.device)
         elif update == 'gru':
             self.gru1 = GRUCell(model_dim["hidden_conv_1"], model_dim["hidden_conv_1"])
             self.gru2 = GRUCell(model_dim["hidden_conv_2"], model_dim["hidden_conv_2"])
@@ -49,10 +36,10 @@ class ROLANDGNN(torch.nn.Module):
             self.mlp2 = Linear(model_dim["hidden_conv_2"] * 2, model_dim["hidden_conv_2"])
         else:
             assert (update >= 0 and update <= 1)
-            self.tau = torch.Tensor([update])
+            self.tau = torch.Tensor([update]).to(args.device)
         self.previous_embeddings = [
-            torch.Tensor([[0 for i in range(model_dim["hidden_conv_1"])] for j in range(num_nodes)]), \
-            torch.Tensor([[0 for i in range(model_dim["hidden_conv_2"])] for j in range(num_nodes)])]
+            torch.Tensor([[0 for i in range(model_dim["hidden_conv_1"])] for j in range(num_nodes)]).to(args.device), \
+            torch.Tensor([[0 for i in range(model_dim["hidden_conv_2"])] for j in range(num_nodes)]).to(args.device)]
 
     def reset_parameters(self):
         self.conv1.reset_parameters()
@@ -67,9 +54,9 @@ class ROLANDGNN(torch.nn.Module):
         if self.update == 'moving' and num_current_edges is not None and num_previous_edges is not None:  # None if test
             # compute moving average parameter
             self.tau = torch.Tensor(
-                [num_previous_edges / (num_previous_edges + num_current_edges)]).clone()  # tau -- past weight
+                [num_previous_edges / (num_previous_edges + num_current_edges)]).to(args.device).clone()  # tau -- past weight
 
-        current_embeddings = [torch.Tensor([]), torch.Tensor([])]
+        current_embeddings = [torch.Tensor([]).to(args.device), torch.Tensor([]).to(args.device)]
 
         # GRAPHCONV
         # GraphConv1
@@ -78,13 +65,13 @@ class ROLANDGNN(torch.nn.Module):
         h = F.dropout(h, p=self.dropout, training=self.training)
         # Embedding Update after first layer
         if self.update == 'gru':
-            h = torch.Tensor(self.gru1(h, self.previous_embeddings[0].clone().to(h.device)).detach())  # .numpy()
+            h = torch.Tensor(self.gru1(h, self.previous_embeddings[0].clone().to(h.device)).to(args.device).detach())  # .numpy()
         elif self.update == 'mlp':
             hin = torch.cat((h, self.previous_embeddings[0].clone().to(h.device)), dim=1)
             h = torch.Tensor(self.mlp1(hin).detach())  # .numpy()
         else:
             h = torch.Tensor(
-                (self.tau * self.previous_embeddings[0].clone() + (1 - self.tau) * h.clone()).detach())  # .numpy()
+                (self.tau * self.previous_embeddings[0].clone() + (1 - self.tau) * h.clone()).detach()).to(args.device)  # .numpy()
 
         current_embeddings[0] = h.clone()
 
@@ -94,13 +81,13 @@ class ROLANDGNN(torch.nn.Module):
         h = F.dropout(h, p=self.dropout, training=self.training)
         # Embedding Update after second layer
         if self.update == 'gru':
-            h = torch.Tensor(self.gru2(h, self.previous_embeddings[1].clone().to(h.device)).detach())  # .numpy()
+            h = torch.Tensor(self.gru2(h, self.previous_embeddings[1].clone().to(h.device)).detach()).to(args.device)  # .numpy()
         elif self.update == 'mlp':
             hin = torch.cat((h, self.previous_embeddings[1].clone().to(h.device)), dim=1)
-            h = torch.Tensor(self.mlp2(hin).detach())  # .numpy()
+            h = torch.Tensor(self.mlp2(hin).detach()).to(args.device)  # .numpy()
         else:
             h = torch.Tensor(
-                (self.tau * self.previous_embeddings[1].clone() + (1 - self.tau) * h.clone()).detach())  # .numpy()
+                (self.tau * self.previous_embeddings[1].clone() + (1 - self.tau) * h.clone()).detach()).to(args.device)  # .numpy()
         current_embeddings[1] = h.clone()
 
         # NOTE: last GCNConv layer is considered as the embeddings

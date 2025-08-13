@@ -12,13 +12,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.probabilities import Probs
 from utils.embedding_methods.betweenness import EmbedBetweenness
-from utils.embedding_methods.closeness import EmbedCloseness
 from utils.embedding_methods.incremental_closeness import EmbedIncrementalCloseness
 from utils.embedding_methods.degree import EmbedDegree
 from utils.embedding_methods.forman_ricci import EmbedForman
 from utils.embedding_methods.weight import EmbedWeight
-
-from multiprocessing import Pool
 
 class Loader():
     # File paths
