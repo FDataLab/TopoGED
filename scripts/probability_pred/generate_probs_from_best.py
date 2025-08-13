@@ -4,6 +4,7 @@ import os
 import torch
 import torch.nn as nn
 import wandb
+import matplotlib.pyplot as plt
 
 
 # Update path for imports
@@ -19,7 +20,7 @@ from utils.utils import Utils
 
 
 RESULTS_PATH = 'data/input/cached/'
-TRIALS_HISTORY_PATH = 'data/output/results/ProbabilityTesting/data/probability_testing_bayesian_individual_regression.csv'
+TRIALS_HISTORY_PATH = 'data/output/results/ProbabilityTesting/data/probability_testing_bayesian_individual_regression_no_norm.csv'
 
 combo_map = {
     "['RNN']": ["RNN"],
@@ -33,12 +34,14 @@ combo_map = {
 # Utility function specific to probabilities
 def normalize_vector_by_groups(vec):
     vec = np.array(vec, dtype=np.float32)
+    vec = np.clip(vec, 0, None)  # Remove negative values
 
-    # Normalize indices 0 and 1
+    # Normalize indices 0 and 1 for node type
     group1 = vec[0:2]
     sum1 = np.sum(group1)
     vec[0:2] = group1 / sum1
 
+    # Normalize other indices for edge type
     group2 = vec[2:6]
     sum2 = np.sum(group2)
     vec[2:6] = group2 / sum2
@@ -63,6 +66,7 @@ def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l
     probabilities = probabilities_df.values.tolist()
     normalized = np.array([normalize_vector_by_groups(row) for row in probabilities])
     probabilities = normalized
+    # probabilities = probabilities_df.to_numpy(dtype=np.float32)
 
     # Probabilities to return
     all_real_embeddings = []
@@ -335,13 +339,37 @@ def main():
         # Form dataframes of pred, real, and a train_test split for graph construction
         pred_df = pd.DataFrame(pred_embeddings)
         real_df = pd.DataFrame(real_embeddings)
-        dim = real_df.shape[1]
-        real_part_len = int(dim * 0.7)
-        pred_part_len = dim - real_part_len
-        real_part = real_df.iloc[:, :real_part_len].to_numpy()
-        pred_part = pred_df.iloc[:, -pred_part_len:].to_numpy()
-        hybrid_array = np.concatenate([real_part, pred_part], axis=1)
+        real_part_len = int(len(real_df) * 0.7)
+        pred_part_len = len(real_df) - real_part_len 
+        real_part = real_df.iloc[:real_part_len, :].to_numpy()
+        pred_part = pred_df.iloc[-pred_part_len:, :].to_numpy()
+        hybrid_array = np.vstack([real_part, pred_part])
         real_pred_df = pd.DataFrame(hybrid_array)
+        
+        plot_saving_map = {
+            0: 'node_type_old',
+            1: 'node_type_new',
+            2: 'edge_type_oo',
+            3: 'edge_type_nn',
+            4: 'node_type_on',
+            5: 'node_type_oon'
+        }
+        
+        for idx, col in enumerate(pred_df.columns):
+            plt.figure(figsize=(5, 5))
+            plt.scatter(real_df[col], pred_df[col], alpha=0.6)
+            plt.xlabel("Real")
+            plt.ylabel("Pred")
+            plt.title(f"plot_type_{plot_saving_map[idx]}")
+            plt.grid(True)
+            
+            plt.xlim(0, 1)
+            plt.ylim(0, 1)
+            
+            # Save to file
+            file_path = os.path.join(res_path, f"plot_type_{plot_saving_map[idx]}.png")
+            plt.savefig(file_path, dpi=300, bbox_inches="tight")
+            plt.close()
 
         # Save the embeddings
         pred_df.to_csv(os.path.join(res_path, f"{dataset}_pred_probabilities.csv"), index=False)

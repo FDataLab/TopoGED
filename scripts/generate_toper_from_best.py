@@ -8,7 +8,7 @@ import wandb
 
 # Update path for imports
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 from utils.loader import Loader
 from utils.dataset import EmbeddingDataset
@@ -19,7 +19,7 @@ from utils.utils import Utils
 
 
 RESULTS_PATH = 'data/input/cached/'
-TRIALS_HISTORY_PATH = 'data/output/results/ProbabilityTesting/data/probability_testing_bayesian_individual_regression.csv'
+TRIALS_HISTORY_PATH = 'data/output/results/RegressionTesting/data/embedding_testing_true.csv'
 
 combo_map = {
     "['RNN']": ["RNN"],
@@ -30,48 +30,35 @@ combo_map = {
 }
 
 
-# Utility function specific to probabilities
-def normalize_vector_by_groups(vec):
-    vec = np.array(vec, dtype=np.float32)
-
-    # Normalize indices 0 and 1
-    group1 = vec[0:2]
-    sum1 = np.sum(group1)
-    vec[0:2] = group1 / sum1
-
-    group2 = vec[2:6]
-    sum2 = np.sum(group2)
-    vec[2:6] = group2 / sum2
-
-    return vec
-
-
-def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l2_val, batch_size, combo, seed):
+def train_and_eval(dataset, activations, window_size, num_layer, dropout, hidden_1, lr_val, l2_val, batch_size, combo, seed):
     # Setup
     my_loader = Loader()
     my_utils = Utils()
     my_utils.set_seeds(seed)
-    output_dim = 6  # Outputting next vector
-    input_dim = 6  
+    output_dim = 30  # Regression (1 Activation)
+    input_dim = 0  # Dynamic based on concatenations
     patience = 25  # Early stopping patience
     num_epochs = 500  # Max epochs to train
     
     run_name = dataset
+    activation_name = ""
     
-    # Set up probabilities
-    probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities')  # Activation doesn't matter here
-    probabilities = probabilities_df.values.tolist()
-    normalized = np.array([normalize_vector_by_groups(row) for row in probabilities])
-    probabilities = normalized
-
-    # Probabilities to return
-    all_real_embeddings = []
-    all_pred_embeddings = []            
-                
-    run_name = run_name + '_best'    
+    # Set up embeddings
+    embeddings = None  # Init
+    for activation in activations:
+        data, labels = my_loader.load_data(dataset, activation)  # Load embeddings and labels
+        embeddings = my_utils.concat_embeddings(embeddings, data)  # Add the new data
+        activation_name += activation + '_'
         
-    # Split data 80/10/10
-    n = len(probabilities)
+    input_dim = 30 * len(activations)
+        
+    all_pred_embeddings = []
+    all_real_embeddings = []
+        
+    run_name = run_name + '_'+ activation_name + '_best'    
+        
+    # Split data 70/15/15
+    n = len(embeddings)
 
     # Calculate split indices
     train_end = int(0.8 * n)  # 80% train
@@ -79,9 +66,9 @@ def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l
     val_end = int(0.9 * n)  # 10% val
     test_start = val_end - window_size  # test starts after gap
 
-    X_train = probabilities[:train_end]
-    X_val = probabilities[val_start:val_end]
-    X_test = probabilities[test_start:]
+    X_train = torch.tensor(embeddings[:train_end], dtype=torch.float32)
+    X_val = torch.tensor(embeddings[val_start:val_end], dtype=torch.float32)
+    X_test = torch.tensor(embeddings[test_start:], dtype=torch.float32)
 
     train_dataset = EmbeddingDataset(X_train, k=window_size)
     valid_dataset = EmbeddingDataset(X_val, k=window_size)
@@ -93,7 +80,7 @@ def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l
                                         
     # Initialize wandb
     run = wandb.init(
-        project="bayesian_testing_probabilities", 
+        project="bayesian_testing_toper", 
         name = run_name, 
         config={
         'dataset': dataset,
@@ -287,10 +274,11 @@ def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l
     return best_train_loss, best_val_loss, best_pred_embeddings, best_real_embeddings
 
 
-
 def main():
     df = pd.read_csv(TRIALS_HISTORY_PATH)
     df["bayesian_score"] = 0.4 * df["train_loss"] + 0.6 * df["valid_loss"]
+
+    df = df.dropna(subset=["bayesian_score"])
 
     best_trials = df.loc[df.groupby("dataset")["bayesian_score"].idxmin()].reset_index(drop=True)
                 
@@ -313,6 +301,7 @@ def main():
         
         train_loss, val_loss, pred_embeddings, real_embeddings = train_and_eval(
             dataset=dataset,
+            activations=['Degree'],  # Since we only use degree right now
             window_size = window_size,
             num_layer=num_layers,
             dropout=dropout,
@@ -344,9 +333,9 @@ def main():
         real_pred_df = pd.DataFrame(hybrid_array)
 
         # Save the embeddings
-        pred_df.to_csv(os.path.join(res_path, f"{dataset}_pred_probabilities.csv"), index=False)
-        real_df.to_csv(os.path.join(res_path, f"{dataset}_real_probabilities.csv"), index=False) 
-        real_pred_df.to_csv(os.path.join(res_path, f"{dataset}_train_test_probabilities.csv"), index=False) 
+        pred_df.to_csv(os.path.join(res_path, f"{dataset}_pred_embeddings.csv"), index=False)
+        real_df.to_csv(os.path.join(res_path, f"{dataset}_real_embeddings.csv"), index=False) 
+        real_pred_df.to_csv(os.path.join(res_path, f"{dataset}_train_test_embeddings.csv"), index=False) 
            
     
 main()
