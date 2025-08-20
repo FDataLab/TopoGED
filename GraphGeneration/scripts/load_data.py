@@ -138,11 +138,12 @@ def generate_training_data(training_graphs, all_edgebanks):
         'o-n': {'X': [], 'y': []},
         'n-n': {'X': [], 'y': []},
         }  # A dict to sort embeddings for multiheaded MLP training
-    
-    old_nodes = set()
+    all_old_nodes = set()  # To keep track of all old nodes across graphs
     
     # Generate embedding inputs and labels
-    for i, graph in enumerate(training_graphs):    
+    for i, graph in enumerate(training_graphs): 
+        # Old nodes of 5 days before 
+        old_nodes_days = set().union(*[g.nodes() for g in training_graphs[max(i - 5, 0): i]]) 
         new_edges_count = {
             'o-o-bank': 0,
             'o-o-nobank': 0,
@@ -160,21 +161,22 @@ def generate_training_data(training_graphs, all_edgebanks):
                 edge_type = 'any'  # Default/fallback type
 
                 # Determine edge type based on node categories and edgebank
-                if u in old_nodes and v in old_nodes:
+                if u in all_old_nodes and v in all_old_nodes:
+                    
                     if v in all_edgebanks[i].get(u, []):
                         edge_type = 'o-o-bank'
                         new_edges_count[edge_type] += 1
-                    else:
+                    elif v in old_nodes_days and u in old_nodes_days:
                         edge_type = 'o-o-nobank'
                         new_edges_count[edge_type] += 1
-                elif (u in old_nodes and v not in old_nodes):
+                elif (u in all_old_nodes and v not in all_old_nodes):
                     edge_type = 'o-n'
                     new_edges_count[edge_type] += 1
-                elif (u not in old_nodes and v in old_nodes):
+                elif (u not in all_old_nodes and v in all_old_nodes):
                     edge_type = 'o-n'
                     new_edges_count[edge_type] += 1
                     u, v = v, u
-                elif u not in old_nodes and v not in old_nodes:
+                elif u not in all_old_nodes and v not in all_old_nodes:
                     edge_type = 'n-n'
                     new_edges_count[edge_type] += 1
 
@@ -187,10 +189,10 @@ def generate_training_data(training_graphs, all_edgebanks):
                 print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
             
         # Generate an equal amount of negative labels for each type of edge
-        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i], old_nodes=old_nodes)
-        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i], old_nodes=old_nodes)
-        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks[i], old_nodes=old_nodes)
-        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks[i], old_nodes=old_nodes)
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
@@ -206,9 +208,9 @@ def generate_training_data(training_graphs, all_edgebanks):
         sorted_samples['o-n']['y'][i].extend([0 for _ in range(len(negative_edges_on))])
         sorted_samples['n-n']['X'][i].extend(tmp_samples_nn)
         sorted_samples['n-n']['y'][i].extend([0 for _ in range(len(negative_edges_nn))])
-        
-        old_nodes.update(graph.nodes())  # Add the old nodes
-    
+
+        # Update the old nodes set
+        all_old_nodes.update(graph.nodes())  # Add the old nodes
     print(len(sorted_samples['o-o-bank']['X']))
     print(len(sorted_samples['o-o-bank']['X'][0]))
     

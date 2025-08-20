@@ -120,6 +120,7 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
     
     # Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
+
     return final_node_embeddings
 
 # GCN embeddings

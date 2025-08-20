@@ -20,7 +20,8 @@ decoder_model:
 training:
   batch_size: 64 # play around
   lr: 0.001
-  epochs: 500
+  epochs: 200
+  day: 5
 
-dataset: CollegeMsg
+dataset: networkaion
 seed: 1024
