@@ -31,6 +31,7 @@ from torch.utils.data import DataLoader
 
 # Import Loss fn
 from GraphGeneration.scripts.composite_graphlet_loss_fn import GraphletLoss
+from GraphGeneration.utils.estimate_graphlet import run_graphlet_estimate   
 
 # Set up device
 try:
@@ -105,7 +106,7 @@ class Runner(object):
         # Split training, validation, test graphs
         # Snapshots that we will use for traininng
         # Convert number of snapshots to integer
-        self.num_snapshots = len(self.probabilities)
+        self.num_snapshots = len(self.target_graphs)
         self.train_end = int(0.8 * self.num_snapshots)
         self.val_end = int(0.9 * self.num_snapshots)
 
@@ -399,12 +400,13 @@ class Runner(object):
                             y = y.view(-1)
                             
                         # Constructing target graph
-                        # pred_graph, _ = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=snapshot)
-                        # pred_graph = pred_graph[-1]
-                        # pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(pred_graph, self.training_graphs[snapshot])
-                        # graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel, device=device).unsqueeze(0), to_tensor(true_kernel, device=device).unsqueeze(0))
-                        # + 0.5*graphlet_loss
-                        loss = loss_fn(preds, y) 
+                        pred_graph, _ = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=snapshot)
+                        pred_graph = pred_graph[-1]
+                        pred_kernel = run_graphlet_estimate(pred_graph)
+                        true_kernel = run_graphlet_estimate(self.training_graphs[snapshot])
+                        graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel, device=device).unsqueeze(0), to_tensor(true_kernel, device=device).unsqueeze(0))
+                        
+                        loss = 0.5*loss_fn(preds, y) + 0.5*graphlet_loss
                         loss.backward()
                         optimizer.step()
                         train_loss[flag].append(loss.item())
@@ -414,6 +416,8 @@ class Runner(object):
                         train_labels.extend(y.detach().cpu().numpy())
 
                     # Constructing temp graph
+                    if flag == self.all_edge_types[-1]:
+                        continue
                     curr_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=training_graphs, encoder_model=self.encoder_model, device=device)
                     constructing_graph = get_node_features(constructing_graph.copy(), self.training_graphs[:snapshot], self.thresholds, self.graph_descriptions[snapshot], node_types["old_nodes"], node_types["new_nodes"])
                     sampled_edges = predict_edges(constructing_graph, edge_type=flag, node_types=node_types, edgebank=self.all_edgebanks[snapshot], link_prediction_decoder=self.link_prediction_decoder, 
@@ -433,7 +437,7 @@ class Runner(object):
                         train_auc[flag].append(roc_auc_score(train_labels, train_preds))  # Calculate scores
                         
             # Validation
-            # self.run_validation(validation_samsples=validation_samples, batch_size=encoder_config["training"]["batch_size"], epoch=epoch)
+            self.run_validation(validation_samples=validation_samples, batch_size=encoder_config["training"]["batch_size"], epoch=epoch)
             
             # Record the Training Loss, AUC 
             gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
@@ -441,7 +445,7 @@ class Runner(object):
                 if (epoch + 1) % 1 == 0 or epoch == 0:
                     epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(train_loss[flag]):.4f} | Train AUCROC {np.mean(train_auc[flag]):.4f} | GPU: {gpu_mem_alloc:.1f}MiB"
                     print(epochMessage)
-                    with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance.txt', "a") as f:
+                    with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance_{self.seed}.txt', "a") as f:
                         f.write(epochMessage + "\n")
             
 
