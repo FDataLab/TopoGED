@@ -337,10 +337,10 @@ def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l
 def objective(trial, dataset):
     # Suggest hyperparameters
     window_size = trial.suggest_int('window_size', 5, 30)
-    dropout = trial.suggest_float('dropout', 0.01, 0.5)
+    dropout = trial.suggest_float('dropout', 0.01, 0.5) # 
     hidden_1 = trial.suggest_categorical('hidden_1', [32, 64, 128, 256, 512, 1024])  # Since it doesnt matter
     num_layers = trial.suggest_int('num_layers', 2, 4)
-    lr_val = trial.suggest_float('lr_val', 1e-4, 1e-2, log=True)
+    lr_val = trial.suggest_float('lr_val', 1e-4, 1e-2, log=True) # Expand range
     l2_val = trial.suggest_float('l2_val', 1e-5, 1e-1, log=True)
     batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
     model = trial.suggest_categorical('combo', [

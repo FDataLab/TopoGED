@@ -28,59 +28,53 @@ from utils.embedding_methods.weight import EmbedWeight
 import wandb
 
 # Constants
-csv_file_path = os.path.abspath('data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression.csv')
+csv_file_path = os.path.abspath('data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression_new.csv')
 model_dir = os.path.abspath('data/output/cached_model/RegressionTesting/EmbeddingTesting')
-STORAGE = "sqlite:///./output/cached_model/RegressionTesting/bayesianSave/model_selection_regression.db"  # Where we save the study
-os.makedirs(os.path.dirname('output/cached_model/RegressionTesting/bayesianSave/model_selection_regression.db'), exist_ok=True)
+STORAGE = "sqlite:///./output/cached_model/RegressionTesting/bayesianSave/model_selection_regression_new.db"  # Where we save the study
+os.makedirs(os.path.dirname('output/cached_model/RegressionTesting/bayesianSave/model_selection_regression_new.db'), exist_ok=True)
 seed = 42  # Can change
 
 # Write the header if the file doesn't already exist
 if not os.path.isfile(csv_file_path):
-    pd.DataFrame(columns=['run_id', 'dataset', 'activation', 'seed', 'normalization', 'hidden_size_rnn', 'learning_rate', 'dropout', 'l2_regularization', 'batch_size', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'test_loss', 'train_avg_norm', 'val_avg_norm', 'test_avg_norm', 'train_avg_cosine_similarity','val_avg_cosine_similarity', 'test_avg_cosine_similarity',]).to_csv(csv_file_path, index=False)
+    pd.DataFrame(columns=['run_id', 'dataset', 'activation', 'seed', 'window_size', 'normalization', 'hidden_size_rnn', 'learning_rate', 'dropout', 'l2_regularization', 'batch_size', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'test_loss', 'train_avg_norm', 'val_avg_norm', 'test_avg_norm', 'train_avg_cosine_similarity','val_avg_cosine_similarity', 'test_avg_cosine_similarity',]).to_csv(csv_file_path, index=False)
 
 
 # Activation name map
 activation_map = {
-    "[Degree]": ['Degree'],
-    "[Betweenness]": ['Betweenness'],
-    "[Forman]": ['Forman'],
-    "[Closeness]": ['Closeness'],
-    "[Weight]": ['Weight'],
-    # "['Betweenness', 'Closeness']": ['Betweenness', 'Closeness'], 
-    # "['Degree', 'Forman', 'Weight']": ['Degree', 'Forman', 'Weight'], 
-    # "['Degree', 'Betweenness', 'Closeness']": ['Degree', 'Betweenness', 'Closeness'], 
-    # "['Betweenness', 'Forman']": ['Betweenness', 'Forman'], 
-    # "['Closeness', 'Forman']": ['Closeness', 'Forman'], 
-    # "['Degree', 'Betweenness', 'Closeness', 'Forman']": ['Degree', 'Betweenness', 'Closeness', 'Forman'], 
-    # "['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']": ['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight'],
-}
-
-embedding_map = {
-    'Betweenness': [EmbedBetweenness],
-    'Closeness': [EmbedCloseness],
-    'Betweenness_Closeness': [EmbedBetweenness, EmbedCloseness],
-    'Degree': [EmbedDegree],
-    'Degree_Forman_Weight': [EmbedDegree, EmbedForman, EmbedWeight],
-    'Degree_Forman': [EmbedDegree, EmbedForman],
-    'Forman': [EmbedForman],
-    'Weight': [EmbedWeight],
-    'Degree_Weight': [EmbedDegree, EmbedWeight],
-    'Forman_Weight': [EmbedForman, EmbedWeight],
+    "Degree": ['Degree'],
+    "Betweenness": ['Betweenness'],
+    "Forman": ['Forman'],
+    "Closeness": ['Closeness'],
+    "Weight": ['Weight'],
+    "Degree_Betweenness_Closeness": ['Degree', 'Betweenness', 'Closeness'],
+    "Degree_Forman_Weight": ['Degree', 'Forman', 'Weight'],
+    "Degree_Forman_Closeness": ['Degree', 'Forman', 'Closeness'],
+    "Degree_Weight_Closeness": ['Degree', 'Weight', 'Closeness'],
+    "Degree_Forman": ['Degree', 'Forman'],
+    "Degree_Weight": ['Degree', 'Weight'],
+    "Degree_Betweenness": ['Degree', 'Betweenness'],
+    "Degree_Closeness": ['Degree', 'Closeness'],
 }
 
 combo_map = {
-    "['LSTM']": ['LSTM'], 
-    "['GRU']": ['GRU'], 
-    "['LSTM', 'GRU']": ['LSTM', 'GRU'], 
+    "['LSTM', 'ReLU']": ['LSTM', 'ReLU'], 
+    "['GRU', 'ReLU']": ['GRU', 'ReLU'], 
+    "['LSTM', 'GRU', 'ReLU']": ['LSTM', 'GRU', 'ReLU'], 
     "['RNN']": ['RNN'],
+    "['GRU']": ['GRU'],
+    "['LSTM']": ['LSTM'],
+    "['RNN', 'FC']": ['RNN', 'FC'],
+    "['LSTM', 'FC']": ['LSTM', 'FC'],
+    "['GRU', 'FC']": ['GRU', 'FC'],
+    "['LSTM', 'GRU', 'FC']": ['LSTM', 'GRU', 'FC'],
 }
 
-def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path):
+def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, hidden_1, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path):
     # Setup
     my_loader = Loader()
     my_utils = Utils()
     my_utils.set_seeds(seed)
-    output_dim = 30  # Regression (1 Activation)
+    output_dim = 0  # Regression (1 Activation)
     input_dim = 0  # Dynamic based on concatenations
     patience = 25  # Early stopping patience
     num_epochs = 500  # Max epochs to train
@@ -96,6 +90,7 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
         activation_name += activation + '_'
         
     input_dim = 30 * len(activations)
+    output_dim = input_dim
         
     run_name = run_name + '_'+ activation_name + str(counter)    
         
@@ -103,11 +98,16 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
     n = len(embeddings)
 
     # Calculate split indices
-    train_end = int(0.7 * n)  # 70% for training
-    val_end = int(0.85 * n)   # Next 15% for validation (70% + 15% = 85%)
+    train_end = int(0.8 * n)  # 80% train
+    val_start = train_end - window_size  # val starts after gap
+    val_end = int(0.9 * n)  # 10% val
+    test_start = val_end - window_size  # test starts after gap
+
+    embeddings = np.array([np.array(e, dtype=np.float32) for e in embeddings])
+
     X_train = embeddings[:train_end]
-    X_val = embeddings[train_end:val_end]
-    X_test = embeddings[val_end:]
+    X_val = embeddings[val_start:val_end]
+    X_test = embeddings[test_start:]
                     
     if norm:
         X_train_scaled, X_val_scaled, X_test_scaled = my_utils.normalize_embeddings(X_train, X_val, X_test)
@@ -115,10 +115,9 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
     else:
         X_train_scaled, X_val_scaled, X_test_scaled = X_train, X_val, X_test
 
-
-    train_dataset = EmbeddingDataset(X_train_scaled)
-    valid_dataset = EmbeddingDataset(X_val_scaled)
-    test_dataset = EmbeddingDataset(X_test_scaled)
+    train_dataset = EmbeddingDataset(X_train_scaled, k=window_size)
+    valid_dataset = EmbeddingDataset(X_val_scaled, k=window_size)
+    test_dataset = EmbeddingDataset(X_test_scaled, k=window_size)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
@@ -126,11 +125,12 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
                                         
     # Initialize wandb
     run = wandb.init(
-        project="bayesian_testing_regression", 
+        project="bayesian_testing_regression_new", 
         name = run_name, 
         config={
         'dataset': dataset,
         'activation': activation_name,
+        'window_size': window_size,
         'num_layers': num_layer,
         'dropout': dropout,
         'l2_regularization': l2_val,
@@ -163,6 +163,7 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
         for x, y in train_loader:
             optimizer.zero_grad()
             output = model(x)
+            output = output[:, -1, :]
             output = output.squeeze(1)
             loss = criterion(output, y)
             loss.backward()
@@ -218,6 +219,7 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
         with torch.no_grad():
             for x, y in valid_loader:
                 output = model(x)  # Maintain hidden state across time steps
+                output = output[:, -1, :]
                 output = output.squeeze(1)
                 y = y.float()
                 loss = criterion(output, y)
@@ -258,8 +260,6 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
         valid_loss /= len(valid_loader)
         val_avg_norm = np.nanmean(norms)
         val_avg_cosine_similarity = np.nanmean(cosine_similarities)
-
-        valid_loss /= len(valid_loader)
         
                 
         # Testing        
@@ -275,6 +275,7 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
         with torch.no_grad():
             for x, y in test_loader:
                 output = model(x)  # Maintain hidden state across time steps
+                output = output[:, -1, :]
                 output = output.squeeze(1)
                 y = y.float()
                 loss = criterion(output, y)
@@ -341,6 +342,7 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
                 'run_id': run.name,  # For checking Wandb Logs
                 'dataset': dataset,
                 'activation': activation_name,
+                'window_size': window_size,
                 'seed': seed,
                 'normalization': norm,
                 'hidden_size_rnn': hidden_1,
@@ -370,44 +372,86 @@ def train_and_eval(dataset, activations, norm, num_layer, dropout, hidden_1, lr_
                 break
     
     # Save the best moment from this training
-    pd.DataFrame([best_moment_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
+    try:
+        pd.DataFrame([best_moment_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
+
+    except UnboundLocalError:
+        # Fallback row with infinities where needed
+        best_moment_row = {
+            'run_id': run.name,
+            'dataset': dataset,
+            'activation': activation_name,
+            'window_size': window_size,
+            'seed': seed,
+            'normalization': norm,
+            'hidden_size_rnn': hidden_1,
+            'learning_rate': lr_val,
+            'dropout': dropout,
+            'l2_regularization': l2_val,
+            'batch_size': batch_size,
+            'num_layers': num_layer,
+            'model': combo,
+            'trained_epochs': np.inf,
+            'train_loss': np.inf,
+            'valid_loss': np.inf,
+            'test_loss': np.inf,
+        }
+        pd.DataFrame([best_moment_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
     
     return best_moment_row['train_loss'], best_moment_row['valid_loss']
     
 
 def objective(trial):
     # Suggest hyperparameters
+    window_size = trial.suggest_int('window_size', 5, 30)
     dropout = trial.suggest_float('dropout', 0.01, 0.5)
-    hidden_1 = trial.suggest_categorical('hidden_1', [30])  # Since it doesnt matter
+    hidden_1 = trial.suggest_categorical('hidden_1', [32, 64, 128, 256, 512, 1024])  # Since it doesnt matter
     num_layers = trial.suggest_int('num_layers', 2, 4)
-    lr_val = trial.suggest_float('lr_val', 1e-4, 1e-2, log=True)
+    lr_val = trial.suggest_float('lr_val', 1e-6, 1e-1, log=True)
     l2_val = trial.suggest_float('l2_val', 1e-5, 1e-1, log=True)
     batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
     activation = trial.suggest_categorical('activation', [
-        "[Degree]",
-        "[Betweenness]",
-        "[Forman]",
-        "[Closeness]",
-        "[Weight]",
-        # "['Betweenness', 'Closeness']", 
-        # "['Degree', 'Forman', 'Weight']", 
-        # "['Degree', 'Betweenness', 'Closeness']", 
-        # "['Betweenness', 'Forman']", 
-        # "['Closeness', 'Forman']", 
-        # "['Degree', 'Betweenness', 'Closeness', 'Forman']", 
-        # "['Betweenness', 'Closeness', 'Degree', 'Forman', 'Weight']",
+        'Degree',
+        'Degree_Forman_Weight',
+        'Degree_Betweenness_Closeness',
+        'Degree_Forman_Closeness',
+        'Degree_Weight_Closeness',
+        'Degree_Forman',
+        'Degree_Weight',
+        'Degree_Betweenness',
+        'Degree_Closeness',
     ])
     activations = activation_map[activation]
     model = trial.suggest_categorical('combo', [
-        "['LSTM']", 
-        "['GRU']", 
-        "['LSTM', 'GRU']", 
-        "['RNN']"
+        "['LSTM', 'ReLU']",
+        "['GRU', 'ReLU']",
+        "['LSTM', 'GRU', 'ReLU']",
+        "['RNN']",
+        "['GRU']",
+        "['LSTM']",
+        "['RNN', 'FC']",
+        "['LSTM', 'FC']",
+        "['GRU', 'FC']",
+        "['LSTM', 'GRU', 'FC']",
     ])   
+    
+    bad_combos = [
+        "['LSTM', 'ReLU']",
+        "['GRU', 'ReLU']",
+        "['LSTM', 'GRU', 'ReLU']",
+        "['RNN']",
+        "['GRU']",
+        "['LSTM']"
+    ]
+
+    # Using because it already started
+    if model in bad_combos:
+        raise optuna.TrialPruned(f"Skipping combo {model} because it clips outputs")
+    
     model = combo_map[model]
     norm = False
     
-    datasets = ['networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', 'networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd', 'cosine']
+    datasets = ['networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', 'networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd']
     
     results = []
 
@@ -419,6 +463,7 @@ def objective(trial):
         # Call your train_and_eval function for each dataset
         train_loss, val_loss = train_and_eval(
             dataset=dataset,
+            window_size=window_size,
             activations=activations,
             norm=norm,
             num_layer=num_layers,
@@ -432,19 +477,19 @@ def objective(trial):
             seed=42,
             csv_file_path=csv_file_path,
         )
-        loss_score = (train_loss * 0.3 + val_loss * 0.7)  # Play with these numbers a bit, (0.2, 0.8) and (0.4, 0.6)
+        loss_score = (train_loss * 0.4 + val_loss * 0.6)  # Play with these numbers a bit, (0.2, 0.8) and (0.4, 0.6)
         results.append(loss_score)
 
-    # Return the mean AUC across datasets
+    # Return the mean loss across datasets
     return sum(results) / len(results)
     
 
 def main():
     os.environ["WANDB_API_KEY"] = "6a5ccf040a6c90944032e58878e46c19d673cdb0"
-    wandb.init(project="Regression", name="bayesian_testing_regression")
+    wandb.init(project="Regression", name="bayesian_testing_regression_new")
     #optuna.delete_study(study_name="model_selection", storage=STORAGE)
-    study = optuna.create_study(study_name="model_selection", storage=STORAGE, direction="minimize", load_if_exists=True)
-    study.optimize(objective, n_trials=2500)
+    study = optuna.create_study(study_name="model_selection_new", storage=STORAGE, direction="minimize", load_if_exists=True)
+    study.optimize(objective, n_trials=500)
 
     print(f"Best trial: {study.best_trial}")
     

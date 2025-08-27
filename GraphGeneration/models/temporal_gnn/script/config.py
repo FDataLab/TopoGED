@@ -112,50 +112,50 @@ if args.dataset in ['LegisEdgelist']:
 if args.dataset in ['UNtrade']:
     args.testlength = 2
 
-if args.dataset in ['aion']:
+if args.dataset in ['networkaion']:
     args.testlength = 38  # train-test split: 80-20; Total number of snapshots = 190
     args.trainable_feat = 1
 
-if args.dataset in ['dgd']:
+if args.dataset in ['networkdgd']:
     args.testlength = 144  # train-test split: 80-20; Total number of snapshots = 720
     args.trainable_feat = 1
 
-if args.dataset in ['adex']:
+if args.dataset in ['networkadex']:
     args.testlength = 59  # train-test split: 80-20; Total number of snapshots = 293
     args.trainable_feat = 1
 
-if args.dataset in ['aragon']:
+if args.dataset in ['networkaragon']:
     args.testlength = 67  # train-test split: 80-20; Total number of snapshots = 337
     args.trainable_feat = 1
 
-if args.dataset in ['coindash']:
+if args.dataset in ['networkcoindash']:
     args.testlength = 54  # train-test split: 80-20; Total number of snapshots = 268
     args.trainable_feat = 1
 
-if args.dataset in ['iconomi']:
+if args.dataset in ['networkiconomi']:
     args.testlength = 108  # train-test split: 80-20; Total number of snapshots = 542
     args.trainable_feat = 1
 
-if args.dataset in ['aeternity']:
+if args.dataset in ['networkaeternity']:
     args.testlength = 46  # Total number of snapshots = 229
     args.trainable_feat = 1
 
-if args.dataset in ['bancor']:
+if args.dataset in ['networkbancor']:
     args.testlength = 66  # Total number of snapshots = 331
     args.trainable_feat = 1
 
-if args.dataset in ['centra']:
+if args.dataset in ['networkcentra']:
     args.testlength = 52  # Total number of snapshots = 261
     args.trainable_feat = 1
 
-if args.dataset in ['cindicator']:
+if args.dataset in ['networkcindicator']:
     args.testlength = 44  # Total number of snapshots = 221
     args.trainable_feat = 1
 
-# if args.dataset in ['CollegeMsg']:
-#     args.testlength = 35  # Total number of snapshots = 177
-#     args.trainable_feat = 1
+if args.dataset in ['CollegeMsg']:
+    args.testlength = 35  # Total number of snapshots = 177
+    args.trainable_feat = 1
 
-# if args.dataset in ['mathoverflow']:
-#     args.testlength = 37  # Total number of snapshots = 183
-#     args.trainable_feat = 1
+if args.dataset in ['mathoverflow']:
+    args.testlength = 37  # Total number of snapshots = 183
+    args.trainable_feat = 1

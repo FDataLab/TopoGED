@@ -27,24 +27,56 @@ combo_map = {
     "['RNN', 'FC']": ["RNN", "FC"],
     "['LSTM', 'FC']": ["LSTM", "FC"],
     "['GRU', 'FC']": ["GRU", "FC"],
-    "['LSTM', 'GRU', 'FC']": ["LSTM", "GRU", "FC"]
+    "['LSTM', 'GRU', 'FC']": ["LSTM", "GRU", "FC"],
+    "['LSTM', 'ReLU']": ['LSTM', 'ReLU'], 
+    "['GRU', 'ReLU']": ['GRU', 'ReLU'], 
+    "['LSTM', 'GRU', 'ReLU']": ['LSTM', 'GRU', 'ReLU'], 
+    "['GRU']": ['GRU'],
+    "['LSTM']": ['LSTM'],
 }
 
 
 # Utility function specific to probabilities
-def normalize_vector_by_groups(vec):
+def normalize_vector_by_groups(vec, tol=1e-8):
     vec = np.array(vec, dtype=np.float32)
-    vec = np.clip(vec, 0, None)  # Remove negative values
+    vec = np.maximum(vec, 0)
 
     # Normalize indices 0 and 1 for node type
     group1 = vec[0:2]
     sum1 = np.sum(group1)
     vec[0:2] = group1 / sum1
 
-    # Normalize other indices for edge type
+    if not np.isclose(np.sum(vec[0:2]), 1.0, atol=tol):
+        print(f"Warning: Group 1 sum = {np.sum(vec[0:2])}, not 1!")
+
+    # Normalize second group
     group2 = vec[2:6]
     sum2 = np.sum(group2)
     vec[2:6] = group2 / sum2
+
+    if not np.isclose(np.sum(vec[2:6]), 1.0, atol=tol):
+        print(f"Warning: Group 2 sum = {np.sum(vec[2:6])}, not 1!")
+
+    return vec
+
+
+# Need to generate with this now
+def softmax_grouped(vec, tol=1e-8):
+    vec = np.array(vec, dtype=np.float32)
+
+    def softmax(x):
+        e_x = np.exp(x - np.max(x))  # stable softmax
+        return e_x / e_x.sum()
+
+    # Apply softmax to first group (indices 0 and 1)
+    vec[0:2] = softmax(vec[0:2])
+    if not np.isclose(np.sum(vec[0:2]), 1.0, atol=tol):
+        print(f"Warning: Group 1 sum = {np.sum(vec[0:2])}, not 1!")
+
+    # Apply softmax to second group (indices 2-5)
+    vec[2:6] = softmax(vec[2:6])
+    if not np.isclose(np.sum(vec[2:6]), 1.0, atol=tol):
+        print(f"Warning: Group 2 sum = {np.sum(vec[2:6])}, not 1!")
 
     return vec
 
@@ -64,9 +96,9 @@ def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l
     # Set up probabilities
     probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities')  # Activation doesn't matter here
     probabilities = probabilities_df.values.tolist()
-    normalized = np.array([normalize_vector_by_groups(row) for row in probabilities])
-    probabilities = normalized
-    # probabilities = probabilities_df.to_numpy(dtype=np.float32)
+    # normalized = np.array([normalize_vector_by_groups(row) for row in probabilities])
+    # probabilities = normalized
+    probabilities = probabilities_df.to_numpy(dtype=np.float32)
 
     # Probabilities to return
     all_real_embeddings = []
@@ -288,13 +320,14 @@ def train_and_eval(dataset, window_size, num_layer, dropout, hidden_1, lr_val, l
                 print(f'Training ending at epoch number: {epoch + 1}')
                 break
     
+    
     return best_train_loss, best_val_loss, best_pred_embeddings, best_real_embeddings
 
 
 
 def main():
     df = pd.read_csv(TRIALS_HISTORY_PATH)
-    df["bayesian_score"] = 0.4 * df["train_loss"] + 0.6 * df["valid_loss"]
+    df["bayesian_score"] = 0.4 * df["train_loss"] + 0.6 * df["valid_loss"]    
 
     best_trials = df.loc[df.groupby("dataset")["bayesian_score"].idxmin()].reset_index(drop=True)
                 
@@ -328,6 +361,13 @@ def main():
             seed=42,
         )
         
+        best_pred_embeddings_norm = [normalize_vector_by_groups(vec) for vec in pred_embeddings]
+        best_real_embeddings_norm = [normalize_vector_by_groups(vec) for vec in real_embeddings]
+
+        # Convert to numpy arrays if you want
+        best_pred_embeddings_norm = np.array(best_pred_embeddings_norm)
+        best_real_embeddings_norm = np.array(best_real_embeddings_norm)
+        
         loss_score = (train_loss * 0.4 + val_loss * 0.6)  # Play with these numbers a bit, (0.2, 0.8) and (0.4, 0.6)
 
         print(f"The old score was {row['bayesian_score']} and the new one was {loss_score}")
@@ -337,8 +377,42 @@ def main():
         os.makedirs(res_path, exist_ok=True)
 
         # Form dataframes of pred, real, and a train_test split for graph construction
-        pred_df = pd.DataFrame(pred_embeddings)
-        real_df = pd.DataFrame(real_embeddings)
+        cols = ["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"]
+        pred_df_discrete = pd.DataFrame(pred_embeddings, columns=cols)
+        real_df_discrete = pd.DataFrame(real_embeddings, columns=cols)
+        pred_df = pd.DataFrame(best_pred_embeddings_norm, columns=cols)
+        real_df = pd.DataFrame(best_real_embeddings_norm, columns=cols)
+        
+        for col in pred_df_discrete.columns:
+            rmse = np.sqrt(np.mean((pred_df_discrete[col] - real_df_discrete[col])**2))
+             # Normalized RMSE (range-based)
+            nrmse_range = rmse / (real_df_discrete[col].max() - real_df_discrete[col].min())
+            
+            # Normalized RMSE (mean-based)
+            nrmse_mean = rmse / real_df_discrete[col].mean()
+            print(f"Dataset: {dataset} | Column: {col} | NRMSE (mean): {nrmse_mean:.6f}")
+
+            # print(f"Dataset: {dataset} | Column: {col} | RMSE: {rmse:.6f} | NRMSE (range): {nrmse_range:.6f} | NRMSE (mean): {nrmse_mean:.6f}")
+                    
+        real_part_len = int(len(real_df_discrete) * 0.7)
+        pred_part_len = len(real_df_discrete) - real_part_len 
+        real_part = real_df_discrete.iloc[:real_part_len, :].to_numpy()
+        pred_part = pred_df_discrete.iloc[-pred_part_len:, :].to_numpy()
+        hybrid_array = np.vstack([real_part, pred_part])
+        real_pred_df_discrete = pd.DataFrame(hybrid_array)
+        
+        
+        for col in pred_df.columns:
+            rmse = np.sqrt(np.mean((pred_df[col] - real_df[col])**2))
+             # Normalized RMSE (range-based)
+            nrmse_range = rmse / (real_df[col].max() - real_df[col].min())
+            
+            # Normalized RMSE (mean-based)
+            nrmse_mean = rmse / real_df[col].mean()
+            print(f"Dataset: {dataset} | Column: {col} | NRMSE (mean): {nrmse_mean:.6f}")
+
+            # print(f"Dataset: {dataset} | Column: {col} | RMSE: {rmse:.6f} | NRMSE (range): {nrmse_range:.6f} | NRMSE (mean): {nrmse_mean:.6f}")
+                    
         real_part_len = int(len(real_df) * 0.7)
         pred_part_len = len(real_df) - real_part_len 
         real_part = real_df.iloc[:real_part_len, :].to_numpy()
@@ -346,35 +420,69 @@ def main():
         hybrid_array = np.vstack([real_part, pred_part])
         real_pred_df = pd.DataFrame(hybrid_array)
         
-        plot_saving_map = {
-            0: 'node_type_old',
-            1: 'node_type_new',
-            2: 'edge_type_oo',
-            3: 'edge_type_nn',
-            4: 'node_type_on',
-            5: 'node_type_oon'
-        }
-        
         for idx, col in enumerate(pred_df.columns):
             plt.figure(figsize=(5, 5))
             plt.scatter(real_df[col], pred_df[col], alpha=0.6)
             plt.xlabel("Real")
             plt.ylabel("Pred")
-            plt.title(f"plot_type_{plot_saving_map[idx]}")
+            plt.title(f"plot_type_{col}")
             plt.grid(True)
             
             plt.xlim(0, 1)
             plt.ylim(0, 1)
             
             # Save to file
-            file_path = os.path.join(res_path, f"plot_type_{plot_saving_map[idx]}.png")
+            file_path = os.path.join(res_path, f"plot_type_{col}.png")
             plt.savefig(file_path, dpi=300, bbox_inches="tight")
             plt.close()
 
         # Save the embeddings
+        pred_df_discrete.to_csv(os.path.join(res_path, f"{dataset}_pred_probabilities_discrete.csv"), index=False)
+        real_df_discrete.to_csv(os.path.join(res_path, f"{dataset}_real_probabilities_discrete.csv"), index=False) 
+        real_pred_df_discrete.to_csv(os.path.join(res_path, f"{dataset}_train_test_probabilities_discrete.csv"), index=False) 
+        # Save the embeddings
         pred_df.to_csv(os.path.join(res_path, f"{dataset}_pred_probabilities.csv"), index=False)
         real_df.to_csv(os.path.join(res_path, f"{dataset}_real_probabilities.csv"), index=False) 
         real_pred_df.to_csv(os.path.join(res_path, f"{dataset}_train_test_probabilities.csv"), index=False) 
+        
+        def plot_line_comparison(real_df, pred_df, res_path, suffix=""):
+            for col in real_df.columns:
+                plt.figure(figsize=(8, 4))
+                plt.plot(real_df[col].values, label="Real", linewidth=2)
+                plt.plot(pred_df[col].values, label="Pred", linewidth=2)
+                
+                plt.xlabel("Index")
+                plt.ylabel("Probability")
+                plt.title(f"{col} - Real vs Predicted")
+                plt.legend()
+                plt.grid(True)
+                if suffix != "_discrete":
+                    plt.ylim(0, 1)
+
+                # Save plot
+                file_path = os.path.join(res_path, f"{col}{suffix}.png")
+                plt.savefig(file_path, dpi=300, bbox_inches="tight")
+                plt.close()
+
+
+        # --- Add after saving CSVs ---
+        plot_line_comparison(real_df_discrete, pred_df_discrete, res_path, suffix="_discrete")
+        plot_line_comparison(real_df, pred_df, res_path)
+        
+        def print_pred_stats(pred_df, label=""):
+            """
+            Print mean and std deviation for each column in a prediction dataframe.
+            """
+            print(f"\n--- Predicted {label} Statistics ---")
+            for col in pred_df.columns:
+                mean_val = pred_df[col].mean()
+                std_val = pred_df[col].std()
+                print(f"{col}: mean = {mean_val:.6f}, std = {std_val:.6f}")
+
+
+        # --- Add this after creating pred_df_discrete and pred_df ---
+        print_pred_stats(pred_df_discrete, label="Discrete")
+        print_pred_stats(pred_df, label="Normalized")
            
     
 main()
