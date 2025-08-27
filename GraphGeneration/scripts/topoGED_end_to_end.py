@@ -260,6 +260,7 @@ class Runner(object):
             print(epochMessage)
             with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance.txt', "a") as f:
                 f.write(epochMessage + "\n")
+                f.flush()
                 
         # We check and cache if it has the best auc
         if current_model_auc/4 >= self.best_validation_model_auc:
@@ -306,7 +307,7 @@ class Runner(object):
     #         train_preds = []
     #         train_labels = []
             
-    #         for snapshot in range(7, 8):
+    #         for snapshot in range(2, 30):
     #             print("INFO: Training on snapshot", snapshot)
                 
     #             # Prepare current target graph count
@@ -408,13 +409,13 @@ class Runner(object):
     #                     train_labels.extend(y.detach().cpu().numpy())
 
     #                 # Constructing target graph
-    #                 pred_graph, _ = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=snapshot)
-    #                 pred_graph = pred_graph[-1]
-    #                 pred_kernel = run_graphlet_estimate(pred_graph)
-    #                 true_kernel = run_graphlet_estimate(self.training_graphs[snapshot])
-    #                 graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel, device=device).unsqueeze(0), to_tensor(true_kernel, device=device).unsqueeze(0))
-    #                 graphlet_loss.backward()
-    #                 optimizer.step()
+    #                 # pred_graph, _ = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=snapshot)
+    #                 # pred_graph = pred_graph[-1]
+    #                 # pred_kernel = run_graphlet_estimate(pred_graph)
+    #                 # true_kernel = run_graphlet_estimate(self.training_graphs[snapshot])
+    #                 # graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel, device=device).unsqueeze(0), to_tensor(true_kernel, device=device).unsqueeze(0))
+    #                 # graphlet_loss.backward()
+    #                 # optimizer.step()
                     
     #                 # Constructing temp graph
     #                 if flag == self.all_edge_types[-1]:
@@ -438,7 +439,7 @@ class Runner(object):
     #                     train_auc[flag].append(roc_auc_score(train_labels, train_preds))  # Calculate scores
                         
     #         # Validation
-    #         self.run_validation(validation_samples=validation_samples, batch_size=encoder_config["training"]["batch_size"], epoch=epoch)
+    #         # self.run_validation(validation_samples=validation_samples, batch_size=encoder_config["training"]["batch_size"], epoch=epoch)
             
     #         # Record the Training Loss, AUC 
     #         gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
@@ -448,13 +449,20 @@ class Runner(object):
     #                 print(epochMessage)
     #                 with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance_{self.seed}.txt', "a") as f:
     #                     f.write(epochMessage + "\n")
+    #                     f.flush()
             
 
     #     return self.link_prediction_decoder, self.encoder_model
 
+    # Same for the above but run faster with autocast and mixed precision and freeze encoder
     def train_multi_head(self, training_samples, validation_samples):
         lr = encoder_config["training"]["lr"]
-        use_cuda = torch.cuda.is_available()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        use_cuda = (device.type == "cuda")
+
+        # choose workers; start safe at 0 on cluster, bump later to 2–4
+        dl_num_workers = 0
+
         self.link_prediction_decoder.train()
         optimizer = torch.optim.Adam(
             list(self.encoder_model.parameters()) +
@@ -468,9 +476,7 @@ class Runner(object):
             epoch_losses = {k: [] for k in self.all_edge_types}
             epoch_aucs   = {k: [] for k in self.all_edge_types}
 
-            # (A) choose snapshot(s) — you hardcoded 7..8; generalize if needed
-            for snapshot in range(2, self.train_end):
-                # ---- precompute once per snapshot ----
+            for snapshot in range(2, self.train_end // 2):
                 self.current_target_count_old_nodes = self.probabilities[snapshot][0]
                 self.current_target_count_new_nodes = self.probabilities[snapshot][1]
                 self.current_target_count = {
@@ -486,12 +492,11 @@ class Runner(object):
                     "new_nodes": set()
                 }
 
-                # training graphs window
                 window_graphs = self.training_graphs[max(0, snapshot - encoder_config["training"]["day"]): snapshot]
 
-                # OPTIONAL: recompute encoder embeddings ONCE per (snapshot, epoch)
+                # PyTorch <=1.9: no device_type kw
                 with torch.cuda.amp.autocast(enabled=use_cuda):
-                    with torch.no_grad():  # freeze encoder for speed phase
+                    with torch.no_grad():
                         base_embeddings = compute_embedding(
                             embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"],
                             graphs=window_graphs,
@@ -502,7 +507,6 @@ class Runner(object):
                 constructing_graph = nx.DiGraph()
                 constructing_graph.add_nodes_from(node_types["old_nodes"])
 
-                # loop edge-types
                 for flag in self.all_edge_types:
                     X_np = np.array([
                         (x.cpu().numpy() if torch.is_tensor(x) else x)
@@ -513,44 +517,55 @@ class Runner(object):
                         continue
 
                     X_np, y_np = shuffle(X_np, y_np, random_state=self.seed)
-                    X = torch.tensor(X_np, dtype=torch.float32, device=device)
-                    y = torch.tensor(y_np, dtype=torch.float32, device=device).view(-1, 1)
 
-                    loader = DataLoader(
-                        TensorDataset(X, y),
+                    # keep on CPU for DataLoader workers
+                    X = torch.tensor(X_np, dtype=torch.float32)
+                    y = torch.tensor(y_np, dtype=torch.float32).view(-1, 1)
+
+                    # --------- CONDITIONAL DATALOADER ARGS ----------
+                    dl_kwargs = dict(
                         batch_size=encoder_config["training"]["batch_size"],
                         shuffle=True,
-                        num_workers=4, pin_memory=True, persistent_workers=True, prefetch_factor=2
+                        num_workers=dl_num_workers,
+                        pin_memory=use_cuda,
+                        drop_last=True,
                     )
+                    if dl_num_workers > 0:
+                        # only valid when multiprocessing is enabled
+                        dl_kwargs.update(
+                            persistent_workers=False,  # set True later if stable
+                            prefetch_factor=2
+                        )
+                    loader = DataLoader(TensorDataset(X, y), **dl_kwargs)
+                    # ------------------------------------------------
 
-                    # per-flag metrics (don’t mix flags)
                     flag_logits = []
                     flag_targets = []
 
                     for xb, yb in loader:
                         optimizer.zero_grad(set_to_none=True)
 
-                        # build per-batch embeddings from cached + zero for new nodes
+                        # move to GPU here (main process)
+                        xb = xb.to(device, non_blocking=True)
+                        yb = yb.to(device, non_blocking=True)
+
                         src_nodes = xb[:, 0].long().tolist()
                         dst_nodes = xb[:, 1].long().tolist()
 
-                        # add unseen nodes once
                         for n in src_nodes + dst_nodes:
-                            if n not in base_embeddings:
-                                node_types["new_nodes"].add(int(n))
-                                base_embeddings[int(n)] = torch.zeros(self.input_dim, device=device)
+                            n_int = int(n)
+                            if n_int not in base_embeddings:
+                                node_types["new_nodes"].add(n_int)
+                                base_embeddings[n_int] = torch.zeros(self.input_dim, device=device)
 
                         src_embed = torch.stack([base_embeddings[int(n)] for n in src_nodes])
                         dst_embed = torch.stack([base_embeddings[int(n)] for n in dst_nodes])
 
-                        with torch.cuda.amp.autocast(enabled=device):
+                        with torch.cuda.amp.autocast(enabled=use_cuda):
                             logits = self.link_prediction_decoder(
                                 src_embed=src_embed, dst_embed=dst_embed, edge_type=flag
-                            )
-                            logits = logits.view(-1, 1)
+                            ).view(-1, 1)
                             bce = loss_fn(logits, yb)
-
-                            # no per-batch graphlet term (compute rarely below if you keep it)
                             loss = bce
 
                         scaler.scale(loss).backward()
@@ -559,20 +574,18 @@ class Runner(object):
 
                         flag_logits.append(logits.detach().cpu())
                         flag_targets.append(yb.detach().cpu())
-
                         epoch_losses[flag].append(loss.item())
-
-                    # per-flag AUC
-                    L = torch.cat(flag_logits, dim=0).sigmoid().numpy()
-                    T = torch.cat(flag_targets, dim=0).numpy()
-                    if len(np.unique(T)) > 1:
-                        epoch_aucs[flag].append(roc_auc_score(T, L))
-                    else:
+                    if len(flag_logits) == 0:
+                        # No batches produced (tiny dataset). Avoid cat() on empty list.
                         epoch_aucs[flag].append(0.0)
+                        if not epoch_losses[flag]:
+                            epoch_losses[flag].append(0.0)   # keep logging sane
+                    else:
+                        L = torch.cat(flag_logits, dim=0).sigmoid().numpy()
+                        T = torch.cat(flag_targets, dim=0).numpy()
+                        epoch_aucs[flag].append(roc_auc_score(T, L) if len(np.unique(T)) > 1 else 0.0)
 
-                    # after batches: update constructing_graph once per flag
-                    # recompute features only if needed
-                    curr_embeds = base_embeddings  # if encoder frozen; otherwise refresh here
+                    curr_embeds = base_embeddings
                     constructing_graph = get_node_features(
                         constructing_graph.copy(), self.training_graphs[:snapshot],
                         self.thresholds, self.graph_descriptions[snapshot],
@@ -588,23 +601,18 @@ class Runner(object):
                     constructing_graph.add_edges_from(list(sampled_edges))
                     update_degrees(constructing_graph)
 
-                # OPTIONAL: sparse graphlet term once per snapshot (not backprop)
-                # if you keep it as a tracking metric:
-                # pred_graph, _ = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=snapshot)
-                # pred_kernel = run_graphlet_estimate(pred_graph[-1])
-                # true_kernel = run_graphlet_estimate(self.training_graphs[snapshot])
-                # log it, but don’t add to loss
-
-            # validation (wrap in no_grad + autocast)
-            # self.run_validation(validation_samples, batch_size=encoder_config["training"]["batch_size"], epoch=epoch)
-
-            # logging
-            gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1e6 if torch.cuda.is_available() else 0
+            gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1e6 if use_cuda else 0
             for flag in self.all_edge_types:
-                msg = f"Epoch: {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(epoch_losses[flag]):.4f} | Train AUCROC: {np.mean(epoch_aucs[flag]):.4f} | GPU: {gpu_mem_alloc:.1f}MiB"
-                print(msg)
+                msg = (
+                    f"Epoch: {epoch+1:02d} | Edge Type: {flag} | "
+                    f"Train Loss: {np.mean(epoch_losses[flag]):.4f} | "
+                    f"Train AUCROC: {np.mean(epoch_aucs[flag]):.4f} | "
+                    f"GPU: {gpu_mem_alloc:.1f}MiB"
+                )
+                print(msg, flush=True)
                 with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance_{self.seed}.txt', "a") as f:
                     f.write(msg + "\n")
+                    f.flush()
 
         return self.link_prediction_decoder, self.encoder_model
 
@@ -765,6 +773,7 @@ class Runner(object):
 
         with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\kl_results_on.txt', "a") as f:
             f.write(f"{self.current_target_snapshot + 1}, {on_kl_divergence_results:.6f}\n")
+            f.flush()
             
         # Evaluate the graph of n-n 
         pred_nn_graph = create_nn_graph(node_types["new_nodes"], pred_graph.copy())
@@ -774,6 +783,7 @@ class Runner(object):
 
         with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\kl_results_nn.txt', "a") as f:
             f.write(f"{self.current_target_snapshot + 1}, {nn_kl_divergence_results:.6f}\n")
+            f.flush()
             
         # Evaluate the graph of old nodes
         oldG = pred_graph.subgraph(self.current_target_old_nodes).copy()
