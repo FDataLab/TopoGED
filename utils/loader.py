@@ -87,7 +87,7 @@ class Loader():
         return all_data
 
 
-    def load_data(self, dataset, activation, type='features', include_weights=True):
+    def load_data(self, dataset, activation, type='features', include_weights=True, num_back='all'):
         """
         Load a single, specified dataset that exists
         
@@ -98,7 +98,7 @@ class Loader():
             graphs (list): A list of networkx graphs to process
             labels (list): The associated labels for each graph
         """
-        # self.to_cached()
+        self.to_cached()
         if type == 'subgraphs':
             seek_file = dataset + '_' + activation + '_subgraphs.pkl'
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
@@ -114,7 +114,7 @@ class Loader():
             seek_file = dataset + '_' + 'probabilities'
             dataset_folder = os.path.join(self.output_dir, dataset)
             dataset_folder = os.path.join(dataset_folder, 'probabilities')
-            df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities.csv')
+            df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities_{num_back}_back.csv')
             df = df.drop(columns=["Unnamed: 0"], errors="ignore")
             return df  # We just return the dataframe directly
         else:
@@ -197,12 +197,20 @@ class Loader():
         data = []
         edgelist_rawfile = self.edgelist_dir + '/{}.txt'.format(dataset)
         edgelist_df = pd.read_csv(edgelist_rawfile)
-        uniq_ts_list = np.unique(edgelist_df['Snapshot'])
+        edgelist_df = edgelist_df.drop_duplicates(subset=["from", "to", "date", "value"])
+        
+        if "Snapshot" in edgelist_df.columns:
+            edgelist_df = edgelist_df.drop(columns=["Snapshot"])
+        
+        edgelist_df.to_csv(edgelist_rawfile, index=False)
+        
+        uniq_ts_list = np.unique(edgelist_df['date'])
 
         # Loop over snapshot ids
         for ts in uniq_ts_list:
             # NOTE: this code does not use any node or edge features
-            ts_edges = edgelist_df.loc[edgelist_df['Snapshot'] == ts, ['from', 'to']]
+            ts_edges = edgelist_df.loc[edgelist_df['date'] == ts, ['from', 'to']]
+            ts_edges = ts_edges.drop_duplicates()
             ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to')
             data.append(ts_G)
         
@@ -223,20 +231,25 @@ class Loader():
         data = []
         edgelist_rawfile = self.edgelist_dir + '/{}.txt'.format(dataset)
         edgelist_df = pd.read_csv(edgelist_rawfile)
+        edgelist_df = edgelist_df.drop_duplicates(subset=["from", "to", "date", "value"])
+        
+        if "Snapshot" in edgelist_df.columns:
+            edgelist_df = edgelist_df.drop(columns=["Snapshot"])
+        
+        edgelist_df.to_csv(edgelist_rawfile, index=False)
+        
+        uniq_ts_list = np.unique(edgelist_df['date'])
         
         if norm:
             edgelist_df = self.normalize_edge_weights(edgelist_df)
         
         # Filter out edges where 'value' is greater than 10^20 (this is a hacking attempt in blockchain)
         # edgelist_df = edgelist_df[edgelist_df['value'] <= 10**20]
-
-        
                 
-        uniq_ts_list = np.unique(edgelist_df['Snapshot'])
-
         # Loop over snapshot ids
         for ts in uniq_ts_list:
-            ts_edges = edgelist_df.loc[edgelist_df['Snapshot'] == ts, ['from', 'to', 'value']]
+            ts_edges = edgelist_df.loc[edgelist_df['date'] == ts, ['from', 'to', 'value']]
+            ts_edges = ts_edges.drop_duplicates()
             ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to', edge_attr=True, create_using=nx.DiGraph())
             
             # Reddit requires special processing (apply sigmoid)
@@ -329,10 +342,15 @@ class Loader():
                     missing_cached.append(dataset)
                     break  # Skip to the next dataset if any activation file is missing
                 
-            # Check the probabilities (we just do all_back)
-            probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities.csv')
+            # Check the probabilities
+            probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_all_back.csv')
             if not os.path.exists(probabilities_file):
                 missing_cached.append(dataset)
+                
+            for num_back in [5, 7]:
+                probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_{num_back}_back.csv')
+                if not os.path.exists(probabilities_file):
+                    missing_cached.append(dataset)
         
                 
         # If we are missing files, generate them
@@ -412,10 +430,18 @@ class Loader():
                             pickle.dump(thresholds, f)
                             
                 # Add on the probabiliites
+                for num_back in [5, 7]:
+                    probs = my_probs_generator.gen_probs(num_graphs_back = num_back, graphs=graphs, from_start=False)
+                    data_dir = self.output_dir + '/' + file + '/probabilities'
+                    os.makedirs(data_dir, exist_ok=True)
+                    probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back.csv')
+                    df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                    df.to_csv(probabilities_file_path)
+                
                 probs = my_probs_generator.gen_probs(num_graphs_back = 1, graphs=graphs, from_start=True)
                 data_dir = self.output_dir + '/' + file + '/probabilities'
                 os.makedirs(data_dir, exist_ok=True)
-                probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities.csv')
+                probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_all_back.csv')
                 df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
                 df.to_csv(probabilities_file_path)
                 print(f'Sending probabilities to {probabilities_file_path}')
