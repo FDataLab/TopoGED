@@ -21,7 +21,7 @@ from utils.utils import Utils
 
 
 RESULTS_PATH = 'data/input/cached/'
-TRIALS_HISTORY_PATH = 'data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression_new.csv'
+TRIALS_HISTORY_PATH = 'data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression_updated_datasets.csv'
 
 
 # Activation name map
@@ -114,7 +114,7 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
                                         
     # Initialize wandb
     run = wandb.init(
-        project="bayesian_testing_regression_new", 
+        project="bayesian_testing_regression_updated_datasets", 
         name = run_name, 
         config={
         'dataset': dataset,
@@ -381,6 +381,9 @@ def main():
     # Keep only trials with good combos
     df = df[df['combo'].isin(good_combos)]
     
+    df["train_loss"] = df["train_loss"].replace([np.inf, -np.inf], np.finfo(np.float32).max)
+    df["valid_loss"] = df["valid_loss"].replace([np.inf, -np.inf], np.finfo(np.float32).max)
+    
     # Compute a score (weighted combination)
     df["bayesian_score"] = 0.4 * df["train_loss"] + 0.6 * df["valid_loss"]
     
@@ -410,7 +413,7 @@ def main():
         print(f"\n🔧 Best Trial for Dataset: {row['run_id']}\n{'-'*40}")
 
         # Extract parameters
-        window_size = int(row['window_size'])
+        window_size = int(row['seed']) if int(row['window_size']) == 42 else int(row['window_size'])
         dropout = float(row['dropout'])
         hidden_1 = int(row['hidden_size_rnn'])  
         num_layers = int(row['num_layers'])

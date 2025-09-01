@@ -293,6 +293,8 @@ class Loader():
         # Betweenness takes too long to process and are deemed not feasible 
         activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
         activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
+        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedIncrementalCloseness]  # All activation functions to use
+        activation_names = ['Degree', 'Forman', 'Weight', 'Closeness']
 
         # If you want to use Betweenness, just run it here
         # activations = [EmbedBetweenness] 
@@ -365,7 +367,10 @@ class Loader():
                     
                 graphs = self.read_edges_directed(file, norm=norm)
                 
+                print(f'There are {len(graphs)} graphs in this dataset')
+                
                 labels = self.gen_labels(graphs)
+                print(f'There are {len(labels)} labels')
                 data = list(zip(graphs, labels))
 
                 data_dir = self.output_dir + '/' + file
@@ -391,6 +396,7 @@ class Loader():
                             
                         end_time = time.time()
                         
+                        print(f'There were {len(embeddings)} embeddings generated')
                         print(f'Activation {activation_name} on dataset {file} took time {end_time - start_time}')
                             
                         self.verify_embeddings(embeddings, activation, file, norm=norm, include_weights=weight_flag)    
@@ -431,6 +437,7 @@ class Loader():
                 # Add on the probabiliites
                 for num_back in [5, 7]:
                     probs = my_probs_generator.gen_probs(num_graphs_back = num_back, graphs=graphs, from_start=False)
+                    print(f'There were {len(probs)} probabilities generated')
                     data_dir = self.output_dir + '/' + file + '/probabilities'
                     os.makedirs(data_dir, exist_ok=True)
                     probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back.csv')

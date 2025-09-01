@@ -320,8 +320,8 @@ def train_and_eval(dataset, prob_type, prob_type_idx, window_size, num_layer, dr
             best_moment_row = {
                 'run_id': run.name,  # For checking Wandb Logs
                 'dataset': dataset,
-                'window_size': window_size,
                 'seed': seed,
+                'window_size': window_size,
                 'hidden_size_rnn': hidden_1,
                 'learning_rate': lr_val,
                 'dropout': dropout,
@@ -370,7 +370,7 @@ def main():
     for prob_type in prob_types.keys():
         print(f'Working on: {prob_type}')
         try:
-            df = pd.read_csv(path + prob_type + '.csv')
+            df = pd.read_csv(path + prob_type + '_new.csv')
         except FileNotFoundError:
             print(f'Error: Type {prob_type} does not exist yet for analysis')
             continue 
@@ -405,7 +405,7 @@ def main():
             print(f"\n🔧 Best Trial for Dataset: {row['run_id']}\n{'-'*40}")
 
             # Extract parameters
-            window_size = int(row['window_size'])
+            window_size = int(row['seed']) if int(row['window_size']) == 42 else int(row['window_size'])
             dropout = float(row['dropout'])
             hidden_1 = int(row['hidden_size_rnn'])  
             num_layers = int(row['num_layers'])

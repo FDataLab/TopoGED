@@ -28,11 +28,13 @@ from utils.embedding_methods.weight import EmbedWeight
 import wandb
 
 # Constants
-csv_file_path = os.path.abspath('data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression_new.csv')
+csv_file_path = os.path.abspath('data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression_updated_datasets.csv')
 model_dir = os.path.abspath('data/output/cached_model/RegressionTesting/EmbeddingTesting')
-STORAGE = "sqlite:///./output/cached_model/RegressionTesting/bayesianSave/model_selection_regression_new.db"  # Where we save the study
-os.makedirs(os.path.dirname('output/cached_model/RegressionTesting/bayesianSave/model_selection_regression_new.db'), exist_ok=True)
+STORAGE = "sqlite:///./output/cached_model/RegressionTesting/bayesianSave/model_selection_regression_updated_datasets.db"  # Where we save the study
+os.makedirs(os.path.dirname('output/cached_model/RegressionTesting/bayesianSave/model_selection_regression_updated_datasets.db'), exist_ok=True)
 seed = 42  # Can change
+FLOAT_MAX = np.finfo(np.float32).max
+
 
 # Write the header if the file doesn't already exist
 if not os.path.isfile(csv_file_path):
@@ -67,6 +69,8 @@ combo_map = {
     "['LSTM', 'FC']": ['LSTM', 'FC'],
     "['GRU', 'FC']": ['GRU', 'FC'],
     "['LSTM', 'GRU', 'FC']": ['LSTM', 'GRU', 'FC'],
+    "['LSTM', 'FC', 'FC']": ['LSTM', 'FC', 'FC'],
+    "['GRU', 'FC', 'FC']": ['GRU', 'FC', 'FC'],
 }
 
 def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, hidden_1, lr_val, l2_val, batch_size, combo, counter, seed, csv_file_path):
@@ -125,11 +129,12 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
                                         
     # Initialize wandb
     run = wandb.init(
-        project="bayesian_testing_regression_new", 
+        project="bayesian_testing_regression_updated_datasets", 
         name = run_name, 
         config={
         'dataset': dataset,
         'activation': activation_name,
+        'seed': seed,
         'window_size': window_size,
         'num_layers': num_layer,
         'dropout': dropout,
@@ -138,7 +143,7 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
         'learning_rate': lr_val,
         'seed': seed,
         'normalization': norm,
-        'model': combo
+        'combo': combo
         },
         reinit=True)
             
@@ -342,8 +347,8 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
                 'run_id': run.name,  # For checking Wandb Logs
                 'dataset': dataset,
                 'activation': activation_name,
-                'window_size': window_size,
                 'seed': seed,
+                'window_size': window_size,
                 'normalization': norm,
                 'hidden_size_rnn': hidden_1,
                 'learning_rate': lr_val,
@@ -351,11 +356,17 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
                 'l2_regularization': l2_val,
                 'batch_size': batch_size,
                 'num_layers': num_layer,
-                'model': combo,
+                'combo': combo,
                 'trained_epochs': epoch + 1,
                 'train_loss': train_loss,
                 'valid_loss': valid_loss,
                 'test_loss': test_loss,
+                'train_avg_norm': train_avg_norm,
+                'val_avg_norm': val_avg_norm, 
+                'test_avg_norm': test_avg_norm, 
+                'train_avg_cosine_similarity': train_avg_cosine_similarity,
+                'val_avg_cosine_similarity': val_avg_cosine_similarity, 
+                'test_avg_cosine_similarity': test_avg_cosine_similarity 
             }
                     
                             
@@ -381,8 +392,8 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
             'run_id': run.name,
             'dataset': dataset,
             'activation': activation_name,
-            'window_size': window_size,
             'seed': seed,
+            'window_size': window_size,
             'normalization': norm,
             'hidden_size_rnn': hidden_1,
             'learning_rate': lr_val,
@@ -390,11 +401,17 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
             'l2_regularization': l2_val,
             'batch_size': batch_size,
             'num_layers': num_layer,
-            'model': combo,
+            'combo': combo,
             'trained_epochs': np.inf,
             'train_loss': np.inf,
             'valid_loss': np.inf,
             'test_loss': np.inf,
+            'train_avg_norm': np.inf,
+            'val_avg_norm': np.inf, 
+            'test_avg_norm': np.inf, 
+            'train_avg_cosine_similarity': np.inf,
+            'val_avg_cosine_similarity': np.inf, 
+            'test_avg_cosine_similarity': np.inf 
         }
         pd.DataFrame([best_moment_row]).to_csv(csv_file_path, mode='a', header=False, index=False)
     
@@ -423,33 +440,18 @@ def objective(trial):
     ])
     activations = activation_map[activation]
     model = trial.suggest_categorical('combo', [
-        "['LSTM', 'ReLU']",
-        "['GRU', 'ReLU']",
-        "['LSTM', 'GRU', 'ReLU']",
-        "['RNN']",
-        "['GRU']",
-        "['LSTM']",
         "['RNN', 'FC']",
         "['LSTM', 'FC']",
         "['GRU', 'FC']",
         "['LSTM', 'GRU', 'FC']",
+        "['LSTM', 'FC', 'FC']",
+        "['GRU', 'FC', 'FC']",
     ])   
-    
-    bad_combos = [
-        "['LSTM', 'ReLU']",
-        "['GRU', 'ReLU']",
-        "['LSTM', 'GRU', 'ReLU']",
-        "['RNN']",
-        "['GRU']",
-        "['LSTM']"
-    ]
-
-    # Using because it already started
-    if model in bad_combos:
-        raise optuna.TrialPruned(f"Skipping combo {model} because it clips outputs")
     
     model = combo_map[model]
     norm = False
+    if 'Betweenness' in activations:
+        raise optuna.TrialPruned('Not made right now')
     
     datasets = ['networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', 'networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd']
     
@@ -477,6 +479,10 @@ def objective(trial):
             seed=42,
             csv_file_path=csv_file_path,
         )
+        if np.isinf(train_loss) or np.isnan(train_loss):
+            train_loss = FLOAT_MAX
+        if np.isinf(val_loss) or np.isnan(val_loss):
+            val_loss = FLOAT_MAX
         loss_score = (train_loss * 0.4 + val_loss * 0.6)  # Play with these numbers a bit, (0.2, 0.8) and (0.4, 0.6)
         results.append(loss_score)
 
@@ -486,9 +492,9 @@ def objective(trial):
 
 def main():
     os.environ["WANDB_API_KEY"] = "6a5ccf040a6c90944032e58878e46c19d673cdb0"
-    wandb.init(project="Regression", name="bayesian_testing_regression_new")
-    #optuna.delete_study(study_name="model_selection", storage=STORAGE)
-    study = optuna.create_study(study_name="model_selection_new", storage=STORAGE, direction="minimize", load_if_exists=True)
+    wandb.init(project="Regression", name="bayesian_testing_regression_updated_datasets")
+    #optuna.delete_study(study_name="model_selection_updated_datasets", storage=STORAGE)
+    study = optuna.create_study(study_name="model_selection_updated_datasets", storage=STORAGE, direction="minimize", load_if_exists=True)
     study.optimize(objective, n_trials=500)
 
     print(f"Best trial: {study.best_trial}")
