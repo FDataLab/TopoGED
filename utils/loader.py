@@ -293,8 +293,7 @@ class Loader():
         # Betweenness takes too long to process and are deemed not feasible 
         activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
         activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
-        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedIncrementalCloseness]  # All activation functions to use
-        activation_names = ['Degree', 'Forman', 'Weight', 'Closeness']
+
         # If you want to use Betweenness, just run it here
         # activations = [EmbedBetweenness] 
         # activation_names = ['Betweenness']
@@ -385,7 +384,7 @@ class Loader():
                         start_time = time.time()
             
                         # Since Forman Ricci requires directed edges
-                        if activation==EmbedForman:
+                        if isinstance(activation, EmbedForman):
                             embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
                         else:
                             embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs)

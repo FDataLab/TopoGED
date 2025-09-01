@@ -167,18 +167,16 @@ def build_edgebanks_from_start(graphs, days=5):
         edgebanks (list(dict)): A list of dictionary edgebanks that store all edges from the previous graphs in each index
     """
     edgebanks = [{}]  # Initialize an empty list for edgebanks
-
+    all_old_nodes = set(graphs[0][-1].nodes())  # To keep track of all old nodes across graphs
     # Loop over all graphs (starting from the second graph)
     for i in range(1, len(graphs)):
         curr_edgebank = {}
 
         # Add edges from all previous graphs (not the current graph)
-        for j in range(max(i - days, 0), i):  # Loop through all previous graphs (graphs 0 to i-1)
+        for j in range(max(i - days, 0), i):  # Loop through all previous graphs (graphs i - days to i-1)
+            
             for u, v in graphs[j][-1].edges():  # Accessing the graph directly
-                u_key = u
-                v_key = v
-                curr_edgebank.setdefault(u_key, []).append(v_key)  # Add edge from u to v
-
-        edgebanks.append(curr_edgebank)  # Append the current edgebank to the list
+                curr_edgebank.setdefault(u, []).append(v)  # Add edge from u to v
+        edgebanks.append(curr_edgebank)
 
     return edgebanks

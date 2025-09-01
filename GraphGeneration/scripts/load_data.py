@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from utils.loader import Loader
 
 
-def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle, embeddingType):
+def load_data(dataset, embedding, mlpEncoding, embeddingType):
     my_loader = Loader()
     output_dir = os.path.abspath(f'data/input/cached/{dataset}')
     
@@ -19,14 +19,14 @@ def load_data(dataset, strategy, embedding, mlpEncoding, embedOld, trainingStyle
     cached_data_dataset_folder = os.path.join(output_dir, 'saved_data/')
 
     # Construct output evaluation csv
-    structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_pred.csv'
-    structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_true.csv'
-    structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/structure_diff.csv'
-    kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/kernel_pred.csv'
-    kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/kernel_true.csv'
-    edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/edge_analysis.csv'
-    topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/toper_diff.csv'
-    animation_path = f'GraphGeneration/output/results/animations/{dataset}/model_gen_retrain_{strategy}_embedding{embedding}_mlpEncoding{mlpEncoding}_embedOld{embedOld}_trainingStyle{trainingStyle}_embeddingType{embeddingType}/pred_vs_true.mp4'
+    structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_pred.csv'
+    structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_true.csv'
+    structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_diff.csv'
+    kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_pred.csv'
+    kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_true.csv'
+    edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/edge_analysis.csv'
+    topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/toper_diff.csv'
+    animation_path = f'GraphGeneration/output/results/animations/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/pred_vs_true.mp4'
 
     # Create file paths if needed
     for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 
@@ -138,11 +138,12 @@ def generate_training_data(training_graphs, all_edgebanks):
         'o-n': {'X': [], 'y': []},
         'n-n': {'X': [], 'y': []},
         }  # A dict to sort embeddings for multiheaded MLP training
-    
-    old_nodes = set()
+    all_old_nodes = set()  # To keep track of all old nodes across graphs
     
     # Generate embedding inputs and labels
-    for i, graph in enumerate(training_graphs):    
+    for i, graph in enumerate(training_graphs): 
+        # Old nodes of 5 days before 
+        old_nodes_days = set().union(*[g.nodes() for g in training_graphs[max(i - 5, 0): i]]) 
         new_edges_count = {
             'o-o-bank': 0,
             'o-o-nobank': 0,
@@ -160,21 +161,22 @@ def generate_training_data(training_graphs, all_edgebanks):
                 edge_type = 'any'  # Default/fallback type
 
                 # Determine edge type based on node categories and edgebank
-                if u in old_nodes and v in old_nodes:
+                if u in all_old_nodes and v in all_old_nodes:
+                    
                     if v in all_edgebanks[i].get(u, []):
                         edge_type = 'o-o-bank'
                         new_edges_count[edge_type] += 1
-                    else:
+                    elif v in old_nodes_days and u in old_nodes_days:
                         edge_type = 'o-o-nobank'
                         new_edges_count[edge_type] += 1
-                elif (u in old_nodes and v not in old_nodes):
+                elif (u in all_old_nodes and v not in all_old_nodes):
                     edge_type = 'o-n'
                     new_edges_count[edge_type] += 1
-                elif (u not in old_nodes and v in old_nodes):
+                elif (u not in all_old_nodes and v in all_old_nodes):
                     edge_type = 'o-n'
                     new_edges_count[edge_type] += 1
                     u, v = v, u
-                elif u not in old_nodes and v not in old_nodes:
+                elif u not in all_old_nodes and v not in all_old_nodes:
                     edge_type = 'n-n'
                     new_edges_count[edge_type] += 1
 
@@ -187,10 +189,10 @@ def generate_training_data(training_graphs, all_edgebanks):
                 print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
             
         # Generate an equal amount of negative labels for each type of edge
-        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i], old_nodes=old_nodes)
-        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i], old_nodes=old_nodes)
-        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks[i], old_nodes=old_nodes)
-        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks[i], old_nodes=old_nodes)
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks[i], old_nodes=old_nodes_days)
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
@@ -206,9 +208,9 @@ def generate_training_data(training_graphs, all_edgebanks):
         sorted_samples['o-n']['y'][i].extend([0 for _ in range(len(negative_edges_on))])
         sorted_samples['n-n']['X'][i].extend(tmp_samples_nn)
         sorted_samples['n-n']['y'][i].extend([0 for _ in range(len(negative_edges_nn))])
-        
-        old_nodes.update(graph.nodes())  # Add the old nodes
-    
+
+        # Update the old nodes set
+        all_old_nodes.update(graph.nodes())  # Add the old nodes
     print(len(sorted_samples['o-o-bank']['X']))
     print(len(sorted_samples['o-o-bank']['X'][0]))
     
@@ -282,10 +284,14 @@ def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks,
                 print(f"[FATAL] Unexpected failure at outer loop for edge ({u}, {v}): {type(e).__name__} - {e}")
             
         # Generate an equal amount of negative labels for each type of edge
-        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', edgebank=all_edgebanks, old_nodes=old_training_nodes)
-        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', edgebank=all_edgebanks, old_nodes=old_training_nodes)
-        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', edgebank=all_edgebanks, old_nodes=old_training_nodes)
-        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_oo = generate_negative_edges(graph, new_edges_count['o-o-bank'], edge_type='o-o-bank', 
+                                                    edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_oon = generate_negative_edges(graph, new_edges_count['o-o-nobank'], edge_type='o-o-nobank', 
+                                                     edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_on = generate_negative_edges(graph, new_edges_count['o-n'], edge_type='o-n', 
+                                                    edgebank=all_edgebanks, old_nodes=old_training_nodes)
+        negative_edges_nn = generate_negative_edges(graph, new_edges_count['n-n'], edge_type='n-n', 
+                                                    edgebank=all_edgebanks, old_nodes=old_training_nodes)
 
         tmp_samples_oo = [torch.tensor([u, v]) for u, v in negative_edges_oo]
         tmp_samples_oon = [torch.tensor([u, v]) for u, v in negative_edges_oon]
@@ -301,7 +307,9 @@ def generate_validation_data(training_graphs, old_training_nodes, all_edgebanks,
         sorted_samples['o-n']['y'][i].extend([0 for _ in range(len(negative_edges_on))])
         sorted_samples['n-n']['X'][i].extend(tmp_samples_nn)
         sorted_samples['n-n']['y'][i].extend([0 for _ in range(len(negative_edges_nn))])
-    
+
+        old_training_nodes.update(graph.nodes())  # Add the old nodes
+        
     return sorted_samples, new_edges_count
 
 def generate_validation_data_cached(training_graphs, old_training_nodes, all_edgebanks, MAX_SAMPLES, dataset, seed, type_data, saved_data_file_path):
