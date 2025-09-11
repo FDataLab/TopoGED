@@ -1,7 +1,7 @@
 encoder_model:
   name: topoGED
   node2vec_setup:
-    node2vec_dimensions: 64 # We add features onto the end since Node2Vec doesn't embed features
+    node2vec_dimensions: 32 # We add features onto the end since Node2Vec doesn't embed features
     node2vec_walk_length: 50 # Number of nodes visited per walk (Higher is more global, smaller is local)
     node2vec_num_walks: 10 # Number of walks to start per node (Higher is more detailed and stable)
     node2vec_p: 1.0 # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
@@ -10,7 +10,7 @@ encoder_model:
     node2vec_min_count: 1 # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
     node2vec_batch_words: 4 # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
     node2vec_workers: 1 # Number of workers (threads)
-  hidden_dim: 64
+  hidden_dim: 32
   nodeEmbeddingType: "LSTM"
   addOnFeature: "Position"
 
@@ -20,7 +20,7 @@ decoder_model:
 training:
   batch_size: 32 # play around
   lr: 0.001
-  epochs: 200
+  epochs: 2
   day: 5
 
 dataset: networkaion

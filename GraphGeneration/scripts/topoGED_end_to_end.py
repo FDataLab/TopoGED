@@ -17,7 +17,6 @@ from GraphGeneration.utils.Evaluator import Evaluator
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached
 from GraphGeneration.utils.casting_type import to_tensor
 from GraphGeneration.utils.sampling_edges_utils import predict_edges
-from GraphGeneration.utils.casting_type import to_tensor
 from GraphGeneration.utils.graph_construction_utils import compute_reappearance_probabilities, get_node_features, update_degrees
 from create_sub_graphs import create_nn_graph, create_on_graph
 
@@ -25,7 +24,7 @@ from create_sub_graphs import create_nn_graph, create_on_graph
 from GraphGeneration.models.model import setupMLP, load_encoder_model
 
 # Import all node embedding methods
-from compute_embedding import compute_embedding
+from compute_embedding import compute_embedding, load_cached_node2vec_embeddings_from_disk
 from process_data import modifyGraphIds, build_edgebanks_from_start
 from torch.utils.data import DataLoader
 
@@ -61,7 +60,7 @@ class Runner(object):
         
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
-        self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data')
+        self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}')
         common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}'
         self.structure_dir = f'GraphGeneration/output/results/structure/{encoder_config["dataset"]}/{common_suffix}'
         self.kernel_dir = f'GraphGeneration/output/results/kernel/{encoder_config["dataset"]}/{common_suffix}'
@@ -86,6 +85,7 @@ class Runner(object):
             self.input_dim += 1
         
         self.link_prediction_decoder = setupMLP(embedding_dim=self.input_dim*2, mlpEncoding=encoder_config["decoder_model"]["encode_links"])
+        # self.link_prediction_decoder =  MLP(in_channels=self.input_dim) 
         self.link_prediction_decoder.to(device)
         
         # Load all the snapshot true data 
@@ -112,7 +112,12 @@ class Runner(object):
         self.training_graphs = [self.target_graphs[i][-1] for i in range(self.train_end)]
         self.validation_graphs = [self.target_graphs[i][-1] for i in range(self.train_end, self.val_end)]
         self.test_graphs = [self.target_graphs[i][-1] for i in range(self.val_end, self.num_snapshots)]
-
+        
+        # Cached the node2vec embeddings of each snapshot
+        cache_file_path = os.path.join(self.saved_input, rf"saved_data/node2vec_embeddings_{self.seed}.pkl")
+        self.cached_node2vec_embeddings = load_cached_node2vec_embeddings_from_disk(cache_file_path, 
+                                                                           self.target_graphs, device)
+        
     # ======================= HELPER FUNCTIONS =======================
     def sample_old_nodes(self, prev_graphs, current_target_snapshot):
         random.seed(self.seed)
@@ -123,7 +128,7 @@ class Runner(object):
         node_ids = list(probs.keys())
         weights = list(probs.values())
 
-        sampled_old_nodes = list(np.random.choice(node_ids, size=self.current_target_count_old_nodes, replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
+        sampled_old_nodes = list(np.random.choice(node_ids, size=min(len(node_ids), self.current_target_count_old_nodes), replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
         
         return set(sampled_old_nodes)
     
@@ -483,6 +488,8 @@ class Runner(object):
                     edge_type: self.probabilities[snapshot][j + 2]
                     for j, edge_type in enumerate(self.all_edge_types)
                 }
+                
+                current_cached_node2vec = [self.cached_node2vec_embeddings[i] for i in range(max(snapshot - encoder_config["training"]["day"], 0), snapshot)]
 
                 node_types = {
                     "old_nodes": self.sample_old_nodes(
@@ -495,14 +502,6 @@ class Runner(object):
                 window_graphs = self.training_graphs[max(0, snapshot - encoder_config["training"]["day"]): snapshot]
 
                 # PyTorch <=1.9: no device_type kw
-                with torch.cuda.amp.autocast(enabled=use_cuda):
-                    with torch.no_grad():
-                        base_embeddings = compute_embedding(
-                            embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"],
-                            graphs=window_graphs,
-                            encoder_model=self.encoder_model,
-                            device=device
-                        )
 
                 constructing_graph = nx.DiGraph()
                 constructing_graph.add_nodes_from(node_types["old_nodes"])
@@ -552,6 +551,15 @@ class Runner(object):
                         src_nodes = xb[:, 0].long().tolist()
                         dst_nodes = xb[:, 1].long().tolist()
 
+                        base_embeddings = compute_embedding(
+                                embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"],
+                                graphs=window_graphs,
+                                encoder_model=self.encoder_model,
+                                device=device,
+                                cached_node2vec_embeddings=current_cached_node2vec,
+                                snapshots=list(range(max(snapshot - encoder_config["training"]["day"], 0), snapshot))
+                            )
+                        
                         for n in src_nodes + dst_nodes:
                             n_int = int(n)
                             if n_int not in base_embeddings:
@@ -575,6 +583,7 @@ class Runner(object):
                         flag_logits.append(logits.detach().cpu())
                         flag_targets.append(yb.detach().cpu())
                         epoch_losses[flag].append(loss.item())
+                    
                     if len(flag_logits) == 0:
                         # No batches produced (tiny dataset). Avoid cat() on empty list.
                         epoch_aucs[flag].append(0.0)
@@ -610,9 +619,9 @@ class Runner(object):
                     f"GPU: {gpu_mem_alloc:.1f}MiB"
                 )
                 print(msg, flush=True)
-                with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance_{self.seed}.txt', "a") as f:
-                    f.write(msg + "\n")
-                    f.flush()
+                # with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance_{self.seed}.txt', "a") as f:
+                #     f.write(msg + "\n")
+                #     f.flush()
 
         return self.link_prediction_decoder, self.encoder_model
 
@@ -633,20 +642,20 @@ class Runner(object):
         
         # Prepare training data
         training_sorted_samples, training_new_edges_count = generate_training_data_cached(training_graphs=self.training_graphs,
-                                                all_edgebanks=self.all_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, saved_data_file_path=self.saved_input)
+                                                all_edgebanks=self.all_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, saved_data_file_path=self.saved_input + "/saved_data")
 
         # Prepare validation data
         # We pass all_edgebanks of the training snapshots edgebanks
         validation_sorted_samples, training_new_edges_count = generate_validation_data_cached(training_graphs=self.validation_graphs, old_training_nodes=old_training_nodes, 
-                                                all_edgebanks=self.all_edgebanks[self.train_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="validation", saved_data_file_path=self.saved_input)
+                                                all_edgebanks=self.all_edgebanks[self.train_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="validation", saved_data_file_path=self.saved_input + "/saved_data")
         # Prepare test data
         # We pass all_edgebanks of the training snapshots edgebanks
         test_sorted_samples, training_new_edges_count = generate_validation_data_cached(training_graphs=self.test_graphs, old_training_nodes=old_training_nodes, 
-                                                all_edgebanks=self.all_edgebanks[self.val_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="test", saved_data_file_path=self.saved_input)
+                                                all_edgebanks=self.all_edgebanks[self.val_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="test", saved_data_file_path=self.saved_input + "/saved_data")
         
         print('Training') 
     
-        self.link_prediction_decoder = self.train_multi_head(training_samples=training_sorted_samples, validation_samples=validation_sorted_samples)
+        self.link_prediction_decoder, self.encoder_model = self.train_multi_head(training_samples=training_sorted_samples, validation_samples=validation_sorted_samples)
         
         return self.link_prediction_decoder, self.encoder_model
             
@@ -708,10 +717,15 @@ class Runner(object):
         
         # Assign maximum degrees
         constructing_graph = get_node_features(constructing_graph, prev_graphs, self.thresholds, current_target_graph_description, old_nodes, new_nodes)  
+        current_cached_node2vec = [self.cached_node2vec_embeddings[i] for i in range(max(current_target_snapshot - encoder_config["training"]["day"], 0), current_target_snapshot)]
 
         # Assign embeddings for all the training_nodes
-        curr_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=prev_graphs, encoder_model=self.encoder_model, device=device)
-        
+        curr_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], 
+                                            graphs=prev_graphs, 
+                                            encoder_model=self.encoder_model, device=device, 
+                                            cached_node2vec_embeddings=current_cached_node2vec,
+                                            snapshots=list(range(max(current_target_snapshot - encoder_config["training"]["day"], 0), current_target_snapshot)))
+
         # Assign zero vector for new nodes
         for new_node in new_nodes:
             curr_embeddings[new_node] = np.zeros(len(curr_embeddings[old_nodes[0]]))
@@ -803,12 +817,12 @@ class Runner(object):
     def run(self):             
         print("INFO: Dataset: {}".format(encoder_config["dataset"]))
         self.encoder_model_path = os.path.join(self.saved_input, rf'saved_models/encoder_{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.seed}')
-        self.decoder_model_path = os.path.join(self.saved_input, rf"saved_data/decoder_MLP_{self.seed}")
+        self.decoder_model_path = os.path.join(self.saved_input, rf'saved_models/decoder_{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.seed}')
 
         if os.path.exists(self.encoder_model_path) and os.path.exists(self.decoder_model_path):
             self.link_prediction_decoder.load_state_dict(torch.load(self.decoder_model_path, map_location=device))
             self.encoder_model.load_state_dict(torch.load(self.encoder_model_path, map_location=device))
-            
+
             self.link_prediction_decoder.to(device)
             self.encoder_model.to(device)
             
@@ -820,13 +834,15 @@ class Runner(object):
             # Train the Decoder and Encoder model
             print('Training the Link Prediction Decoder and Encoder')
             self.link_prediction_decoder, self.encoder_model = self.train_models()
+            torch.save(self.encoder_model.state_dict(), os.path.join(self.saved_input, rf'saved_models/encoder_{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.seed}'))
+            torch.save(self.link_prediction_decoder.state_dict(), os.path.join(self.saved_input, rf'saved_models/decoder_{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.seed}'))
             print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
        
         # Old graphs that we know up to now
         self.old_graphs = [self.target_graphs[0], self.target_graphs[1]]
         
         # To predict snapshot i, we use snapshot 0,...,i-1 to train
-        for i in range(2, len(self.probabilities)): 
+        for i in range(2, 20): 
             print("INFO: >>> Temporal Graph Construction <<<")
             print("INFO: Predict snapshot: ", i)
             print("======================================")
@@ -854,6 +870,7 @@ class Runner(object):
             self.old_graphs.append(self.target_graphs[i])
             
 if __name__ == '__main__':
+    from GraphGeneration.models.temporal_gnn.script.config import args
     runner = Runner()
     runner.run()
 

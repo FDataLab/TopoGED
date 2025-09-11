@@ -6,10 +6,15 @@ import torch
 from node2vec import Node2Vec
 from GraphGeneration.models.temporal_gnn.script.config import args
 import yaml
-
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 # Load YAML config
-with open("GraphGeneration/encoder.yaml", "r") as file:
+with open("./GraphGeneration/encoder.yaml", "r") as file:
     encoder_config = yaml.safe_load(file)
+    
+# with open(rf"C:\Users\duykh\OneDrive\Documents\GNN Research\Topological-Temporal-GFM\Topological-Temporal-GFM\GraphGeneration\encoder.yaml", "r") as file:
+#     encoder_config = yaml.safe_load(file)
 
 def compute_linear_gnn_embeddings(G: nx.DiGraph, device):
     """
@@ -95,7 +100,7 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
     return embeddings
 
 # LSTM embeddings  
-def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
+def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, cached_node2vec_embeddings, snapshots, device):
     """
     Args:
         graph_snapshots (list of nx.DiGraph): temporal graphs with node['feat'] ready
@@ -105,18 +110,17 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
     """
     # Collect per-timestep node embeddings
     node_history = defaultdict(list)
-    old_nodes = set()
+    old_nodes = set().union(*[g.nodes() for g in graph_snapshots]) 
     null_embed = torch.tensor([0]*(encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"]),
                               dtype=torch.float32).to(device)
-    for G in graph_snapshots:
-        snapshot_embeddings = compute_node2vec_embeddings(G, device)
+    for i, _ in enumerate(snapshots):
+        snapshot_embeddings = cached_node2vec_embeddings[i]
         for node, emb in snapshot_embeddings.items():
             node_history[node].append(emb) # TODO: Check nodeId if the same for every snapshot
         
         for node in old_nodes:
             if node not in snapshot_embeddings:
                 node_history[node].append(null_embed)
-        old_nodes = old_nodes | set(G.nodes())
     
     # Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
@@ -194,20 +198,59 @@ def compute_node_embeddings_HTGN(graph_snapshots, HTGN_model):
     final_node_embeddings = HTGN_model(edge_index=edge_index_list[-1], x=None, node_id_list=node_id_list, node_id_map=node_id_map)
     return final_node_embeddings
 
-def compute_embedding(embeddingType, graphs, device, encoder_model=None):
+import pickle
+import os
+
+def cache_embeddings_to_disk(embeddings, file_path):
+    """
+    Saves a dictionary of embeddings to a file using pickle.
+
+    Args:
+        embeddings (dict): The dictionary of embeddings to save.
+        file_path (str): The path to the file where the embeddings will be stored.
+    """
+    with open(file_path, 'wb') as f:
+        pickle.dump(embeddings, f)
+    print(f"Embeddings successfully cached to {file_path}")
+
+def load_cached_node2vec_embeddings_from_disk(file_path, target_graphs, device):
+    """
+    Loads a dictionary of embeddings from a file using pickle.
+
+    Args:
+        file_path (str): The path to the file to load.
+
+    Returns:
+        dict: The loaded dictionary of embeddings.
+    """
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as f:
+            embeddings = pickle.load(f)
+        print(f"Embeddings successfully loaded from {file_path}")
+        return embeddings
+    else:
+        print(f"Compute the node2vec embeddings first; cache file not found at {file_path}")
+        cached_node2vec_embeddings = {}
+        for i in range(len(target_graphs)):
+            print(f"Computing node2vec embeddings for snapshot {i+1}/{len(target_graphs)}")
+            cached_node2vec_embeddings[i] = compute_embedding(embeddingType="Node2Vec", graphs=target_graphs[i], device=device)
+        cache_embeddings_to_disk(cached_node2vec_embeddings, file_path)
+        return cached_node2vec_embeddings
+
+def compute_embedding(embeddingType, graphs, device, snapshots=None, cached_node2vec_embeddings=None, encoder_model=None):
     if embeddingType == 'Node2Vec':
         final_embeddings = compute_node2vec_embeddings(graphs[-1], device)
     elif embeddingType == 'Linear':
         final_embeddings = compute_linear_gnn_embeddings(graphs[-1], device)
     elif embeddingType == 'LSTM':       
         # graph_snapshots = [G_0, G_1, ..., G_T]  # each G must have node['feat']
-        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model, device)
+        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model, cached_node2vec_embeddings, snapshots, device)
         cos_val = torch.tensor([[math.cos(len(graphs))]], dtype=torch.float32, device=device)
         for node in final_embeddings:
             if final_embeddings[node].dim() == 1:
-                final_embeddings[node] = final_embeddings[node].unsqueeze(0) 
+                final_embeddings[node] = final_embeddings[node].to(device).unsqueeze(0) 
 
-            final_embeddings[node] = torch.cat([final_embeddings[node], cos_val], dim=1) 
+            final_embeddings[node] = torch.cat([final_embeddings[node].to(device), cos_val], dim=1) 
             final_embeddings[node] = final_embeddings[node].squeeze(0)
 
             
