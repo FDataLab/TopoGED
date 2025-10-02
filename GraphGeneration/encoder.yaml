@@ -18,10 +18,10 @@ decoder_model:
   encode_links: "Concat"
 
 training:
-  batch_size: 32 # play around
-  lr: 0.001
-  epochs: 2
+  batch_size: 16 # play around
+  lr: 0.005
+  epochs: 100
   day: 5
 
-dataset: networkaion
+dataset: mathoverflow
 seed: 1024

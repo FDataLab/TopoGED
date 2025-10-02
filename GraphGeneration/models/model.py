@@ -2,6 +2,8 @@
 from GraphGeneration.models.MultiHeadedEdgePredictor import MultiHeadedEdgePredictor
 from GraphGeneration.models.temporal_gnn.script.utils.util import logger
 from GraphGeneration.models.SimpleNodeLSTM import SimpleNodeLSTM
+from GraphGeneration.models.temporal_gnn.script.models.load_model import load_model
+from GraphGeneration.models.temporal_gnn.script.config import args
 
 def setupMLP(embedding_dim, mlpEncoding):   
     """
@@ -23,8 +25,8 @@ def setupMLP(embedding_dim, mlpEncoding):
 
 def load_encoder_model(encoder_config, device, node2vec_dimensions, hidden_dim=64, HTGN_nodelist=[]):       
     if encoder_config["encoder_model"]["nodeEmbeddingType"] == 'LSTM':
-        model = SimpleNodeLSTM(input_dim=node2vec_dimensions, hidden_dim=hidden_dim).to(device)
+        model = SimpleNodeLSTM(input_dim=node2vec_dimensions, hidden_dim=hidden_dim, device=device).to(device)
     else:
-        raise Exception('pls define the model')
+        model = load_model(args).to(device)
     logger.info('using model {} '.format(encoder_config["encoder_model"]["nodeEmbeddingType"]))
     return model, hidden_dim

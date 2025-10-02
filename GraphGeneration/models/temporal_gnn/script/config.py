@@ -49,6 +49,7 @@ parser.add_argument('--egcn_type', type=str, default='EGCNH', help='Type of EGCN
 parser.add_argument('--curvature', type=float, default=1.0, help='curvature value')
 parser.add_argument('--fixed_curvature', type=int, default=1, help='fixed (1) curvature or not (0)')
 parser.add_argument('--aggregation', type=str, default='deg', help='aggregation method: [deg, att]')
+parser.add_argument('--device', type=str, default='cpu', help='cpu or cuda:0, cuda:1 ...')
 
 # TopoGED mode
 parser.add_argument('--use_predict_probs', action='store_true', help='Use prediction probabilities to predict the next snapshot')
