@@ -12,6 +12,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.loader import Loader
 from utils.dataset import EmbeddingDataset
+from utils.dataset import DeltaEmbeddingDataset
 from torch.utils.data import DataLoader
 from nn.custom_model import Decoder
 from torch.utils.data import DataLoader, Dataset
@@ -78,31 +79,6 @@ combo_map = {
     "['LSTM', 'GRU', 'MLP']": ['LSTM', 'GRU', 'MLP']
 }
 
-
-class DeltaEmbeddingDataset(Dataset):
-    def __init__(self, embeddings, k):
-        self.embeddings = embeddings
-        self.k = k
-
-    def __len__(self):
-        return len(self.embeddings) - self.k
-
-    def __getitem__(self, idx):
-        # Input: A sequence of 'k' vectors.
-        x = self.embeddings[idx : idx + self.k]
-        
-        # Target: The delta (change) between the next vector and the last vector in the input sequence.
-        y = self.embeddings[idx + self.k] - self.embeddings[idx + self.k - 1]
-        
-        # We also grab the last vector of the input sequence.
-        x_last = self.embeddings[idx + self.k - 1]
-        
-        # Convert to PyTorch tensors and return the three values.
-        x = torch.tensor(x, dtype=torch.float32)
-        y = torch.tensor(y, dtype=torch.float32)
-        x_last = torch.tensor(x_last, dtype=torch.float32)
-
-        return x, y, x_last
 
 # Activation name map
 activation_map = {

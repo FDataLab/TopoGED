@@ -315,6 +315,7 @@ def train_single_head(model, X_train, y_train, X_val=None, y_val=None, lr=1e-3, 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.BCELoss()
 
+
     X_train = torch.tensor(X_train, dtype=torch.float32).to(device)
     y_train = torch.tensor(y_train, dtype=torch.float32).to(device)
     train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=batch_size, shuffle=True)

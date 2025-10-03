@@ -55,7 +55,7 @@ prob_types = {
     "prob_oo": 2,
     "prob_n": 3,
     "prob_on": 4,
-    "prob_oon": 5,
+    #"prob_oon": 5,
 }
 
 # Utility function specific to probabilities
@@ -550,180 +550,199 @@ probs_to_save = {
     # Dataset: df storing probs, 
     # ...
 }
-
-def test_pytorch_tft(prob_type):    
+def test_pytorch_tft(prob_type, learning_rate, hidden_size, attention_head_size, dropout, hidden_continuous_size, dataset):    
     batch_size = 32
     lookback = 7
     horizon = 1
-
-    datasets = ['networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', 'networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd']
 
     my_loader = Loader()
     my_utils = Utils()
     my_utils.set_seeds(42)
 
-    for dataset in datasets:
-        # Set up probabilities
-        probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities', num_back='5')  # Activation doesn't matter here
-        prob_type_idx = prob_types[prob_type]
-        series = probabilities_df.iloc[:, prob_type_idx].to_numpy(dtype=np.float32).flatten()
-        
-        N = len(series)
+    # Load all 6 probability columns
+    probabilities_df = my_loader.load_data(dataset, activation='Degree', type='probabilities', num_back='5')  
+    
+    # Which column is the target
+    prob_type_idx = prob_types[prob_type]
+    target_col = probabilities_df.columns[prob_type_idx]
 
-        # Create a dataframe with time index and series ID (for multiple series)
-        df = pd.DataFrame({
-            "series_id": 0,                 # unique id for this series
-            "time_idx": np.arange(N),       # time steps
-            "probability": series,          # target
-            "static_feat": "0",             # dummy static categorical
-            "future_feat": 0                # dummy known future feature
-        })
-        training_cutoff = int(N * 0.8)
+    # Convert to dataframe with time index + static
+    df = probabilities_df.copy().reset_index(drop=True)
+    df["series_id"] = 0
+    df["time_idx"] = np.arange(len(df))
+    df["static_feat"] = "0"   # dummy categorical
+    df["future_feat"] = 0     # dummy known feature
 
-        training = TimeSeriesDataSet(
-            df[lambda x: x.time_idx <= training_cutoff],
-            time_idx="time_idx",
-            target="probability",
-            group_ids=["series_id"],
-            max_encoder_length=lookback,
-            max_prediction_length=horizon,
-            static_categoricals=["static_feat"],
-            time_varying_known_reals=["future_feat"],
-            time_varying_unknown_reals=["probability"],
-            add_relative_time_idx=True,
-            add_target_scales=True,
-            add_encoder_length=True,
-            target_normalizer=GroupNormalizer(center=False)
-        )
+    N = len(df)
+    train_end = int(N * 0.8)
+    val_end = int(N * 0.9)
 
-        # Validation dataset (predict=True ensures decoder is used correctly)
-        validation = TimeSeriesDataSet.from_dataset(training, df, predict=True, stop_randomization=True)
+    # Define feature sets
+    known_reals = [c for c in probabilities_df.columns if c != target_col] + ["future_feat"]
+    unknown_reals = [target_col]
 
+    # Train dataset
+    training = TimeSeriesDataSet(
+        df[lambda x: x.time_idx < train_end],
+        time_idx="time_idx",
+        target=target_col,
+        group_ids=["series_id"],
+        max_encoder_length=lookback,
+        max_prediction_length=horizon,
+        static_categoricals=["static_feat"],
+        time_varying_known_reals=known_reals,
+        time_varying_unknown_reals=unknown_reals,
+        add_relative_time_idx=True,
+        add_target_scales=True,
+        add_encoder_length=True,
+        target_normalizer=GroupNormalizer(center=False),
+    )
 
-        # Create dataloaders
-        train_loader = training.to_dataloader(train=True, batch_size=batch_size, num_workers=0)
-        val_loader = validation.to_dataloader(train=False, batch_size=batch_size * 10, num_workers=0)
+    # Validation dataset
+    validation = TimeSeriesDataSet(
+        df[lambda x: (x.time_idx >= train_end - lookback) & (x.time_idx < val_end)],
+        time_idx="time_idx",
+        target=target_col,
+        group_ids=["series_id"],
+        max_encoder_length=lookback,
+        max_prediction_length=horizon,
+        static_categoricals=["static_feat"],
+        time_varying_known_reals=known_reals,
+        time_varying_unknown_reals=unknown_reals,
+        add_relative_time_idx=True,
+        add_target_scales=True,
+        add_encoder_length=True,
+        target_normalizer=GroupNormalizer(center=False),
+    )
 
-        # Initialize TFT model
-        tft = TemporalFusionTransformer.from_dataset(
-            training,
-            learning_rate=1e-4,
-            hidden_size=32,
-            attention_head_size=2,
-            dropout=0.15,
-            hidden_continuous_size=16,
-            output_size=1,
-            loss=RMSE(),
-            log_interval=10,
-            reduce_on_plateau_patience=4,
-        )
-        
-        '''
-        # Complexity 1
-        tft = TemporalFusionTransformer.from_dataset(
-            training,
-            learning_rate=1e-3,
-            hidden_size=16,
-            attention_head_size=1,
-            dropout=0.05,
-            hidden_continuous_size=8,
-            output_size=1,
-            loss=PoissonLoss(),
-            log_interval=10,
-            reduce_on_plateau_patience=4,
-        )
-        '''
-                
-        print("TFT class:", TemporalFusionTransformer)
+    # Test dataset
+    test_dataset = TimeSeriesDataSet(
+        df[lambda x: x.time_idx >= val_end - lookback],
+        time_idx="time_idx",
+        target=target_col,
+        group_ids=["series_id"],
+        max_encoder_length=lookback,
+        max_prediction_length=horizon,
+        static_categoricals=["static_feat"],
+        time_varying_known_reals=known_reals,
+        time_varying_unknown_reals=unknown_reals,
+        add_relative_time_idx=True,
+        add_target_scales=True,
+        add_encoder_length=True,
+        target_normalizer=GroupNormalizer(center=False),
+    )
 
-        early_stop_callback = EarlyStopping(
-            monitor="val_loss",
-            min_delta=1e-4,
-            patience=20,
-            verbose=True,
-            mode="min"
-        )
+    # Dataloaders
+    train_loader = training.to_dataloader(train=True, batch_size=batch_size, num_workers=0)
+    val_loader = validation.to_dataloader(train=False, batch_size=batch_size * 10, num_workers=0)
+    test_loader = test_dataset.to_dataloader(train=False, batch_size=batch_size * 10, num_workers=0)
 
-        # Trainer
-        trainer = Trainer(
-            max_epochs=150,
-            callbacks=[early_stop_callback],
-            accelerator="gpu" if torch.cuda.is_available() else "cpu",
-            gradient_clip_val=0.1,
-        )
+    # Initialize TFT model
+    tft = TemporalFusionTransformer.from_dataset(
+        training,
+        learning_rate=learning_rate,
+        hidden_size=hidden_size,
+        attention_head_size=attention_head_size,
+        dropout=dropout,
+        hidden_continuous_size=hidden_continuous_size,
+        output_size=1,
+        loss=RMSE(),
+        log_interval=10,
+        reduce_on_plateau_patience=4,
+    )
 
-        # Train
-        trainer.fit(
-            tft,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader
-        )
+    early_stop_callback = EarlyStopping(
+        monitor="val_loss",
+        min_delta=1e-4,
+        patience=20,
+        verbose=True,
+        mode="min"
+    )
 
-        # Predict on the full dataset
-        '''pred_full = []
+    trainer = Trainer(
+        max_epochs=150,
+        callbacks=[early_stop_callback],
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        gradient_clip_val=0.1,
+        enable_progress_bar=False
+    )
 
-        for start_idx in range(len(series) - lookback):
-            window_df = df.iloc[start_idx:start_idx+lookback+horizon]
-            val_dataset = TimeSeriesDataSet.from_dataset(training, window_df, predict=True, stop_randomization=True)
-            val_loader = val_dataset.to_dataloader(train=False, batch_size=1)
-            pred = tft.predict(val_loader).detach().cpu().numpy().flatten()
-            pred_full.append(pred[0])  # horizon = 1'''
-            
-        full_dataset_predict = TimeSeriesDataSet(
-            df,
-            time_idx="time_idx",
-            target="probability",
-            group_ids=["series_id"],
-            max_encoder_length=lookback,
-            max_prediction_length=horizon,
-            static_categoricals=["static_feat"],
-            time_varying_known_reals=["future_feat"],
-            time_varying_unknown_reals=["probability"],
-            add_relative_time_idx=True,
-            add_target_scales=True,
-            add_encoder_length=True,
-        )
-        full_dataloader_predict = full_dataset_predict.to_dataloader(
-            train=False, batch_size=batch_size * 10, num_workers=0
-        )
+    # Train
+    trainer.fit(
+        tft,
+        train_dataloaders=train_loader,
+        val_dataloaders=val_loader
+    )
 
-        print("Predicting the full dataset with the best model...")
-        predictions_tensor = tft.predict(full_dataloader_predict)
-        
-        # Flatten the predictions to a single list
-        single_list_predictions = predictions_tensor.detach().cpu().numpy().flatten().tolist()
-        pred_series = single_list_predictions
-        
-        if dataset in probs_to_save.keys():
-            probs_to_save[dataset][prob_type] = pred_series 
-        else:
-            probs_to_save[dataset] = pd.DataFrame({prob_type: pred_series})
-        
-        res_path = RESULTS_PATH + dataset + '/PredProbabilitiesSeparatedTestingRMSEMoreComplex2/'
+    # Predict on full dataset
+    full_dataset_predict = TimeSeriesDataSet(
+        df,
+        time_idx="time_idx",
+        target=target_col,
+        group_ids=["series_id"],
+        max_encoder_length=lookback,
+        max_prediction_length=horizon,
+        static_categoricals=["static_feat"],
+        time_varying_known_reals=known_reals,
+        time_varying_unknown_reals=unknown_reals,
+        add_relative_time_idx=True,
+        add_target_scales=True,
+        add_encoder_length=True,
+    )
+    full_dataloader_predict = full_dataset_predict.to_dataloader(
+        train=False, batch_size=batch_size * 10, num_workers=0
+    )
 
-        os.makedirs(res_path, exist_ok=True)
-        
-        
-        print(f"Original series length: {len(series)}")
-        print(f"Predictions length: {len(pred_series)}")
-        
-        print(series)
-        print(pred_series)
-        
-        plt.figure(figsize=(8, 4))
-        plt.plot(series[lookback:], label="Real", linewidth=1)
-        plt.plot(pred_series, label="Pred", linewidth=1)
-        plt.xlabel("Index")
-        plt.ylabel("Probability")
-        plt.title(f"{prob_type} - Real vs Predicted")
-        plt.legend()
-        plt.grid(True)
+    predictions_tensor = tft.predict(full_dataloader_predict)
+    pred_series = predictions_tensor.detach().cpu().numpy().flatten().tolist()
 
-        # Save plot
-        file_path = os.path.join(res_path, f"{prob_type}_discrete.png")
-        plt.savefig(file_path, dpi=300, bbox_inches="tight")
-        plt.close()
-        
+    # For plotting
+    series = df[target_col].to_numpy(dtype=np.float32).flatten()
+
+    column_mapper = {
+        "prob_old_nodes": "Count Old Nodes",
+        "prob_new_nodes": "Count New Nodes",
+        "prob_oo": "Count OO",
+        "prob_nn": "Count NN",
+        "prob_on": "Count ON",
+        "prob_oon": "Count OON",
+    }
+    column_name = column_mapper[prob_type]
+
+    if dataset in probs_to_save.keys():
+        probs_to_save[dataset][column_name] = pred_series
+    else:
+        probs_to_save[dataset] = pd.DataFrame({column_name: pred_series})
+
+    header = renaming_probs_dict[prob_type]
+
+    plt.figure(figsize=(8, 4))
+    plt.plot(series[lookback:], label="Real", linewidth=1)
+    plt.plot(pred_series, label="Pred", linewidth=1)
+    plt.xlabel("Index")
+    plt.ylabel("Count")
+    plt.title(f"{prob_type} - Real vs Predicted")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    plt.close()
+
+    # Predictions per split
+    train_pred = tft.predict(train_loader).detach().cpu().numpy().flatten()
+    val_pred   = tft.predict(val_loader).detach().cpu().numpy().flatten()
+    test_pred  = tft.predict(test_loader).detach().cpu().numpy().flatten()
+
+    train_true = df[lambda x: x.time_idx < train_end][target_col].to_numpy()
+    val_true   = df[lambda x: (x.time_idx >= train_end) & (x.time_idx < val_end)][target_col].to_numpy()
+    test_true  = df[lambda x: x.time_idx >= val_end][target_col].to_numpy()
+
+    # Metrics
+    train_rmse = trainer.callback_metrics.get("train_loss")
+    val_rmse   = trainer.callback_metrics.get("val_loss")
+    test_rmse  = np.sqrt(mean_squared_error(test_true, test_pred))
+
+    return train_rmse, val_rmse, test_rmse
+
 
 def objective(trial, prob_type):
     csv_file_path = os.path.abspath(f'data/output/results/ProbabilityTesting/data/tft_individual_regression_multi_{prob_type}_5back.csv')
@@ -852,7 +871,7 @@ def objective(trial, prob_type):
             best_moment_row = {
                 'trial': trial.number,  # For checking Wandb Logs
                 'dataset': dataset,
-                'seed': seed,
+                'seed': 42,
                 'learning_rate': learning_rate,
                 'hidden_size': hidden_size,
                 'attention_head_size': attention_head_size,
@@ -1106,10 +1125,43 @@ if __name__ == "__main__":
         wandb.init(project="Probabilities", name=f"tft_optimization_{prob_type}")
         #optuna.delete_study(study_name=f"tft_optimization_{prob_type}", storage=STORAGE)
         study = optuna.create_study(study_name=f"tft_optimization_{prob_type}", storage=STORAGE, direction="minimize", load_if_exists=True)
-        study.optimize(lambda trial: objective(trial, prob_type), n_trials=50)
+        #study.optimize(lambda trial: objective(trial, prob_type), n_trials=6)
 
+        best_trial = study.best_trial
+        print(f"\nBest trial for prob_type '{prob_type}':")
+        print(f"  Trial number: {best_trial.number}")
         print(f"Best trial: {study.best_trial}")
+        print(f"  Value: {best_trial.value}")
+        print(f"  Params:")
+        for param_name, param_value in best_trial.params.items():
+            print(f"    {param_name}: {param_value}")
+            
+        params = best_trial.params
+        test_pytorch_tft(
+            prob_type=prob_type,
+            learning_rate=params.get("learning_rate"),
+            hidden_size=params.get("hidden_size"),
+            attention_head_size=params.get("attention_head_size"),
+            dropout=params.get("dropout"),
+            hidden_continuous_size=params.get("hidden_continuous_size")
+        )
+        
+    prob_type = "prob_oon" 
+    test_pytorch_tft(
+        prob_type=prob_type,
+        learning_rate=1e-3,
+        hidden_size=16,
+        attention_head_size=1,
+        dropout=0.05,
+        hidden_continuous_size=8,
+        
+    )
+        
     
+    for dataset in probs_to_save.keys(): 
+        res_path = RESULTS_PATH + dataset + '/PredProbabilities/'
+        probs_to_save[dataset].to_csv(res_path + 'pred_probabilities.csv', index=False)
+        print(f'Probabilities for {dataset} saved')
 
 #test_arima()
 #main()

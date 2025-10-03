@@ -16,27 +16,15 @@ from utils.loader import Loader
 from utils.dataset import EmbeddingDataset
 from torch.utils.data import DataLoader
 from nn.custom_model import Decoder
-from utils.loader import Loader
-from utils.dataset import EmbeddingDataset
-from utils.dataset import DeltaEmbeddingDataset
-from torch.utils.data import DataLoader
-from nn.custom_model import Decoder
 from torch.utils.data import DataLoader, Dataset
-from utils.utils import Utils
+from utils.dataset import DeltaEmbeddingDataset
 
-
-# Import all embedding methods
-from utils.embedding_methods.betweenness import EmbedBetweenness
-from utils.embedding_methods.closeness import EmbedCloseness
-from utils.embedding_methods.degree import EmbedDegree
-from utils.embedding_methods.forman_ricci import EmbedForman
-from utils.embedding_methods.weight import EmbedWeight
 
 from utils.utils import Utils
 
 
 RESULTS_PATH = 'data/input/cached/'
-TRIALS_HISTORY_PATH = 'data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression_20dim_deltas_trainlossonly.csv'
+TRIALS_HISTORY_PATH = 'data/output/results/RegressionTesting/data/embedding_testing_bayesian_regression_20dim.csv'
 
 
 using_20dim = True
@@ -77,43 +65,8 @@ combo_map = {
     "['LSTM', 'GRU', 'MLP']": ['LSTM', 'GRU', 'MLP']
 }
 
-def plot_scatter(predicted, true, save_path, mode="nodes", xlabel="", ylabel=""):
-    predicted = np.array(predicted, dtype=np.float32).flatten()
-    true = np.array(true, dtype=np.float32).flatten()
 
-    plt.figure(figsize=(6, 6))
-    plt.scatter(predicted, true, alpha=0.6)
-
-    # Axis labels depending on mode
-    if mode == "nodes":
-        plt.xlabel(r'$|\hat{v}|$')
-        plt.ylabel(r'$|v|$')
-    elif mode == "edges":
-        plt.xlabel(r'$|\hat{e}|$')
-        plt.ylabel(r'$|e|$')
-    else:
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-
-    # Remove top and right borders
-    ax = plt.gca()
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-
-    # Always start at (0,0)
-    ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
-
-    # No grid, no title, no legend
-    plt.grid(False)
-
-    # Make sure the directory exists
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, bbox_inches='tight')
-    plt.clf()
-
-
-def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, hidden_1, lr_val, l2_val, batch_size, combo, counter, seed):\
+def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed):\
     
     # Setup
     print(combo)
@@ -176,26 +129,26 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
                                         
     # Initialize wandb
-    # run = wandb.init(
-    #     project="bayesian_testing_regression_updated_datasets", 
-    #     name = run_name, 
-    #     config={
-    #     'dataset': dataset,
-    #     'activation': activation_name,
-    #     'window_size': window_size,
-    #     'num_layers': num_layer,
-    #     'dropout': dropout,
-    #     'l2_regularization': l2_val,
-    #     'hidden_size_rnn': hidden_1,
-    #     'learning_rate': lr_val,
-    #     'seed': seed,
-    #     'normalization': norm,
-    #     'model': combo
-    #     },
-    #     reinit=True)
+    run = wandb.init(
+        project="bayesian_testing_regression_updated_datasets", 
+        name = run_name, 
+        config={
+        'dataset': dataset,
+        'activation': activation_name,
+        'window_size': window_size,
+        'num_layers': num_layer,
+        'dropout': dropout,
+        'l2_regularization': l2_val,
+        'hidden_size_rnn': hidden_1,
+        'learning_rate': lr_val,
+        'seed': seed,
+        'normalization': norm,
+        'model': combo
+        },
+        reinit=True)
             
     no_improvement_counter = 0  # Number of epochs that we haven't seen an improvement in the validation AUCROC
-    model = Decoder(in_channels=input_dim, out_channels=output_dim, hids_size_rnn=[hidden_1], hids_size_other=[output_dim], num_layers=[num_layer], layers=combo, bias=[True], dropout=[dropout])
+    model = Decoder(in_channels=input_dim, out_channels=output_dim, hids_size_rnn=[hidden_1], hids_size_other=[hidden_2], num_layers=[num_layer], layers=combo, bias=[True], dropout=[dropout])
     optimizer = torch.optim.Adam(model.parameters(), lr=lr_val, weight_decay=l2_val)
     criterion = nn.MSELoss() 
     
@@ -379,7 +332,7 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
         }    
                 
         # Log each epoch results
-        # wandb.log(to_log)
+        wandb.log(to_log)
 
         # Optimize for the best aucroc
         if valid_loss <= curr_batch_best_loss:
@@ -387,7 +340,7 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
             
             # Save for dataframe
             best_moment_row = {
-                'run_id': 999,  # For checking Wandb Logs
+                'run_id': run.name,  # For checking Wandb Logs
                 'dataset': dataset,
                 'activation': activation_name,
                 'window_size': window_size,
@@ -491,23 +444,23 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
                                     
     # Initialize wandb
-    # run = wandb.init(
-    #     project="bayesian_testing_regression_updated_datasets", 
-    #     name = run_name, 
-    #     config={
-    #     'dataset': dataset,
-    #     'activation': activation_name,
-    #     'window_size': window_size,
-    #     'num_layers': num_layer,
-    #     'dropout': dropout,
-    #     'l2_regularization': l2_val,
-    #     'hidden_size_rnn': hidden_1,
-    #     'learning_rate': lr_val,
-    #     'seed': seed,
-    #     'normalization': norm,
-    #     'model': combo
-    #     },
-    #     reinit=True)
+    run = wandb.init(
+        project="bayesian_testing_regression_updated_datasets", 
+        name = run_name, 
+        config={
+        'dataset': dataset,
+        'activation': activation_name,
+        'window_size': window_size,
+        'num_layers': num_layer,
+        'dropout': dropout,
+        'l2_regularization': l2_val,
+        'hidden_size_rnn': hidden_1,
+        'learning_rate': lr_val,
+        'seed': seed,
+        'normalization': norm,
+        'model': combo
+        },
+        reinit=True)
             
     no_improvement_counter = 0
     model = Decoder(in_channels=input_dim, out_channels=output_dim, hids_size_rnn=[hidden_1], hids_size_other=[hidden_2], num_layers=[num_layer], layers=combo, bias=[True], dropout=[dropout])
@@ -645,13 +598,13 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
             'test_avg_cosine_similarity': test_avg_cosine_similarity,
         }
         
-        # wandb.log(to_log)
+        wandb.log(to_log)
 
         if valid_loss <= curr_batch_best_loss:
             curr_batch_best_loss = valid_loss
             
             best_moment_row = {
-                'run_id': 999,
+                'run_id': run.name,
                 'dataset': dataset,
                 'activation': activation_name,
                 'window_size': window_size,
@@ -693,65 +646,37 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
 
 
 def main():
-    df = pd.read_csv(TRIALS_HISTORY_PATH)
+    #df = pd.read_csv(TRIALS_HISTORY_PATH)
     
-    df["train_loss"] = df["train_loss"].replace([np.inf, -np.inf], np.finfo(np.float32).max)
-    df["valid_loss"] = df["valid_loss"].replace([np.inf, -np.inf], np.finfo(np.float32).max)
-    
-    # Compute a score (weighted combination)
-    #df["bayesian_score"] = 0.4 * df["train_loss"] + 0.6 * df["valid_loss"]
-    df["bayesian_score"] = df["train_loss"]
-    # Strip the _# suffix to create a trial group
-    df["trial_group"] = df["run_id"].str.rsplit("_", n=1).str[1]
-    
-    # Count entries per group
-    group_counts = df.groupby("trial_group").size().reset_index(name="count")
-    
-    # Keep only groups with at least 13 entries
-    valid_groups = group_counts[group_counts["count"] >= 12]["trial_group"]
-    
-    # Compute the mean score for valid groups only
-    group_means = df[df["trial_group"].isin(valid_groups)].groupby("trial_group")["bayesian_score"].mean().reset_index()
-    
-    # Find the trial group with the lowest average score
-    best_group = group_means.loc[group_means["bayesian_score"].idxmin()]["trial_group"]
-    
-    print(f"Best trial group across all datasets (>=13 entries): {best_group}\n{'-'*40}")
-    
-    # Optionally, display the best trials for each dataset within that group
-    # Find the trial group with the lowest average score
-    best_group = group_means.loc[group_means["bayesian_score"].idxmin()]["trial_group"]
-    
-    print(f"Best trial group across all datasets (>=13 entries): {best_group}\n{'-'*40}")
-    
-    # Optionally, display the best trials for each dataset within that group
-    best_trials_group = df[df["trial_group"] == best_group]
+    # Necessary because of tanh clipping
+    good_combos = [
+        "['RNN', 'FC']",
+        "['LSTM', 'FC']",
+        "['GRU', 'FC']",
+        "['LSTM', 'GRU', 'FC']",
+        "['LSTM', 'FC', 'FC']",
+        "['GRU', 'FC', 'FC']",
+        "['RNN', 'MLP']",
+        "['LSTM', 'MLP']", 
+        "['GRU', 'MLP']", 
+        "['LSTM', 'GRU', 'MLP']"
+    ]
 
-    best_trials = best_trials_group.loc[
-        best_trials_group.groupby("dataset")["bayesian_score"].idxmin()
-    ].reset_index(drop=True)
-    
-    best_trials = df.loc[
-        df.groupby("dataset")["bayesian_score"].idxmin()
-    ].reset_index(drop=True)
-                
-    # Loop and print results as variable assignments
-    for _, row in best_trials.iterrows():
-        print(f"\n🔧 Best Trial for Dataset: {row['run_id']}\n{'-'*40}")
+    datasets = ['networkaion', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', 'networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd']
 
+    for dataset in datasets:
         # Extract parameters
-        window_size = int(row['seed']) if int(row['window_size']) == 42 else int(row['window_size'])
-        dropout = float(row['dropout'])
-        hidden_1 = int(row['hidden_size_rnn'])  
-        hidden_2 = int(0)
-        num_layers = int(row['num_layers'])
-        lr_val = float(row['learning_rate'])
-        l2_val = float(row['l2_regularization'])
-        batch_size = int(row['batch_size'])
-        model_str = row['combo']
-        model = combo_map[model_str]
-        dataset=row['dataset']
-        activations = activation_map[row['activation'][:-1]]
+        window_size = 7
+        dropout = 0.14538496524860484
+        hidden_1 = 1024 
+        hidden_2 = 256
+        num_layers = 2
+        lr_val = 3.310529141761092e-05
+        l2_val = 0.0016245338330645128
+        batch_size = 16
+        model = combo_map["['GRU', 'FC', 'FC']"]
+        dataset=dataset
+        activations = activation_map["Degree_Weight"]
         
         
         train_loss, val_loss, pred_embeddings, real_embeddings = train_and_eval_delta(
@@ -762,7 +687,7 @@ def main():
             num_layer=num_layers,
             dropout=dropout,
             hidden_1=hidden_1,
-            hidden_2=64,
+            hidden_2=hidden_2,
             lr_val=lr_val,
             l2_val=l2_val,
             batch_size=batch_size,
@@ -770,67 +695,67 @@ def main():
             counter=999,
             seed=42,
         )
-    
-        #loss_score = (train_loss * 0.4 + val_loss * 0.6)  # Play with these numbers a bit, (0.2, 0.8) and (0.4, 0.6)
-        loss_score = train_loss
-        print(f"The old score was {row['bayesian_score']} and the new one was {loss_score}")
 
-        res_path = RESULTS_PATH + dataset + '/PredTopER/'
+        loss_score = (train_loss * 0.4 + val_loss * 0.6)  # Play with these numbers a bit, (0.2, 0.8) and (0.4, 0.6)
+        print(f'Train loss {train_loss}')
+        print(f'Valid loss {val_loss}')
+
+        print(f"The new score was {loss_score}")
+
+        res_path = RESULTS_PATH + dataset + '/PredTopERUpdatedTestingDeltasBest/'
 
         os.makedirs(res_path, exist_ok=True)
-            
-        pred_df_discrete = pd.DataFrame(pred_embeddings).iloc[:, :20]
-        real_df_discrete = pd.DataFrame(real_embeddings).iloc[:, :20]
-        
+
         # Form dataframes of pred, real, and a train_test split for graph construction
-        n = len(pred_df_discrete)
-        train_end = int(0.8 * n)
-        val_end = int(0.9 * n)
+        pred_df_discrete = pd.DataFrame(pred_embeddings)
+        real_df_discrete = pd.DataFrame(real_embeddings)
+        
+        # Take only the degree embedding
+        embedding_amount = 20 if using_20dim else 30
+        pred_df_discrete = pred_df_discrete.iloc[:, :embedding_amount]
+        real_df_discrete = real_df_discrete.iloc[:, :embedding_amount]
+        
+        pred_col = pred_df_discrete.iloc[:, -1]
+        real_col = real_df_discrete.iloc[:, -1]
 
-        splits = {
-            "Train": (pred_df_discrete.iloc[:train_end], real_df_discrete.iloc[:train_end]),
-            "Validation": (pred_df_discrete.iloc[train_end:val_end], real_df_discrete.iloc[train_end:val_end]),
-            "Test": (pred_df_discrete.iloc[val_end:], real_df_discrete.iloc[val_end:])
-        }
+        # Compute RMSE
+        rmse = mean_squared_error(real_col, pred_col, squared=False)  # squared=False gives RMSE
 
-        # Function to compute metrics
-        def compute_metrics(pred_df, real_df, split_name):
-            pred_col = pred_df.iloc[:, -2]
-            real_col = real_df.iloc[:, -2]
+        # Compute MAE
+        mae = mean_absolute_error(real_col, pred_col)
 
-            rmse = np.sqrt(mean_squared_error(real_col, pred_col))
-            mae = mean_absolute_error(real_col, pred_col)
+        print(f"Final Edge RMSE: {rmse}")
+        print(f"Final Edge MAE: {mae}")  
+        
+        print(f"Final Edge Mean: {pred_col.mean()}")
+        print(f"Final Edge STDDEV: {pred_col.std()}") 
+        
+        pred = pred_df_discrete.to_numpy()
+        real = real_df_discrete.to_numpy()
 
-            pred = pred_df.to_numpy()
-            real = real_df.to_numpy()
+        # RMSE per row, then average
+        rmse_per_row = np.sqrt(np.mean((pred - real) ** 2, axis=1))
+        avg_rmse = np.mean(rmse_per_row)
 
-            # RMSE per row, then average
-            rmse_per_row = np.sqrt(np.mean((pred - real) ** 2, axis=1))
-            avg_rmse = np.mean(rmse_per_row)
+        # MAE per row, then average
+        mae_per_row = np.mean(np.abs(pred - real), axis=1)
+        avg_mae = np.mean(mae_per_row)
+        
+        print(f"Average row-wise RMSE: {avg_rmse}")
+        print(f"Average row-wise MAE: {avg_mae}")
 
-            # MAE per row, then average
-            mae_per_row = np.mean(np.abs(pred - real), axis=1)
-            avg_mae = np.mean(mae_per_row)
+        pred_tensor = torch.tensor(pred_df_discrete.values, dtype=torch.float32)
+        real_tensor = torch.tensor(real_df_discrete.values, dtype=torch.float32)
 
-            pred_tensor = torch.tensor(pred, dtype=torch.float32)
-            real_tensor = torch.tensor(real, dtype=torch.float32)
-            criterion = nn.MSELoss(reduction='sum')
-            total_loss = criterion(pred_tensor, real_tensor).item()
+        # Define loss function (sum to mimic training accumulation)
+        criterion = nn.MSELoss(reduction='sum')
 
-            print(f"\n📊 {split_name} Results")
-            print(f"Final Edge RMSE: {rmse}")
-            print(f"Final Edge MAE: {mae}")
-            print(f"Final Edge Mean: {pred_col.mean()}")
-            print(f"Final Edge STDDEV: {pred_col.std()}")
-            print(f"Average row-wise RMSE: {avg_rmse}")
-            print(f"Average row-wise MAE: {avg_mae}")
-            print(f"Total Loss across all vectors: {total_loss}")
+        # Compute total loss
+        total_loss = criterion(pred_tensor, real_tensor).item()
 
-        # Run for each split
-        for split_name, (pred_split, real_split) in splits.items():
-            compute_metrics(pred_split, real_split, split_name)
-
-                
+        
+        print(f'Total Loss across all vectors: {total_loss}')
+        
         real_part_len = int(len(real_df_discrete) * 0.7)
         pred_part_len = len(real_df_discrete) - real_part_len 
         real_part = real_df_discrete.iloc[:real_part_len, :].to_numpy()
@@ -857,16 +782,6 @@ def main():
 
         # --- Add this after creating pred_df_discrete and pred_df ---
         print_pred_stats(pred_df_discrete)
-        
-        pred_col_nodes = pred_df_discrete.iloc[:, -2]  # Nodes
-        real_col_nodes = real_df_discrete.iloc[:, -2]  # Nodes
-        pred_col_edges = pred_df_discrete.iloc[:, -1]  # Edges
-        real_col_edges = real_df_discrete.iloc[:, -1]  # Edges
-
-        scatter_path = 'data/output/figures/TopERScatter/'
-        os.makedirs(res_path, exist_ok=True)
-
-        plot_scatter(pred_col_nodes, real_col_nodes, scatter_path + f'{dataset}_Nodes.png', mode="nodes")
-        plot_scatter(pred_col_edges, real_col_edges, scatter_path + f'{dataset}_Edges.png', mode="edges")
+            
     
 main()

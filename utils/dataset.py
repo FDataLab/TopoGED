@@ -23,15 +23,28 @@ class EmbeddingDataset(Dataset):
         y = self.embeddings[idx + self.k]             # shape: [features]
         return x, y
     
-class BinaryDataset(Dataset):
-    def __init__(self, embeddings, truth):
+
+class DeltaEmbeddingDataset(Dataset):
+    def __init__(self, embeddings, k):
         self.embeddings = embeddings
-        self.truth = truth
-    
+        self.k = k
+
     def __len__(self):
-        return len(self.embeddings)
-    
+        return len(self.embeddings) - self.k
+
     def __getitem__(self, idx):
-        x = torch.FloatTensor(self.embeddings[idx]) 
-        y = torch.LongTensor([self.truth[idx]])
-        return x, y
+        # Input: A sequence of 'k' vectors.
+        x = self.embeddings[idx : idx + self.k]
+        
+        # Target: The delta (change) between the next vector and the last vector in the input sequence.
+        y = self.embeddings[idx + self.k] - self.embeddings[idx + self.k - 1]
+        
+        # We also grab the last vector of the input sequence.
+        x_last = self.embeddings[idx + self.k - 1]
+        
+        # Convert to PyTorch tensors and return the three values.
+        x = torch.tensor(x, dtype=torch.float32)
+        y = torch.tensor(y, dtype=torch.float32)
+        x_last = torch.tensor(x_last, dtype=torch.float32)
+
+        return x, y, x_last

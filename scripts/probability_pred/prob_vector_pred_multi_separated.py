@@ -37,14 +37,20 @@ combo_map = {
     "['LSTM', 'FC', 'FC']": ['LSTM', 'FC', 'FC'],
     "['GRU', 'FC', 'FC']": ['GRU', 'FC', 'FC'],
     "['LSTM', 'GRU', 'FC']": ['LSTM', 'GRU', 'FC'],
+    "['RNN', 'MLP']": ['RNN', 'MLP'],
+    "['LSTM', 'MLP', 'Sigmoid']": ['LSTM', 'MLP', 'Sigmoid'], 
+    "['GRU', 'MLP', 'Sigmoid']": ['GRU', 'MLP', 'Sigmoid'], 
+    "['LSTM', 'GRU', 'MLP', 'Sigmoid']": ['LSTM', 'GRU', 'MLP', 'Sigmoid']
 }
 
 prob_types = {
+    "prob_oon": 5,
+    "prob_nn": 3,
     "prob_old_nodes": 0,
     "prob_new_nodes": 1,
-    "prob_oo": 2,"prob_nn": 3,
+    "prob_oo": 2,
     "prob_on": 4,
-    "prob_oon": 5,
+    
     
     
 }
@@ -333,7 +339,8 @@ def train_and_eval(dataset, prob_type, prob_type_idx, num_back, window_size, num
 
 def objective(trial, prob_type, num_back='5'):
     # Suggest hyperparameters
-    window_size = trial.suggest_int('window_size', 5, 30)
+    _ = trial.suggest_int('window_size', 5, 30)
+    window_size = 7  # Trying to fix window size for now
     dropout = trial.suggest_float('dropout', 0.01, 0.5) 
     hidden_1 = trial.suggest_categorical('hidden_1', [32, 64, 128, 256, 512, 1024])  # Since it doesnt matter
     num_layers = trial.suggest_int('num_layers', 2, 4)
@@ -347,7 +354,11 @@ def objective(trial, prob_type, num_back='5'):
         "['LSTM', 'FC', 'FC']",
         "['GRU', 'FC', 'FC']",
         "['LSTM', 'GRU', 'FC']",
-        "['RNN', 'LSTM', 'GRU', 'FC']"
+        "['RNN', 'LSTM', 'GRU', 'FC']",
+        # "['RNN', 'MLP']",
+        # "['LSTM', 'MLP', 'Sigmoid']", 
+        # "['GRU', 'MLP', 'Sigmoid']", 
+        # "['LSTM', 'GRU', 'MLP', 'Sigmoid']"
     ])   
     model = combo_map[model]
 
@@ -420,7 +431,7 @@ def main(prob_type):
         load_if_exists=True
     )
     
-    study.optimize(partial(objective, prob_type=prob_type, num_back='5'), n_trials=25)
+    study.optimize(partial(objective, prob_type=prob_type, num_back='5'), n_trials=250)
 
     print(f"Best trial: {study.best_trial}")
         
@@ -428,5 +439,5 @@ def main(prob_type):
 if __name__ == "__main__":
     os.environ["WANDB_API_KEY"] = "6a5ccf040a6c90944032e58878e46c19d673cdb0"
 
-    with mp.Pool(processes=6) as pool:
+    with mp.Pool(processes=2) as pool:
         pool.map(main, prob_types.keys())

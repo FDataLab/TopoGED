@@ -32,6 +32,10 @@ from torch.utils.data import DataLoader
 # Import Loss fn
 from GraphGeneration.scripts.composite_graphlet_loss_fn import GraphletLoss
 from GraphGeneration.utils.estimate_graphlet import run_graphlet_estimate   
+# TODO Rename these ^^^
+
+from utils.embedding_methods.degree import EmbedDegree
+
 
 # Set up device
 try:
@@ -470,6 +474,7 @@ class Runner(object):
             lr=lr
         )
         loss_fn = nn.BCEWithLogitsLoss()
+        toper_loss_fn = GraphletLoss()  # Rename TODO
         scaler = torch.cuda.amp.GradScaler(enabled=use_cuda)
 
         for epoch in range(encoder_config["training"]["epochs"]):
@@ -567,8 +572,20 @@ class Runner(object):
                             ).view(-1, 1)
                             bce = loss_fn(logits, yb)
                             loss = bce
+                            
+                        embedder = EmbedDegree(include_weights=False)
 
-                        scaler.scale(loss).backward()
+                        # Make the TopER embedding
+                        pred_embedding, _, _ = embedder.process_graphs_for_embeddings([constructing_graph])
+                        pred_embedding = pred_embedding[0]
+                        true_embedding, _, _ = embedder.process_graphs_for_embeddings([self.training_graphs[snapshot]])
+                        true_embedding = true_embedding[0]
+
+                        toper_loss = toper_loss_fn(to_tensor(pred_embedding, device=device).unsqueeze(0), to_tensor(true_embedding, device=device).unsqueeze(0))
+
+                        total_loss = 0.8 * loss + 0.2 * toper_loss  # Play with the weights a bit
+
+                        scaler.scale(total_loss).backward()
                         scaler.step(optimizer)
                         scaler.update()
 
@@ -601,6 +618,7 @@ class Runner(object):
                     constructing_graph.add_edges_from(list(sampled_edges))
                     update_degrees(constructing_graph)
 
+
             gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1e6 if use_cuda else 0
             for flag in self.all_edge_types:
                 msg = (
@@ -615,6 +633,7 @@ class Runner(object):
                     f.flush()
 
         return self.link_prediction_decoder, self.encoder_model
+    
 
     def train_models(self):
         """
@@ -792,13 +811,26 @@ class Runner(object):
         # results_edges = self.evaluator.evaluateEdges(pred_graph, true_graph, curr_edgebank_pred, all_edgebanks[i], graph_num=i)
         results_true_structure = self.evaluator.evaluateSingleStructure(target_oldG, graph_num=self.current_target_snapshot)
         results_pred_structure = self.evaluator.evaluateSingleStructure(oldG, graph_num=self.current_target_snapshot)
-        pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(oldG, target_oldG)
+        
+        embedder = EmbedDegree(include_weights=False)
+
+        # Make the TopER embedding
+        pred_embedding, _, _ = embedder.process_graphs_for_embeddings([constructing_graph])
+        pred_toper = pred_embedding[0]
+        true_embedding, _, _ = embedder.process_graphs_for_embeddings([self.training_graphs[snapshot]])
+        true_toper = true_embedding[0]
+        pred_label = 0  # Not important right now TODO
+        true_label = 0  # Not important right now TODO
+        results_toper_diff = self.evaluator.evaluateTopER(pred_toper, true_toper, pred_label, true_label, graph_num=0)
+        #pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(oldG, target_oldG)
         
         # Store all results
+        os.makedirs(self.structure_dir, exist_ok=True)
         pd.DataFrame([results_true_structure]).to_csv(f"{self.structure_dir}/structure_true.csv", mode='a', header=False, index=False)
         pd.DataFrame([results_pred_structure]).to_csv(f"{self.structure_dir}/structure_pred.csv", mode='a', header=False, index=False)
-        pd.DataFrame([pred_kernel]).to_csv(f"{self.kernel_dir}/kernel_pred.csv", mode='a', header=False, index=False)
-        pd.DataFrame([true_kernel]).to_csv(f"{self.kernel_dir}/kernel_true.csv", mode='a', header=False, index=False)
+        pd.DataFrame([results_toper_diff]).to_csv(f"{self.structure_dir}/toper_eval.csv", mode='a', header=False, index=False)
+        # pd.DataFrame([pred_kernel]).to_csv(f"{self.kernel_dir}/kernel_pred.csv", mode='a', header=False, index=False)
+        # pd.DataFrame([true_kernel]).to_csv(f"{self.kernel_dir}/kernel_true.csv", mode='a', header=False, index=False)
         
     def run(self):             
         print("INFO: Dataset: {}".format(encoder_config["dataset"]))

@@ -420,7 +420,8 @@ def train_and_eval(dataset, activations, window_size, norm, num_layer, dropout, 
 
 def objective(trial):
     # Suggest hyperparameters
-    window_size = trial.suggest_int('window_size', 5, 30)
+    _ = trial.suggest_int('window_size', 5, 30)
+    window_size = 7  # Trying to fix window size for now
     dropout = trial.suggest_float('dropout', 0.01, 0.5)
     hidden_1 = trial.suggest_categorical('hidden_1', [32, 64, 128, 256, 512, 1024])  # Since it doesnt matter
     num_layers = trial.suggest_int('num_layers', 2, 4)
