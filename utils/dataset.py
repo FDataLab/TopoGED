@@ -24,6 +24,7 @@ class EmbeddingDataset(Dataset):
         return x, y
     
 
+# Dataset class that allows us to predict the change in embedding from yesterday, then add it to the previous days embedding
 class DeltaEmbeddingDataset(Dataset):
     def __init__(self, embeddings, k):
         self.embeddings = embeddings

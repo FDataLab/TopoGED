@@ -148,10 +148,6 @@ class Loader():
             print(f'Dataset {dataset} not found in files, please check available datasets and try again')
             print(f'Available data: \t{data_files}')
 
-    
-    def clean_data(self):
-        pass
-
 
     # Read labels from file
     def read_labels(self, dataset):

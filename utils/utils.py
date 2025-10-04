@@ -505,3 +505,25 @@ class Utils:
         plt.title("The true graph")
         plt.show()
         plt.clf()
+        
+    def normalize_vector_by_groups(self, vec, tol=1e-8):
+        vec = np.array(vec, dtype=np.float32)
+        vec = np.maximum(vec, 0)
+
+        # Normalize indices 0 and 1 for node type
+        group1 = vec[0:2]
+        sum1 = np.sum(group1)
+        vec[0:2] = group1 / sum1 if sum1 > 0 else np.zeros_like(group1)
+
+        if not np.isclose(np.sum(vec[0:2]), 1.0, atol=tol):
+            print(f"Warning: Group 1 sum = {np.sum(vec[0:2])}, not 1!")
+
+        # Normalize second group
+        group2 = vec[2:6]
+        sum2 = np.sum(group2)
+        vec[2:6] = group2 / sum2 if sum2 > 0 else np.zeros_like(group2)
+
+        if not np.isclose(np.sum(vec[2:6]), 1.0, atol=tol):
+            print(f"Warning: Group 2 sum = {np.sum(vec[2:6])}, not 1!")
+
+        return vec

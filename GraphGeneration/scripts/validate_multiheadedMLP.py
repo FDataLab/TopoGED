@@ -30,7 +30,7 @@ from utils.loader import Loader
 from GraphGeneration.utils.Evaluator import Evaluator
 from GraphGeneration.models.temporal_gnn.script.config import args
 from load_data import load_data
-from utils.visualizers import Visualizer
+from utils.visualizer import Visualizer
 # Models in use
 from GraphGeneration.models.model import setupMLP, load_encoder_model
 from itertools import product
