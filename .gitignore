@@ -58,6 +58,7 @@ venv.bak/
 
 # Other
 wandb/
+toper/slurm_scripts/
 
 # Ignore large output files
 GraphGeneration/output/
