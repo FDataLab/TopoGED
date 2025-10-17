@@ -253,7 +253,7 @@ class Evaluator():
         return pred_kernel, true_kernel, wasserstein_distance(pred_kernel, true_kernel)
     
     
-    def evaluateOrca(self, pred_graph: nx.DiGraph, true_graph: nx.DiGraph):
+    def evaluateOrca(self, pred_graph, true_graph):
         # Graphs must be undirected for orca
         pred_graph_undirected = pred_graph.to_undirected()
         true_graph_undirected = true_graph.to_undirected()
@@ -265,7 +265,7 @@ class Evaluator():
         return pred_kernel, true_kernel, wasserstein_distance(pred_kernel, true_kernel)
         
     
-    def evaluateTopER(self, A, B, pred_label, true_label, graph_num=0):
+    def evaluateTopER(self, A, B, graph_num=0):
         A = np.array(A)
         B = np.array(B)
 
@@ -289,8 +289,6 @@ class Evaluator():
             'graph_num': graph_num,
             'l2_norm': l2_norm,
             'cosine_similarity': cosine_sim,
-            'g/s_pred_label': pred_label,
-            'g/s_true_label': true_label,
             **node_edge_diffs
         }
 
@@ -525,13 +523,103 @@ class Evaluator():
         kl = np.sum(rel_entr(P, Q))
         return kl
     
-    def calculate_precision_picking_nodes(self, G_pred, G_true, old_nodes):
-        V_true = set(G_true.nodes()).intersection(set(old_nodes))
-        V_pred = set(G_pred.nodes()).intersection(set(old_nodes))
+    
+    def evaluate_node_selection(self, sorted_nodes_pred, sorted_nodes_true, candidate_old_nodes, graph_num=0):
+        
+        # Unpack for readability
+        pred_new_nodes = sorted_nodes_pred.get('new_nodes', set())
+        pred_old_nodes = sorted_nodes_pred.get('old_nodes', set())
+        true_new_nodes = sorted_nodes_true.get('new_nodes', set())
+        true_old_nodes = sorted_nodes_true.get('old_nodes', set())
 
-        tp = V_true & V_pred
-        precision = len(tp) / len(V_pred) if V_pred else 0.0
-        recall = len(tp) / len(V_true) if V_true else 0.0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+        # --- New nodes ---
+        new_correct = pred_new_nodes & true_new_nodes
+        new_precision = len(new_correct) / len(pred_new_nodes) if pred_new_nodes else 0
+        new_recall = len(new_correct) / len(true_new_nodes) if true_new_nodes else 0
+        new_f1 = (2 * new_precision * new_recall / (new_precision + new_recall)
+                if (new_precision + new_recall) > 0 else 0)
 
-        return precision, recall, f1
+        # --- Old nodes ---
+        old_correct = pred_old_nodes & true_old_nodes
+        old_precision = len(old_correct) / len(pred_old_nodes) if pred_old_nodes else 0
+        old_recall = len(old_correct) / len(true_old_nodes) if true_old_nodes else 0
+        old_f1 = (2 * old_precision * old_recall / (old_precision + old_recall)
+                if (old_precision + old_recall) > 0 else 0)
+        
+        old_node_accuracy = (len(old_correct & candidate_old_nodes) / len(candidate_old_nodes)
+                            if candidate_old_nodes else 0)
+        
+        # --- Combined nodes ---
+        pred_all = pred_new_nodes | pred_old_nodes
+        true_all = true_new_nodes | true_old_nodes
+        all_correct = pred_all & true_all
+        all_precision = len(all_correct) / len(pred_all) if pred_all else 0
+        all_recall = len(all_correct) / len(true_all) if true_all else 0
+        all_f1 = (2 * all_precision * all_recall / (all_precision + all_recall)
+                if (all_precision + all_recall) > 0 else 0)
+
+        return {
+            'Graph_Num': graph_num,
+            'Precision_New': new_precision,
+            'Recall_New': new_recall,
+            'F1_New': new_f1,
+            'Precision_Old': old_precision,
+            'Recall_Old': old_recall,
+            'F1_Old': old_f1,
+            'Accuracy_Old': old_node_accuracy,
+            'Precision_All': all_precision,
+            'Recall_All': all_recall,
+            'F1_All': all_f1,
+        }
+
+    
+    def evaluate_graph_edges(self, pred_graph, true_graph, is_directed=False, graph_num=0):
+        # Get overlapping nodes (we can't compute metrics with node mismatch)
+        pred_nodes = set(pred_graph.nodes())
+        true_nodes = set(true_graph.nodes())
+        common_nodes = pred_nodes & true_nodes
+
+        # Calculate how many nodes we removed
+        removed_pred_nodes = len(pred_nodes - common_nodes)
+        removed_true_nodes = len(true_nodes - common_nodes)
+
+        # Make the nodes line up
+        pred_sub = pred_graph.subgraph(common_nodes)
+        true_sub = true_graph.subgraph(common_nodes)
+
+        # Edge processing differs if graph is directed or not
+        if is_directed:
+            pred_edges = set(pred_sub.edges())
+            true_edges = set(true_sub.edges())
+        else:
+            pred_edges = {tuple(sorted(e)) for e in pred_sub.edges()}
+            true_edges = {tuple(sorted(e)) for e in true_sub.edges()}
+
+        # Compute metrics
+        correct_edges = pred_edges & true_edges
+        precision = len(correct_edges) / len(pred_edges) if pred_edges else 0
+        recall = len(correct_edges) / len(true_edges) if true_edges else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+        results = {
+            "Graph_Num": graph_num,
+            "Num_Pred_Nodes": len(pred_nodes),
+            "Num_True_Nodes": len(true_nodes),
+            "Common_Nodes": len(common_nodes),
+            "Removed_From_Pred": removed_pred_nodes,
+            "Removed_From_True": removed_true_nodes,
+            "Num_Pred_Edges": len(pred_edges),
+            "Num_True_Edges": len(true_edges),
+            "Correct_Edges": len(correct_edges),
+            "Precision": precision,
+            "Recall": recall,
+            "F1": f1,
+        }
+
+        return results
+    
+    
+    def write_kl_results(self, path, value, graph_num):
+        with open(path, "a") as f:
+            f.write(f"{graph_num + 1}, {value:.6f}\n")
+            f.flush()

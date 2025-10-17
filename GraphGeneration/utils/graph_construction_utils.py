@@ -2,7 +2,7 @@ import random
 import numpy as np 
 import networkx as nx
 
-def compute_reappearance_probabilities(graphs, t_curr, decay_factor=3.0, alpha=1.0, epsilon=1e-8):
+def compute_reappearance_probabilities(graphs, days_back, decay_factor=3.0, alpha=1.0, epsilon=1e-8):
     """
     Compute the probability for each node to reappear given how long ago it was seen and its latest degree
     Nodes of higher degree, and nodes seen more recently are preferred
@@ -10,6 +10,7 @@ def compute_reappearance_probabilities(graphs, t_curr, decay_factor=3.0, alpha=1
     Args:
         graphs: The snapshots we have observed up to the t_curr
         t_curr (int): The current graph number we are on, used to compute probabilities
+        days_back (int)
         decay_factor (float): How quickly the recency of a node decays. Higher means that the nodes seen long ago decay slower
         alpha (float): Our decay constant, controls how influential degree is (alpha > 1 means that it prefers degree, alpha < 1 means that it matters less)
         epsilon (float): Prevents having 0 probabilities for a node, and thus prevents numpy errors later on
@@ -20,10 +21,10 @@ def compute_reappearance_probabilities(graphs, t_curr, decay_factor=3.0, alpha=1
     nodes = dict()
     # Create the nodes dict degree history
     # nodes (dict): A dict of {node_id: (last_seen_timestamp, last_seen_degree)} used for computing probabilities
+    
     for t, G in enumerate(graphs):
         for node in G.nodes():
-            degree = G.degree(node)
-            nodes[node] = (t, degree) 
+            nodes[node] = (t, G.degree(node))
     
     if not nodes:
         return {}
@@ -31,6 +32,7 @@ def compute_reappearance_probabilities(graphs, t_curr, decay_factor=3.0, alpha=1
     max_degree = max(degree for _, (_, degree) in nodes.items())
 
     probs = {}
+    t_curr = len(graphs)  # The next available graph (will be days_back + 1)
     for node_id, (last_seen, degree) in nodes.items():
         recency_score = np.exp(-max(0, t_curr - last_seen) / decay_factor)
         degree_score = (degree / max_degree) ** alpha if max_degree > 0 else epsilon
@@ -43,6 +45,7 @@ def compute_reappearance_probabilities(graphs, t_curr, decay_factor=3.0, alpha=1
         probs[node] /= total
 
     return probs
+       
        
 def get_node_features(constructing_graph, previous_graphs, thresholds, graph_description, old_nodes, new_nodes):
     """

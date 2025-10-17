@@ -15,7 +15,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from GraphGeneration.utils.Evaluator import Evaluator
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached
-from GraphGeneration.utils.casting_type import to_tensor
 from GraphGeneration.utils.sampling_edges_utils import predict_edges
 from GraphGeneration.utils.casting_type import to_tensor
 from GraphGeneration.utils.graph_construction_utils import compute_reappearance_probabilities, get_node_features, update_degrees
@@ -41,7 +40,7 @@ from utils.embedding_methods.degree import EmbedDegree
 try:
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        # print("Using CUDA (NVIDIA GPU)")
+        print("Using CUDA (NVIDIA GPU)")
     else:
         device = torch.device("cpu")
 except Exception:
@@ -67,6 +66,7 @@ class Runner(object):
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
         self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data')
         common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}'
+        self.edge_eval_dir = f'GraphGeneration/output/results/edges_evaluation/{encoder_config["dataset"]}/{common_suffix}'
         self.structure_dir = f'GraphGeneration/output/results/structure/{encoder_config["dataset"]}/{common_suffix}'
         self.kernel_dir = f'GraphGeneration/output/results/kernel/{encoder_config["dataset"]}/{common_suffix}'
         self.topER_dir = f'GraphGeneration/output/results/topER/{encoder_config["dataset"]}/{common_suffix}'
@@ -75,7 +75,15 @@ class Runner(object):
         os.makedirs(save_dir, exist_ok=True)
         
         # Current target snapshot we want to predict
-        self.current_target_snapshot = 2
+        self.starting_graph = 3
+        self.current_target_snapshot = self.starting_graph
+        
+        # Controls our window size and how we actually construct the graph (directed vs undirected)
+        self.days_back = encoder_config["days_back"]
+        self.is_directed = encoder_config["directed_flag"]
+        
+        if self.days_back <= 0:
+            raise ValueError(f"days_back must be a positive integer (days_back > 0). Got {self.days_back}.")
         
         # All the edge types
         self.all_edge_types = ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']
@@ -94,16 +102,17 @@ class Runner(object):
         
         # Load all the snapshot true data 
         self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
-                                                                                                     encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"])
+                                                                                                     encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], str(encoder_config["days_back"]), encoder_config["use_predicted_vals"])
         
         # Modify the graph ids to 1,2,3,...
-        self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds)
+        self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, self.days_back)
 
         # Build the edgebanks for construction
-        self.all_edgebanks = build_edgebanks_from_start(self.target_graphs)        
+        self.all_edgebanks = build_edgebanks_from_start(self.target_graphs, self.days_back)        
 
         # Reshape the graph description
-        self.graph_descriptions = [list(zip(graph_description[0::3], graph_description[1::3], graph_description[2::3])) for graph_description in self.graph_descriptions]
+        # self.graph_descriptions = [list(zip(graph_description[0::3], graph_description[1::3], graph_description[2::3])) for graph_description in self.graph_descriptions]
+        self.graph_descriptions = [[(lst[i], lst[i+1]) for i in range(0, len(lst), 2)] for lst in self.graph_descriptions]
         
         # Split training, validation, test graphs
         # Snapshots that we will use for traininng
@@ -117,19 +126,38 @@ class Runner(object):
         self.validation_graphs = [self.target_graphs[i][-1] for i in range(self.train_end, self.val_end)]
         self.test_graphs = [self.target_graphs[i][-1] for i in range(self.val_end, self.num_snapshots)]
 
+        self.new_node_id = 0  # The ID we will assign new node (incremented as we add nodes)
+
+
     # ======================= HELPER FUNCTIONS =======================
-    def sample_old_nodes(self, prev_graphs, current_target_snapshot):
+    def sample_old_nodes(self, prev_graphs):
+        """
+        Retrieve the old nodes that we want to add to the current graph
+        We use compute_reappearance_probabilities to help figure out what nodes to add back
+        
+        Params:
+            prev_graphs (list): The previous self.days_back graphs that we will take old nodes from
+            
+        Returns:
+            (set(sampled_old_nodes)): The set of nodes that we will now add during construction
+        """
         random.seed(self.seed)
         np.random.seed(self.seed)
         
         # Sample old nodes
-        probs = compute_reappearance_probabilities(graphs=prev_graphs, t_curr=current_target_snapshot)
+        probs = compute_reappearance_probabilities(graphs=prev_graphs, days_back=self.days_back)
         node_ids = list(probs.keys())
         weights = list(probs.values())
+
+        # Prevents failing if there are no old nodes
+        if not node_ids:
+            print(f'There are no old nodes to sample from')
+            return set([])
 
         sampled_old_nodes = list(np.random.choice(node_ids, size=self.current_target_count_old_nodes, replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
         
         return set(sampled_old_nodes)
+    
     
     # ======================= TRAIN MODEL =======================
     def run_validation(self, validation_samples, batch_size, epoch):
@@ -151,15 +179,21 @@ class Runner(object):
                 print("INFO: Validation on snapshot", snapshot)
                 
                 # Prepare current target graph count
-                self.current_target_count_old_nodes = self.probabilities[snapshot][0]
-                self.current_target_count_new_nodes = self.probabilities[snapshot][1]
+                current_target_graph_description = self.graph_descriptions[snapshot]
+                # Used to convert probabilities
+                V_total = int(current_target_graph_description[-1][0])
+                E_total = int(current_target_graph_description[-1][1])
+                
+                # Prepare the probability counts
+                self.current_target_count_old_nodes = int(round(self.probabilities[snapshot][0] * V_total))
+                self.current_target_count_new_nodes = int(round(self.probabilities[snapshot][1] * V_total))
                 self.current_target_count = {
-                    edge_type: self.probabilities[snapshot][j + 2]
-                    for j, edge_type in enumerate(self.all_edge_types)
-                }
+                        edge_type: int(round(self.probabilities[snapshot][j + 2] * E_total))
+                        for j, edge_type in enumerate(self.all_edge_types)
+                    }
                 
                 node_types = { 
-                    "old_nodes": self.sample_old_nodes(self.training_graphs[:snapshot], snapshot),
+                    "old_nodes": self.sample_old_nodes(self.training_graphs[max(0, snapshot - self.days_back): snapshot]),
                     "new_nodes": set()
                 } 
                 
@@ -180,8 +214,7 @@ class Runner(object):
                     curr_X_train = np.array(curr_X_train)
                     curr_y_train = np.array(curr_y_train)
 
-                    X_train_curr, curr_y_train = shuffle(curr_X_train, curr_y_train, random_state=self.seed)
-                    temp_X_train = torch.tensor(X_train_curr, dtype=torch.float32).to(device)
+                    temp_X_train = torch.tensor(curr_X_train, dtype=torch.float32).to(device)
                     temp_y_train = torch.tensor(curr_y_train, dtype=torch.float32).to(device)
                     train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=batch_size, shuffle=True)
                     
@@ -233,13 +266,12 @@ class Runner(object):
                         # Add to our labels for evaluation
                         train_preds.extend(preds.detach().cpu().numpy())
                         train_labels.extend(y.detach().cpu().numpy())
-                        break
 
                     # Assign embeddings for all the training_nodes
                     curr_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=validation_graphs, encoder_model=self.encoder_model, device=device)
                     constructing_graph = get_node_features(constructing_graph.copy(), self.training_graphs + self.validation_graphs[:i], self.thresholds, self.graph_descriptions[snapshot], node_types["old_nodes"], node_types["new_nodes"])
                     sampled_edges = predict_edges(constructing_graph, edge_type=flag, node_types=node_types, edgebank=self.all_edgebanks[snapshot], link_prediction_decoder=self.link_prediction_decoder, 
-                                old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=snapshot, device=device)
+                                old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=snapshot, device=device, train=False)
                     constructing_graph.add_edges_from(list(sampled_edges))
                     update_degrees(constructing_graph)
                     
@@ -262,7 +294,7 @@ class Runner(object):
             epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag}  | Validation AUCROC {np.mean(train_auc[flag]):.4f} | GPU: {gpu_mem_alloc:.1f}MiB"
             current_model_auc += np.mean(train_auc[flag])
             print(epochMessage)
-            with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance.txt', "a") as f:
+            with open(rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/multiheadMLP_performance.txt', "a") as f:
                 f.write(epochMessage + "\n")
                 f.flush()
                 
@@ -275,193 +307,17 @@ class Runner(object):
             torch.save(self.encoder_model.state_dict(), self.encoder_model_path)
             print("INFO: The model is saved. Done.")
             
-    
-    # def train_multi_head(self, training_samples, validation_samples):
-    #     """
-    #     Train a MultiHeaded MLP Neural Network for use in edge predictions
-        
-    #     Args:
-    #         model (MultiheadedMLP): The Multiheaded MLP to train now
-    #         training_samples: The dictionary store the pos, neg edges of each snapshot, using for training
-    #         validation_samples: The dictionary store the pos, neg edges of each snapshot, using for validation
-    #     Returns:
-    #         link_prediction_decoder (Multiheaded MLP): The trained MLP
-    #     """
-    #     lr = encoder_config["training"]["lr"]
-    #     self.link_prediction_decoder.train()
-    #     optimizer = torch.optim.Adam(list(self.encoder_model.parameters()) + list(self.link_prediction_decoder.parameters()), lr=lr)
-    #     loss_fn = nn.BCELoss()
-    #     graphlet_loss_fn = GraphletLoss()
-        
-    #     # Train
-    #     for epoch in range(encoder_config["training"]["epochs"]):
-    #         train_loss = {
-    #                 'o-o-bank': [],
-    #                 'o-o-nobank': [],
-    #                 'o-n': [],
-    #                 'n-n': [],
-    #             }
-    #         train_auc = {
-    #                 'o-o-bank': [],
-    #                 'o-o-nobank': [],
-    #                 'o-n': [],
-    #                 'n-n': [],
-    #             }
-    #         # For computing AUC Scores
-    #         train_preds = []
-    #         train_labels = []
-            
-    #         for snapshot in range(2, 30):
-    #             print("INFO: Training on snapshot", snapshot)
-                
-    #             # Prepare current target graph count
-    #             self.current_target_count_old_nodes = self.probabilities[snapshot][0] # TODO: change the name to counts
-    #             self.current_target_count_new_nodes = self.probabilities[snapshot][1]
-    #             self.current_target_count = {
-    #                 edge_type: self.probabilities[snapshot][j + 2]
-    #                 for j, edge_type in enumerate(self.all_edge_types)
-    #             }
-                
-    #             node_types = { 
-    #                 "old_nodes": self.sample_old_nodes(self.training_graphs[max(0, snapshot - encoder_config["training"]["day"]):snapshot], snapshot),
-    #                 "new_nodes": set()
-    #             } 
-                
-    #             constructing_graph = nx.DiGraph() # Graph we try to predict
-                    
-    #             # Adding old nodes to constructing_graph
-    #             constructing_graph.add_nodes_from(node_types['old_nodes'])
-                
-    #             for flag in self.all_edge_types:
-    #                 curr_X_train = training_samples[flag]['X'][snapshot]
-    #                 curr_y_train = training_samples[flag]['y'][snapshot]
-                    
-    #                 if len(curr_X_train) == 0 or len(curr_y_train) == 0:
-    #                     print(f'No samples for edge type: {flag}')
-    #                     continue
-                    
-    #                 curr_X_train = [x.cpu().detach().numpy() if torch.is_tensor(x) else x for x in curr_X_train]
-    #                 curr_X_train = np.array(curr_X_train)
-    #                 curr_y_train = np.array(curr_y_train)
 
-    #                 X_train_curr, curr_y_train = shuffle(curr_X_train, curr_y_train, random_state=self.seed)
-    #                 temp_X_train = torch.tensor(X_train_curr, dtype=torch.float32).to(device)
-    #                 temp_y_train = torch.tensor(curr_y_train, dtype=torch.float32).to(device)
-    #                 train_loader = DataLoader(TensorDataset(temp_X_train, temp_y_train), batch_size=encoder_config["training"]["batch_size"], shuffle=True)
-                    
-    #                 # Training graphs for predicting current snapshot
-    #                 training_graphs = self.training_graphs[max(0, snapshot - encoder_config["training"]["day"]):snapshot]
-    #                 old_nodes_days = set().union(*[g.nodes() for g in training_graphs[max(snapshot - 5, 0): snapshot]])
-                    
-    #                 for (x, y) in train_loader:
-    #                     optimizer.zero_grad()
-    #                     node_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=training_graphs, encoder_model=self.encoder_model, device=device)
-                        
-    #                     # Get current embeddings
-    #                     src_nodes = [int(n) for n in x[:, 0].tolist()]                
-    #                     dst_nodes = [int(n) for n in x[:, 1].tolist()]
-                        
-    #                     # Add new nodes to the node_types
-    #                     for n in src_nodes:
-    #                         if n not in node_embeddings and flag in ['o-n', 'n-n']:
-    #                             node_types["new_nodes"].add(n)
-    #                             constructing_graph.add_node(n)
-    #                             node_embeddings[n] = torch.zeros(self.input_dim, device=device)
-                                
-    #                     for n in dst_nodes:
-    #                         if n not in node_embeddings and flag in ['o-n', 'n-n']:
-    #                             node_types["new_nodes"].add(n)
-    #                             constructing_graph.add_node(n)
-    #                             node_embeddings[n] = torch.zeros(self.input_dim, device=device)
-                        
-    #                     # Assign embeddings for source nodes
-    #                     # Assign zero vectors for new nodes for on and nn edge type
-    #                     src_embed = torch.stack([
-    #                         node_embeddings[n] for n in src_nodes
-    #                     ])
-
-    #                     # Assign embeddings for dest nodes
-    #                     # Assign zero vectors for new nodes for on and nn edge type
-    #                     dst_embed = torch.stack([
-    #                         node_embeddings[n] for n in dst_nodes
-    #                     ])
-
-    #                     # Converting dim
-    #                     if src_embed.dim() == 1:
-    #                         src_embed = src_embed.unsqueeze(1)  
-    #                     if dst_embed.dim() == 1:
-    #                         dst_embed = dst_embed.unsqueeze(1) 
-                        
-    #                     # Get predictions for link
-    #                     preds = self.link_prediction_decoder(src_embed=src_embed, dst_embed=dst_embed, edge_type=flag)
-                        
-    #                     if preds.dim() == 0:
-    #                         preds = preds.unsqueeze(0)
-    #                     if y.dim() == 0:  # scalar value like torch.tensor(0.5)
-    #                         y = y.unsqueeze(0)  # make it [1]
-    #                     elif y.dim() == 2 and y.size(1) == 1:  # shape [batch_size, 1]
-    #                         y = y.view(-1)
-                            
-                        
-    #                     loss = loss_fn(preds, y)
-    #                     loss.backward()
-    #                     optimizer.step()
-    #                     train_loss[flag].append(loss.item())
-                        
-    #                     # Add to our labels for evaluation
-    #                     train_preds.extend(preds.detach().cpu().numpy())
-    #                     train_labels.extend(y.detach().cpu().numpy())
-
-    #                 # Constructing target graph
-    #                 # pred_graph, _ = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=snapshot)
-    #                 # pred_graph = pred_graph[-1]
-    #                 # pred_kernel = run_graphlet_estimate(pred_graph)
-    #                 # true_kernel = run_graphlet_estimate(self.training_graphs[snapshot])
-    #                 # graphlet_loss = graphlet_loss_fn(to_tensor(pred_kernel, device=device).unsqueeze(0), to_tensor(true_kernel, device=device).unsqueeze(0))
-    #                 # graphlet_loss.backward()
-    #                 # optimizer.step()
-                    
-    #                 # Constructing temp graph
-    #                 if flag == self.all_edge_types[-1]:
-    #                     continue
-    #                 curr_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=training_graphs, encoder_model=self.encoder_model, device=device)
-    #                 constructing_graph = get_node_features(constructing_graph.copy(), self.training_graphs[:snapshot], self.thresholds, self.graph_descriptions[snapshot], node_types["old_nodes"], node_types["new_nodes"])
-    #                 sampled_edges = predict_edges(constructing_graph, edge_type=flag, node_types=node_types, edgebank=self.all_edgebanks[snapshot], link_prediction_decoder=self.link_prediction_decoder, 
-    #                             old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=snapshot, device=device)
-    #                 constructing_graph.add_edges_from(list(sampled_edges))
-    #                 update_degrees(constructing_graph)
-                    
-    #                 # Update the training_graphs to involve with the constructing graph
-    #                 if flag == self.all_edge_types[0]:
-    #                     training_graphs.append(constructing_graph)
-    #                 else:
-    #                     training_graphs[-1] = constructing_graph 
-                    
-    #                 if len(np.unique(train_labels)) < 2:
-    #                     train_auc[flag].append(0)
-    #                 else:
-    #                     train_auc[flag].append(roc_auc_score(train_labels, train_preds))  # Calculate scores
-                        
-    #         # Validation
-    #         # self.run_validation(validation_samples=validation_samples, batch_size=encoder_config["training"]["batch_size"], epoch=epoch)
-            
-    #         # Record the Training Loss, AUC 
-    #         gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
-    #         for flag in self.all_edge_types:
-    #             if (epoch + 1) % 1 == 0 or epoch == 0:
-    #                 epochMessage = f"Epoch {epoch+1:02d} | Edge Type: {flag} | Train Loss: {np.mean(train_loss[flag]):.4f} | Train AUCROC {np.mean(train_auc[flag]):.4f} | GPU: {gpu_mem_alloc:.1f}MiB"
-    #                 print(epochMessage)
-    #                 with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance_{self.seed}.txt', "a") as f:
-    #                     f.write(epochMessage + "\n")
-    #                     f.flush()
-            
-
-    #     return self.link_prediction_decoder, self.encoder_model
-
-    # Same for the above but run faster with autocast and mixed precision and freeze encoder
     def train_multi_head(self, training_samples, validation_samples):
+        """
+        Params:
+            training_samples ():
+            validation_samples (): 
+            
+        Returns:
+
+        """
         lr = encoder_config["training"]["lr"]
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         use_cuda = (device.type == "cuda")
 
         # choose workers; start safe at 0 on cluster, bump later to 2–4
@@ -481,27 +337,32 @@ class Runner(object):
             epoch_losses = {k: [] for k in self.all_edge_types}
             epoch_aucs   = {k: [] for k in self.all_edge_types}
 
-            for snapshot in range(2, self.train_end // 2):
-                self.current_target_count_old_nodes = self.probabilities[snapshot][0]
-                self.current_target_count_new_nodes = self.probabilities[snapshot][1]
+            for snapshot in range(self.starting_graph, self.train_end):
+                current_target_graph_description = self.graph_descriptions[snapshot]
+                # Used to convert probabilities
+                V_total = int(current_target_graph_description[-1][0])
+                E_total = int(current_target_graph_description[-1][1])
+                self.current_target_count_old_nodes = int(round(self.probabilities[snapshot][0] * V_total))
+                self.current_target_count_new_nodes = int(round(self.probabilities[snapshot][1] * V_total))
                 self.current_target_count = {
-                    edge_type: self.probabilities[snapshot][j + 2]
-                    for j, edge_type in enumerate(self.all_edge_types)
-                }
+                        edge_type: int(round(self.probabilities[snapshot][j + 2] * E_total))
+                        for j, edge_type in enumerate(self.all_edge_types)
+                    }
 
                 node_types = {
                     "old_nodes": self.sample_old_nodes(
-                        self.training_graphs[max(0, snapshot - encoder_config["training"]["day"]): snapshot],
-                        snapshot
+                        self.training_graphs[max(0, snapshot - self.days_back): snapshot],
                     ),
                     "new_nodes": set()
                 }
 
-                window_graphs = self.training_graphs[max(0, snapshot - encoder_config["training"]["day"]): snapshot]
+                window_graphs = self.training_graphs[max(0, snapshot - self.days_back): snapshot]  # Get the graphs from the past days_back days
 
                 # PyTorch <=1.9: no device_type kw
                 with torch.cuda.amp.autocast(enabled=use_cuda):
                     with torch.no_grad():
+                        # TODO This part could be more efficient
+                        # Compute embeddings for the past graphs in our context window
                         base_embeddings = compute_embedding(
                             embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"],
                             graphs=window_graphs,
@@ -509,7 +370,7 @@ class Runner(object):
                             device=device
                         )
 
-                constructing_graph = nx.DiGraph()
+                constructing_graph = nx.DiGraph() if self.is_directed else nx.Graph()
                 constructing_graph.add_nodes_from(node_types["old_nodes"])
 
                 for flag in self.all_edge_types:
@@ -557,11 +418,11 @@ class Runner(object):
                         src_nodes = xb[:, 0].long().tolist()
                         dst_nodes = xb[:, 1].long().tolist()
 
-                        for n in src_nodes + dst_nodes:
+                        new_nodes_to_add = set(src_nodes + dst_nodes) - base_embeddings.keys()
+                        for n in new_nodes_to_add:
                             n_int = int(n)
-                            if n_int not in base_embeddings:
-                                node_types["new_nodes"].add(n_int)
-                                base_embeddings[n_int] = torch.zeros(self.input_dim, device=device)
+                            node_types["new_nodes"].add(n_int)
+                            base_embeddings[n_int] = torch.zeros(self.input_dim, device=device)
 
                         src_embed = torch.stack([base_embeddings[int(n)] for n in src_nodes])
                         dst_embed = torch.stack([base_embeddings[int(n)] for n in dst_nodes])
@@ -576,10 +437,14 @@ class Runner(object):
                         embedder = EmbedDegree(include_weights=False)
 
                         # Make the TopER embedding
-                        pred_embedding, _, _ = embedder.process_graphs_for_embeddings([constructing_graph])
-                        pred_embedding = pred_embedding[0]
-                        true_embedding, _, _ = embedder.process_graphs_for_embeddings([self.training_graphs[snapshot]])
-                        true_embedding = true_embedding[0]
+                        if len(node_types["old_nodes"]) > 0:
+                            pred_embedding, _, _ = embedder.process_graphs_for_embeddings([constructing_graph])
+                            pred_embedding = pred_embedding[0]
+                            true_embedding, _, _ = embedder.process_graphs_for_embeddings([self.training_graphs[snapshot]])
+                            true_embedding = true_embedding[0]
+                        else:
+                            pred_embedding = np.zeros(20)
+                            true_embedding = np.zeros(20)
 
                         toper_loss = toper_loss_fn(to_tensor(pred_embedding, device=device).unsqueeze(0), to_tensor(true_embedding, device=device).unsqueeze(0))
 
@@ -613,7 +478,7 @@ class Runner(object):
                         edgebank=self.all_edgebanks[snapshot],
                         link_prediction_decoder=self.link_prediction_decoder,
                         old_node_embeddings=curr_embeds,
-                        top_k=self.current_target_count[flag], graph_num=snapshot, device=device
+                        top_k=self.current_target_count[flag], graph_num=snapshot, device=device, train=True
                     )
                     constructing_graph.add_edges_from(list(sampled_edges))
                     update_degrees(constructing_graph)
@@ -628,9 +493,15 @@ class Runner(object):
                     f"GPU: {gpu_mem_alloc:.1f}MiB"
                 )
                 print(msg, flush=True)
-                with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\multiheadMLP_performance_{self.seed}.txt', "a") as f:
+                with open(rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/multiheadMLP_performance_{self.seed}.txt', "a") as f:
                     f.write(msg + "\n")
                     f.flush()
+
+            self.run_validation(
+                validation_samples=validation_samples,
+                batch_size=encoder_config["training"]["batch_size"],
+                epoch=epoch
+            )
 
         return self.link_prediction_decoder, self.encoder_model
     
@@ -639,35 +510,65 @@ class Runner(object):
         """
         Create and train the models used for graph construction, these will be used for later graph construction
         
-        Args:
-            lr (float): The learning rate to use for the model
-            seed (int): The seed for reproducibility purposes, controls our randomness in this strategy
+        Params:
+            None
             
         Returns:
             link_prediction_decoder (MLP NN): The trained MLP, either single or multiheaded
+            encoder_model (): The Encoder we will use to get node features later
         """
         MAX_SAMPLES = 1000000  # 1 Million
-
-        old_training_nodes = set().union(*[g.nodes() for g in self.training_graphs]) 
         
         # Prepare training data
-        training_sorted_samples, training_new_edges_count = generate_training_data_cached(training_graphs=self.training_graphs,
-                                                all_edgebanks=self.all_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, saved_data_file_path=self.saved_input)
+        training_sorted_samples = generate_training_data_cached(training_graphs=self.training_graphs,
+                                                all_edgebanks=self.all_edgebanks[:self.train_end], days_back=self.days_back, MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, is_directed=self.is_directed, saved_data_file_path=self.saved_input)
 
         # Prepare validation data
+        val_graphs_combined = self.training_graphs[-self.days_back:] + self.validation_graphs  # We pass in the last days of training so that we can get the old edges and nodes from it
+        # This could also likely be done through the edgebank, but there would be a logic issue where if a node has no outgoing edge in the directed case, it fails
+        
+        val_edgebanks = self.all_edgebanks[self.train_end + 1 : self.val_end]
+
+        # If fewer edgebanks than graphs, pad the beginning with the last few training edgebanks
+        if len(val_edgebanks) < len(val_graphs_combined):
+            num_missing = len(val_graphs_combined) - len(val_edgebanks)
+            padding = self.all_edgebanks[self.train_end - num_missing + 1 : self.train_end + 1]
+            val_edgebanks = padding + val_edgebanks
+        
         # We pass all_edgebanks of the training snapshots edgebanks
-        validation_sorted_samples, training_new_edges_count = generate_validation_data_cached(training_graphs=self.validation_graphs, old_training_nodes=old_training_nodes, 
-                                                all_edgebanks=self.all_edgebanks[self.train_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="validation", saved_data_file_path=self.saved_input)
+        validation_sorted_samples = generate_validation_data_cached(training_graphs=val_graphs_combined, days_back=self.days_back, 
+                                               all_edgebanks=val_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, is_directed=self.is_directed, type_data="validation", saved_data_file_path=self.saved_input)
+                
         # Prepare test data
+        num_needed = self.days_back
+        prev_val_graphs = self.validation_graphs[-num_needed:]
+        if len(prev_val_graphs) < num_needed:
+            num_missing = num_needed - len(prev_val_graphs)
+            prev_train_graphs = self.training_graphs[-num_missing:]
+        else:
+            prev_train_graphs = []
+
+        test_graphs_combined = prev_train_graphs + prev_val_graphs + self.test_graphs
+
+        # Slice edgebanks for test
+        test_edgebanks = self.all_edgebanks[self.val_end:]
+
+        # Pad to match
+        if len(test_edgebanks) < len(test_graphs_combined):
+            num_missing = len(test_graphs_combined) - len(test_edgebanks)
+            padding = self.all_edgebanks[self.val_end - num_missing : self.val_end]
+            test_edgebanks = padding + test_edgebanks
+        
         # We pass all_edgebanks of the training snapshots edgebanks
-        test_sorted_samples, training_new_edges_count = generate_validation_data_cached(training_graphs=self.test_graphs, old_training_nodes=old_training_nodes, 
-                                                all_edgebanks=self.all_edgebanks[self.val_end], MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, type_data="test", saved_data_file_path=self.saved_input)
+        test_sorted_samples = generate_validation_data_cached(training_graphs=test_graphs_combined, days_back=self.days_back, 
+                                                all_edgebanks=test_edgebanks, MAX_SAMPLES=MAX_SAMPLES, dataset=encoder_config["dataset"], seed=self.seed, is_directed=self.is_directed, type_data="test", saved_data_file_path=self.saved_input)
         
         print('Training') 
     
-        self.link_prediction_decoder = self.train_multi_head(training_samples=training_sorted_samples, validation_samples=validation_sorted_samples)
+        self.link_prediction_decoder, self.encoder_model = self.train_multi_head(training_samples=training_sorted_samples, validation_samples=validation_sorted_samples)
         
         return self.link_prediction_decoder, self.encoder_model
+            
             
     # ======================= BUILD GRAPH =======================
     def build_accumulating_filtration_sequence_with_edgebank(self, current_target_snapshot):
@@ -678,8 +579,6 @@ class Runner(object):
         
         Args:
             current_target_graph_description (list): The TopER current_target_graph_description to guide construction of the graph, stores the number of nodes and edges to add to the graph
-            thresholds (list): The thresholds for node degrees 'maxDegree' as dicted by TopER
-            seed (int): The seed for reproducibility purposes, controls our randomness in this strategy
             
         Returns:
             filtration_graphs (list(nx.DiGraph)): A list of nx Graphs that we built up from our TopER current_target_graph_description
@@ -693,32 +592,18 @@ class Runner(object):
         current_target_graph_description = self.graph_descriptions[current_target_snapshot]
         prev_graphs = [graph[-1] for graph in self.target_graphs[max(current_target_snapshot - encoder_config["training"]["day"], 0):current_target_snapshot]]
         
-        # Prepare the graphs we have known
-        known_graphs = self.training_graphs[:self.current_target_snapshot]
-        
+        # How many nodes and edges we are expecting to see        
         V_total = int(current_target_graph_description[-1][0])
         E_total = int(current_target_graph_description[-1][1])
-        W_total = current_target_graph_description[-1][2] 
 
-        # Sample old nodes
-        probs = compute_reappearance_probabilities(graphs=prev_graphs,
-                                                   t_curr=current_target_snapshot)
-        node_ids = list(probs.keys())
-        weights = list(probs.values())
-
-        old_nodes = list(np.random.choice(node_ids, size=self.current_target_count_old_nodes, replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
+        old_nodes = self.sample_old_nodes(prev_graphs)
 
         # Create new node IDs
-        current_target_old_nodes = set().union(*[g[-1].nodes() for g in self.target_graphs[:current_target_snapshot]])
-        if current_target_old_nodes:
-            max_id = max(current_target_old_nodes)
-        else:
-            max_id = 0
+        new_nodes = np.arange(self.new_node_id, self.new_node_id + self.current_target_count_new_nodes)
+        self.new_node_id += len(new_nodes)  # Get the next new node id (the next available number)
+        all_nodes = list(old_nodes) + list(new_nodes)
 
-        new_nodes = list(range(max_id + 1, max_id + 1 + self.current_target_count_new_nodes))
-        all_nodes = old_nodes + new_nodes
-
-        constructing_graph = nx.DiGraph()  # A graph for computing node embeddings easily
+        constructing_graph = nx.DiGraph() if self.is_directed else nx.Graph()  # A graph for computing node embeddings easily
         
         node_types = {
             "old_nodes": old_nodes,
@@ -733,7 +618,8 @@ class Runner(object):
         
         # Assign zero vector for new nodes
         for new_node in new_nodes:
-            curr_embeddings[new_node] = np.zeros(len(curr_embeddings[old_nodes[0]]))
+            curr_embeddings[new_node] = torch.zeros(len(curr_embeddings[old_nodes[0]]), device=device, dtype=torch.float32)
+
             
         # SAMPLE EDGES STEP
         # Get edges of each type
@@ -751,88 +637,211 @@ class Runner(object):
         
             edge_pool = edge_pool + sampled_edges
             
-        weights = np.random.dirichlet(np.ones(len(edge_pool))) * W_total
-        edge_weight_map = {edge: w for edge, w in zip(edge_pool, weights)}
+        # weights = np.random.dirichlet(np.ones(len(edge_pool))) * W_total
+        # edge_weight_map = {edge: w for edge, w in zip(edge_pool, weights)}
 
         # ======== START GRAPH CONSTRUCTION ========
-        G = nx.DiGraph()
+        G = nx.DiGraph() if self.is_directed else nx.Graph()
         used_edges = set()
         filtration_graphs = []
 
-        for i, (v_target, e_target, w_target) in enumerate(current_target_graph_description):
-            v_target = int(v_target)
-            e_target = int(e_target)
+        # for i, (v_target, e_target) in enumerate(current_target_graph_description):
+        #     v_target = int(v_target)
+        #     e_target = int(e_target)
 
-            current_nodes = set(all_nodes[:v_target])
-            G.add_nodes_from(current_nodes)
+        #     current_nodes = {node for node, degree in constructing_graph.degree() if degree <= self.thresholds[i]}
+        #     G.add_nodes_from(current_nodes)
 
-            available_edges = [
-                (u, v) for (u, v) in edge_pool
-                if u in current_nodes and v in current_nodes and (u, v) not in used_edges
-            ]
+        #     available_edges = [
+        #         (u, v) for (u, v) in edge_pool
+        #         if u in current_nodes and v in current_nodes and (u, v) not in used_edges
+        #     ]
 
-            needed = e_target - G.number_of_edges()
-            selected_edges = available_edges[:needed]
+        #     needed = e_target - G.number_of_edges()
+        #     selected_edges = available_edges[:needed]
 
-            for (u, v) in selected_edges:
-                G.add_edge(u, v, weight=edge_weight_map[(u, v)])
-                used_edges.add((u, v))
+        #     for (u, v) in selected_edges:
+        #         #G.add_edge(u, v, weight=edge_weight_map[(u, v)])
+        #         G.add_edge(u, v)
+        #         used_edges.add((u, v))
 
-            filtration_graphs.append(G.copy())
+        #     filtration_graphs.append(G.copy())
+
+        # Trying some new logic here, this should capture the nodes properly and quicker. We will rely on TopER more heavily earlier
+        filtration_graphs = []
+        for i, threshold in enumerate(self.thresholds[0: len(self.thresholds) - 1]):
+            current_nodes = [node for node, degree in constructing_graph.degree() if degree <= threshold]
+            subgraph = constructing_graph.subgraph(current_nodes).copy()
+            filtration_graphs.append(subgraph)
+
+        filtration_graphs.append(constructing_graph.copy())  # The last graph is the full graph, we add it at the end regardless
 
         return filtration_graphs, node_types
 
-    # ======================= Evaluate =======================
-    def evaluate(self, pred_graph, true_graph, node_types):
-        # Evaluate the graph of o-n 
-        pred_on_graph = create_on_graph(node_types["new_nodes"], self.current_target_old_nodes, pred_graph.copy())
-        true_on_graph = create_on_graph(node_types["new_nodes"], self.current_target_old_nodes, true_graph.copy())
-        
-        on_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
 
-        with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\kl_results_on.txt', "a") as f:
-            f.write(f"{self.current_target_snapshot + 1}, {on_kl_divergence_results:.6f}\n")
-            f.flush()
+    def _setup_clean_files(self, directories, file_paths):
+        """
+        Utility function for emptying files if they exist
+        We don't want to repeatedly add trials to the csvs/txt files after many runs
+        
+        Params:
+            directories (list): The directories to create
+            file_paths (list): The file paths we plan on storing data in
             
-        # Evaluate the graph of n-n 
-        pred_nn_graph = create_nn_graph(node_types["new_nodes"], pred_graph.copy())
-        true_nn_graph = create_nn_graph(node_types["new_nodes"], true_graph.copy())
+        Returns:
+            None
+        """
+        for directory in directories:
+            os.makedirs(directory, exist_ok=True)
+
+        # Delete if they exist
+        for path in file_paths:
+            if os.path.exists(path):
+                os.remove(path)
+
+    # ======================= Evaluate =======================
+    def evaluate(self, pred_graph, true_graph, sorted_nodes_pred, sorted_nodes_true):
+        """
+        Evaluate the constructed graph across various metrics including:
+            - Graphlet kernels
+            - Its TopER vector
+            - Precision, Recall, F1 score for various subgraphs
+            - The nodes we added to the constructed graph
+            - The graph's structure
+            
+        Params:
+            pred_graph (nx.Graph/nx.DiGraph): The graph we just finished constructing
+            true_graph (nx.Graph/nx.DiGraph): The target graph
+            sorted_nodes_pred (dict{str: list}): A dictionary storing lists of ids for 'old_nodes' and 'new_nodes' for pred_graph
+            sorted_nodes_true (dict{str: list}): A dictionary storing lists of ids for 'old_nodes' and 'new_nodes' for true_graph
+            
+        Returns:
+            None
+        """
+        # Setup (clearing files if needed)
+        
+        if self.current_target_snapshot == self.starting_graph:
+            directories = [
+                self.file_visualization_path,
+                self.structure_dir,
+                self.edge_eval_dir,
+                self.kernel_dir
+            ]
+                        
+            target_files = [
+                f"{self.edge_eval_dir}/old_nodes_only.csv",
+                f"{self.edge_eval_dir}/new_nodes_only.csv",
+                f"{self.edge_eval_dir}/on_edges_only.csv",
+                f"{self.edge_eval_dir}/all_edges.csv",
+                f"{self.structure_dir}/node_evaluation.csv",
+                f"{self.structure_dir}/structure_true.csv",
+                f"{self.structure_dir}/structure_pred.csv",
+                f"{self.structure_dir}/toper_eval.csv",
+                f"{self.kernel_dir}/kernel_pred.csv",
+                f"{self.kernel_dir}/kernel_true.csv",
+                f"{self.kernel_dir}/kernel_diff.csv",
+                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_old_nodes.txt",
+                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_nn.txt",
+                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_on.txt",
+                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_overall.txt",
+            ]
+            
+            self._setup_clean_files(directories, target_files)
+        
+        
+        # Evaluate the correctness of nodes that we have chosen (old, new, together)
+        results_node_evaluation = self.evaluator.evaluate_node_selection(sorted_nodes_pred, sorted_nodes_true, self.current_target_old_nodes, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the graph of just old nodes (edge types: oo, oon)
+        pred_old_nodes_graph = pred_graph.subgraph(sorted_nodes_pred['old_nodes']).copy()
+        true_old_nodes_graph = true_graph.subgraph(sorted_nodes_true['old_nodes']).copy()
+        
+        old_nodes_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_old_nodes_graph, true_old_nodes_graph, mode="total")
+            
+        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_old_nodes.txt', 
+                                        value=old_nodes_kl_divergence_results, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the AUC here
+        results_old_nodes_edges = self.evaluator.evaluate_graph_edges(pred_old_nodes_graph, true_old_nodes_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the graph of just new nodes (edge types: nn)
+        pred_nn_graph = pred_graph.subgraph(sorted_nodes_pred['new_nodes']).copy()
+        true_nn_graph = true_graph.subgraph(sorted_nodes_true['new_nodes']).copy()
 
         nn_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_nn_graph, true_nn_graph, mode="total")
-
-        with open(rf'{self.file_visualization_path}\{encoder_config["dataset"]}\{encoder_config["encoder_model"]["nodeEmbeddingType"]}\kl_results_nn.txt', "a") as f:
-            f.write(f"{self.current_target_snapshot + 1}, {nn_kl_divergence_results:.6f}\n")
-            f.flush()
             
-        # Evaluate the graph of old nodes
-        oldG = pred_graph.subgraph(self.current_target_old_nodes).copy()
-        target_oldG = true_graph.subgraph(self.current_target_old_nodes).copy()
-
-        # results_edges = self.evaluator.evaluateEdges(pred_graph, true_graph, curr_edgebank_pred, all_edgebanks[i], graph_num=i)
-        results_true_structure = self.evaluator.evaluateSingleStructure(target_oldG, graph_num=self.current_target_snapshot)
-        results_pred_structure = self.evaluator.evaluateSingleStructure(oldG, graph_num=self.current_target_snapshot)
+        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_nn.txt', 
+                                        value=nn_kl_divergence_results, graph_num=self.current_target_snapshot)
         
+        # Want to evaluate AUC of these
+        results_nn_edges = self.evaluator.evaluate_graph_edges(pred_nn_graph, true_nn_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the graph of just edge type on
+        pred_on_graph = create_on_graph(sorted_nodes_pred["new_nodes"], sorted_nodes_pred["old_nodes"], pred_graph.copy(), is_directed=self.is_directed)
+        true_on_graph = create_on_graph(sorted_nodes_true["new_nodes"], sorted_nodes_true["old_nodes"], true_graph.copy(), is_directed=self.is_directed)
+        
+        on_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
+            
+        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_on.txt', 
+                                        value=on_kl_divergence_results, graph_num=self.current_target_snapshot)
+            
+        # Evaluate the AUC here
+        results_on_edges = self.evaluator.evaluate_graph_edges(pred_on_graph, true_on_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the graph of shared nodes (all edge types)
+        results_all_edges = self.evaluator.evaluate_graph_edges(pred_graph, true_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the graphs in terms of structure
+        results_true_structure = self.evaluator.evaluateSingleStructure(true_graph, graph_num=self.current_target_snapshot)
+        results_pred_structure = self.evaluator.evaluateSingleStructure(pred_graph, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the graph in terms of kl divergence
+        overall_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_graph, true_graph, mode="total")
+
+        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_overall.txt', 
+                                        value=overall_kl_divergence_results, graph_num=self.current_target_snapshot)
+        
+        # Evaluate the graph in terms of its TopER vector (Degree)
         embedder = EmbedDegree(include_weights=False)
 
         # Make the TopER embedding
-        pred_embedding, _, _ = embedder.process_graphs_for_embeddings([constructing_graph])
+        pred_embedding, _, _ = embedder.process_graphs_for_embeddings([pred_graph])
         pred_toper = pred_embedding[0]
-        true_embedding, _, _ = embedder.process_graphs_for_embeddings([self.training_graphs[snapshot]])
+        true_embedding, _, _ = embedder.process_graphs_for_embeddings([true_graph])
         true_toper = true_embedding[0]
-        pred_label = 0  # Not important right now TODO
-        true_label = 0  # Not important right now TODO
-        results_toper_diff = self.evaluator.evaluateTopER(pred_toper, true_toper, pred_label, true_label, graph_num=0)
-        #pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(oldG, target_oldG)
+
+        results_toper_diff = self.evaluator.evaluateTopER(pred_toper, true_toper, graph_num=self.current_target_snapshot)  # Get the difference
+            
+        # Evaluate the graph in terms of graphlet kernels
+        pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(pred_graph, true_graph)
+                        
+        # Write results
+        for data, path in [
+            (results_old_nodes_edges, f"{self.edge_eval_dir}/old_nodes_only.csv"),
+            (results_nn_edges, f"{self.edge_eval_dir}/new_nodes_only.csv"),
+            (results_on_edges, f"{self.edge_eval_dir}/on_edges_only.csv"),
+            (results_all_edges, f"{self.edge_eval_dir}/all_edges.csv"),
+            (results_node_evaluation, f"{self.structure_dir}/node_evaluation.csv"),
+            (results_true_structure, f"{self.structure_dir}/structure_true.csv"),
+            (results_pred_structure, f"{self.structure_dir}/structure_pred.csv"),
+            (results_toper_diff, f"{self.structure_dir}/toper_eval.csv"),
+            (pred_kernel, f"{self.kernel_dir}/kernel_pred.csv"),
+            (true_kernel, f"{self.kernel_dir}/kernel_true.csv"),
+            (distance, f"{self.kernel_dir}/kernel_diff.csv"),
+        ]:
+            pd.DataFrame([data]).to_csv(path, mode='a', header=not os.path.exists(path), index=False)
         
-        # Store all results
-        os.makedirs(self.structure_dir, exist_ok=True)
-        pd.DataFrame([results_true_structure]).to_csv(f"{self.structure_dir}/structure_true.csv", mode='a', header=False, index=False)
-        pd.DataFrame([results_pred_structure]).to_csv(f"{self.structure_dir}/structure_pred.csv", mode='a', header=False, index=False)
-        pd.DataFrame([results_toper_diff]).to_csv(f"{self.structure_dir}/toper_eval.csv", mode='a', header=False, index=False)
-        # pd.DataFrame([pred_kernel]).to_csv(f"{self.kernel_dir}/kernel_pred.csv", mode='a', header=False, index=False)
-        # pd.DataFrame([true_kernel]).to_csv(f"{self.kernel_dir}/kernel_true.csv", mode='a', header=False, index=False)
         
-    def run(self):             
+    def run(self):        
+        """
+        Our main runner function
+        
+        Params:
+            None
+            
+        Returns: 
+            None
+        """     
         print("INFO: Dataset: {}".format(encoder_config["dataset"]))
         self.encoder_model_path = os.path.join(self.saved_input, rf'saved_models/encoder_{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.seed}')
         self.decoder_model_path = os.path.join(self.saved_input, rf"saved_data/decoder_MLP_{self.seed}")
@@ -855,35 +864,57 @@ class Runner(object):
             print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
        
         # Old graphs that we know up to now
-        self.old_graphs = [self.target_graphs[0], self.target_graphs[1]]
+        self.old_graphs = [self.target_graphs[x] for x in range(self.starting_graph)]
         
+        all_node_ids = [node for g in self.old_graphs for node in g.nodes()]
+        self.new_node_id = max(all_node_ids) + 1 if all_node_ids else 0
+
         # To predict snapshot i, we use snapshot 0,...,i-1 to train
-        for i in range(2, len(self.probabilities)): 
+        for i in range(self.starting_graph, len(self.probabilities)): 
             print("INFO: >>> Temporal Graph Construction <<<")
             print("INFO: Predict snapshot: ", i)
             print("======================================")
 
             self.current_target_snapshot = i
             
-            # Get all old nodes
-            self.current_target_old_nodes = set().union(*[g[-1].nodes() for g in self.old_graphs])
+            # Get all old nodes in our context window
+            self.current_target_old_nodes = set().union(*[g[-1].nodes() for g in self.old_graphs[max(i - self.days_back, 0): i]])
             
-            # Get the true count of 4 edges type and number of new, old nodes of the target snapshot
-            self.current_target_count_old_nodes = self.probabilities[i][0]
-            self.current_target_count_new_nodes = self.probabilities[i][1]
+            current_target_graph_description = self.graph_descriptions[self.current_target_snapshot]
+            # Used to convert probabilities
+            V_total = int(current_target_graph_description[-1][0])
+            E_total = int(current_target_graph_description[-1][1])
+            
+            # Get the true count of 4 edges type and number of new, old nodes of the target snapshot (probabilities are fed in as percents)
+            self.current_target_count_old_nodes = int(round(self.probabilities[self.current_target_snapshot][0] * V_total))
+            self.current_target_count_new_nodes = int(round(self.probabilities[self.current_target_snapshot][1] * V_total))
             self.current_target_count = {
-                    edge_type: self.probabilities[i][j + 2]
+                    edge_type: int(round(self.probabilities[self.current_target_snapshot][j + 2] * E_total))
                     for j, edge_type in enumerate(self.all_edge_types)
                 }
+            
+            # Debugging:
+            if self.current_target_count_old_nodes + self.current_target_count_new_nodes != V_total:
+                print(f'WARNING: THE NUMBER OF NODES FROM PROBABILITIES IS WRONG: {self.current_target_count_old_nodes + self.current_target_count_new_nodes} != {V_total}')
+            if sum(self.current_target_count.values()) != E_total:
+                print(f'WARNING: THE NUMBER OF NODES FROM PROBABILITIES IS WRONG: {sum(self.current_target_count.values())} != {E_total}')
+            
             
             # Build the filtration sequence using the current parameters
             filtration_sequence, node_types = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=i)
             
+            sorted_nodes_pred = {k: set(v) for k, v in node_types.items()}  # We get this from the construction; cast it to sets
+            sorted_nodes_true = {
+                'old_nodes': self.current_target_old_nodes & set(self.target_graphs[i].nodes()), 
+                'new_nodes': set(self.target_graphs[i].nodes()) - self.current_target_old_nodes
+            }
+            
             # Evaluate generated graph
-            self.evaluate(pred_graph=filtration_sequence[-1], true_graph=self.target_graphs[i], node_types=node_types)
+            self.evaluate(pred_graph=filtration_sequence[-1], true_graph=self.target_graphs[i], sorted_nodes_pred=sorted_nodes_pred, sorted_nodes_true=sorted_nodes_true)
             
             # Add to the old graphs
             self.old_graphs.append(self.target_graphs[i])
+            
             
 if __name__ == '__main__':
     runner = Runner()

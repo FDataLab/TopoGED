@@ -14,7 +14,7 @@ class Visualizer:
     figdir_regression = os.path.abspath('data/output/results/RegressionTesting/graphs/')
     figdir_binary = os.path.abspath('data/output/results/BinaryTesting/graphs/')
     
-    def __init__(self, dataset, task):
+    def __init__(self, dataset=None, task=None):
         self.dataset = dataset
         self.task = task
         

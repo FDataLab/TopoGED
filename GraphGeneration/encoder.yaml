@@ -23,5 +23,8 @@ training:
   epochs: 200
   day: 5
 
-dataset: networkaion
+dataset: networkcentra
 seed: 1024
+days_back: 5
+directed_flag: False
+use_predicted_vals: False

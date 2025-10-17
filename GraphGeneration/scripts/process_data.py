@@ -92,12 +92,15 @@ def process_starter_graph(graphs: list, thresholds: list, encoder_model):
     
     return final_embeddings, degree_clusters, existing_nodes, edgebank
 
-def modifyGraphIds(graphs, thresholds):
+
+def modifyGraphIds(graphs, thresholds, days_back=5):
     '''
     For the target graphs, modify their ids to start at 0 for an instance of a node, then increment throughout the graphs
     
     Args:
         graphs (list(nx.Graph)): A list of graphs to modify
+        thresholds (list): The thresholds to determine the max degree, taken from TopER
+        days_back (int): How many days back we look to determine our edge bank; also known as our context window (default 5)
         
     Returns:
         graphs (list(nx.Graph)): The modified graphs (operations performed in-place)       
@@ -109,8 +112,9 @@ def modifyGraphIds(graphs, thresholds):
 
     # Iterate over all graphs in the list of lists (where each graph is a subgraph in the list)
     # First pass: assign a new ID to every unique node
-    for graph_list in graphs:
+    for i, graph_list in enumerate(graphs):
         updated_sublist = []
+        old_nodes = set().union(*[graphs[curr_step][-1].nodes() for curr_step in range(max(i - days_back, 0), i)])
         for graph in graph_list:
             curr_mapping = {}  # Mapping applies to this specific graph
 
@@ -120,7 +124,7 @@ def modifyGraphIds(graphs, thresholds):
                     graph.nodes[node]['feat'] = {}
 
                 # Mark the node as new or old
-                if node not in node_mapping:
+                if node not in old_nodes:
                     node_mapping[node] = new_id
                     new_id += 1
                     graph.nodes[node]['feat']['type'] = 1  # Node is new
@@ -156,27 +160,32 @@ def modifyGraphIds(graphs, thresholds):
 
     return updated_graphs, len(node_mapping)
 
-def build_edgebanks_from_start(graphs, days=5):
+
+def build_edgebanks_from_start(graphs, is_directed, days_back=5):
     """
     Build the edgebanks for each graph in graphs, stores all edges from graph i-1 in each index i
     
     Args:
         graphs (list(nx.Graph)): A list of nx Graphs that we will build our edgebanks from
+        is_directed (bool): A flag for representing if the graph is a DiGraph or not (True/False)
+        days_back (int): How many days back we look to determine our edge bank; also known as our context window (default 5)
         
     Returns:
         edgebanks (list(dict)): A list of dictionary edgebanks that store all edges from the previous graphs in each index
     """
     edgebanks = [{}]  # Initialize an empty list for edgebanks
-    all_old_nodes = set(graphs[0][-1].nodes())  # To keep track of all old nodes across graphs
+
     # Loop over all graphs (starting from the second graph)
     for i in range(1, len(graphs)):
         curr_edgebank = {}
 
         # Add edges from all previous graphs (not the current graph)
-        for j in range(max(i - days, 0), i):  # Loop through all previous graphs (graphs i - days to i-1)
+        for j in range(max(i - days_back, 0), i):  # Loop through all previous graphs (graphs i - days to i-1)
             
             for u, v in graphs[j][-1].edges():  # Accessing the graph directly
-                curr_edgebank.setdefault(u, []).append(v)  # Add edge from u to v
+                curr_edgebank.setdefault(u, set()).add(v)  # Add edge from u to v
+                if not is_directed:
+                    curr_edgebank.setdefault(v, set()).add(u)
         edgebanks.append(curr_edgebank)
 
     return edgebanks

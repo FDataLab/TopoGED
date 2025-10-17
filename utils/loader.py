@@ -11,6 +11,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.probabilities import Probs
+from utils.utils import Utils
 from utils.embedding_methods.betweenness import EmbedBetweenness
 from utils.embedding_methods.incremental_closeness import EmbedIncrementalCloseness
 from utils.embedding_methods.degree import EmbedDegree
@@ -22,6 +23,7 @@ class Loader():
     output_dir = os.path.abspath('data/input/cached')
     edgelist_dir = os.path.abspath('data/input/raw/edgelist')
     label_dir = os.path.abspath('data/input/raw/labels')
+    my_utils = Utils()
 
     def verify_embeddings(self, embeddings, activation, dataset, norm=False, include_weights=True):
         print(f'Verifying {activation} on dataset {dataset}')
@@ -87,7 +89,7 @@ class Loader():
         return all_data
 
 
-    def load_data(self, dataset, activation, type='features', include_weights=True, num_back='all'):
+    def load_data(self, dataset, activation, type='features', include_weights=True, normalized=True, use_predicted=False, num_back='all'):
         """
         Load a single, specified dataset that exists
         
@@ -99,6 +101,7 @@ class Loader():
             labels (list): The associated labels for each graph
         """
         self.to_cached()
+        
         if type == 'subgraphs':
             seek_file = dataset + '_' + activation + '_subgraphs.pkl'
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
@@ -106,15 +109,25 @@ class Loader():
         elif type == 'thresholds':
             seek_file = dataset + '_' + activation + '_thresholds.pkl'
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
-            dataset_folder = os.path.join(dataset_folder, 'thresholds')  # Target folder path
+            if use_predicted:
+                dataset_folder = os.path.join(dataset_folder, 'PredTopER')  # Target folder path
+            else:
+                dataset_folder = os.path.join(dataset_folder, 'thresholds')  # Target folder path
         elif type == 'features' and include_weights == True:
             seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
         elif type == 'probabilities':
             seek_file = dataset + '_' + 'probabilities'
             dataset_folder = os.path.join(self.output_dir, dataset)
-            dataset_folder = os.path.join(dataset_folder, 'probabilities')
-            df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities_{num_back}_back.csv')
+            
+            if use_predicted:
+                dataset_folder = os.path.join(dataset_folder, 'PredProbs')
+            else:
+                dataset_folder = os.path.join(dataset_folder, 'probabilities')
+            if normalized:
+                df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities_{num_back}_back_norm.csv')
+            else:
+                df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities_{num_back}_back.csv')
             df = df.drop(columns=["Unnamed: 0"], errors="ignore")
             return df  # We just return the dataframe directly
         else:
@@ -281,6 +294,7 @@ class Loader():
             None
         """
         normalization_datasets = ['networkaeternity', 'networkiconomi', 'networkcindicator', 'networkdgd']  # Cuneyt recommended normalizing these datasets due to large edge weights messing up data
+        normalization_datasets = []  # None for now
         
         raw_data = [file for file in os.listdir(self.edgelist_dir)]
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
@@ -344,6 +358,11 @@ class Loader():
             if not os.path.exists(probabilities_file):
                 missing_cached.append(dataset)
                 
+            # Check the normalized probabilities
+            probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_all_back_norm.csv')
+            if not os.path.exists(probabilities_file):
+                missing_cached.append(dataset)
+                
             for num_back in [5, 7]:
                 probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_{num_back}_back.csv')
                 if not os.path.exists(probabilities_file):
@@ -351,6 +370,7 @@ class Loader():
         
                 
         # If we are missing files, generate them
+        missing_cached = list(set(missing_cached))
         if missing_cached:
             print(f'Generating pkl files for the following datasets: {missing_cached}')
 
@@ -361,6 +381,7 @@ class Loader():
                 else:
                     norm = False
                     
+                print('Reading graphs')
                 graphs = self.read_edges_directed(file, norm=norm)
                 
                 print(f'There are {len(graphs)} graphs in this dataset')
@@ -439,7 +460,11 @@ class Loader():
                     probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back.csv')
                     df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
                     df.to_csv(probabilities_file_path)
-                
+                    norm_probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back_norm.csv')
+                    normalized_probs = np.vstack(df.apply( lambda row: self.my_utils.normalize_vector_by_groups(row.values), axis=1))
+                    df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                    df.to_csv(norm_probabilities_file_path)
+                    
                 probs = my_probs_generator.gen_probs(num_graphs_back = 1, graphs=graphs, from_start=True)
                 data_dir = self.output_dir + '/' + file + '/probabilities'
                 os.makedirs(data_dir, exist_ok=True)
@@ -447,6 +472,10 @@ class Loader():
                 df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
                 df.to_csv(probabilities_file_path)
                 print(f'Sending probabilities to {probabilities_file_path}')
+                norm_probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_all_back_norm.csv')
+                normalized_probs = np.vstack(df.apply( lambda row: self.my_utils.normalize_vector_by_groups(row.values), axis=1))
+                df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                df.to_csv(norm_probabilities_file_path)
 
 
     # Load from the pkl file

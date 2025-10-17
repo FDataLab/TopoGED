@@ -66,7 +66,7 @@ def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=
     return candidates
 
 
-def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decoder, old_node_embeddings, top_k, graph_num, device):
+def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decoder, old_node_embeddings, top_k, graph_num, device, train=False):
     """
     Predict what edges we will see in the graph, this is done by passing the node embeddings into the MLP and selecting the top_k most likely edges
     
@@ -94,6 +94,10 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
     elif edge_type == 'o-n':
         nodes = set(node_types['old_nodes']).union(node_types['new_nodes'])  # Since all nodes are valid candidates
         candidate_edges = generate_candidates(graph, nodes_1=nodes, nodes_2=nodes, flag=edge_type, edgebank=edgebank) #TODO kha: check this
+    
+    # No candidates given
+    if len(candidate_edges) == 0:
+        return []
     
     # Predict edge probabilities using the MLP
     edge_probs = []
@@ -128,7 +132,31 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
 
     # Sort and select top_k
     edge_probs.sort(key=lambda x: x[2], reverse=True)
-    top_edges = [(u, v) for u, v, _ in edge_probs[:top_k]]
+    # top_edges = [(u, v) for u, v, _ in edge_probs[:top_k]]  # Removed for now, trying something new below
+
+    # The following logic ensures that we respect the maximum degree of a given node
+    top_edges = []
+    queue_len = len(edge_probs)
+    for j in range(queue_len):
+        # This is at the beginning because we want to avoid adding edges when we need 0
+        if len(edge_probs) >= top_k:
+            break
+        u, v, _ = edge_probs.pop(0)
+        if graph.nodes[u]['feat']['currDegree'] < graph.nodes[u]['feat']['maxDegree'] and graph.nodes[v]['feat']['currDegree'] < graph.nodes[v]['feat']['maxDegree']:
+            top_edges.append((u, v))
+            graph.nodes[u]['feat']['currDegree'] += 1
+            graph.nodes[v]['feat']['currDegree'] += 1
+        else:
+            edge_probs.append((u, v, _))
+            
+        
+
+    # If we have exhausted our viable options, add the most likely edges regardless of degree constraints
+    while len(top_edges) < top_k and edge_probs:
+        u, v, _ = edge_probs.pop(0)
+        top_edges.append((u, v))
+        graph.nodes[u]['feat']['currDegree'] += 1
+        graph.nodes[v]['feat']['currDegree'] += 1
 
     # Likely to be an issue in the early graphs
     if top_k != len(top_edges):
@@ -136,6 +164,7 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
         print(f'[WARNING] There were {len(top_edges)} edges when there was supposed to be {top_k} edges with {len(candidate_edges)} options')
 
     return top_edges
+
 
 def sample_edges(count, tmp_graph, node_types, link_prediction_decoder, 
                  curr_embeddings, graph_num, device, edgebank=None, edge_type=None):

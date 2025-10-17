@@ -4,10 +4,11 @@ import os
 import torch
 import torch.nn as nn
 from dotenv import load_dotenv
+print(torch.cuda.is_available())
 
 # Update path for imports
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.loader import Loader
 from utils.dataset import DeltaEmbeddingDataset
@@ -22,12 +23,13 @@ csv_file_path = os.path.abspath('data/output/results/ProbabilityTesting/data/tes
 
 # Write the header if the file doesn't already exist
 if not os.path.isfile(csv_file_path):
-    pd.DataFrame(columns=['run_id', 'dataset', 'activation', 'seed', 'window_size', 'normalization', 'hidden_1', 'hidden_2', 'learning_rate', 'dropout', 'l2_regularization', 'batch_size', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'test_loss', 'train_avg_norm', 'val_avg_norm', 'test_avg_norm', 'train_avg_cosine_similarity','val_avg_cosine_similarity', 'test_avg_cosine_similarity',]).to_csv(csv_file_path, index=False)
+    pd.DataFrame(columns=['run_id', 'dataset', 'seed', 'window_size', 'normalization', 'hidden_1', 'hidden_2', 'learning_rate', 'dropout', 'l2_regularization', 'batch_size', 'num_layers', 'combo', 'trained_epochs', 'train_loss', 'valid_loss', 'test_loss', 'train_avg_norm', 'val_avg_norm', 'test_avg_norm', 'train_avg_cosine_similarity','val_avg_cosine_similarity', 'test_avg_cosine_similarity',]).to_csv(csv_file_path, index=False)
 
 combo_map = {
     "['LSTM', 'ReLU']": ['LSTM', 'ReLU'], 
     "['GRU', 'ReLU']": ['GRU', 'ReLU'], 
     "['LSTM', 'GRU', 'ReLU']": ['LSTM', 'GRU', 'ReLU'], 
+    "['RNN']": ['RNN'],
     "['RNN']": ['RNN'],
     "['GRU']": ['GRU'],
     "['LSTM']": ['LSTM'],
@@ -45,7 +47,10 @@ combo_map = {
     
 using_20_dim = True
 
-def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed):
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+def train_and_eval(dataset, window_size, num_back, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed):
     # Setup
     my_loader = Loader()
     my_utils = Utils()
@@ -75,7 +80,7 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
         embeddings = probabilities_df.values.astype(np.float32)
         
     # Load the TopER and concatenate
-    toper_embeddings, labels = my_loader.load_data(dataset, activation, include_weights=(not using_20dim))
+    toper_embeddings, labels = my_loader.load_data(dataset, activation='Degree', include_weights=(not using_20_dim))
     embeddings = my_utils.concat_embeddings(toper_embeddings, embeddings)
         
     run_name = run_name + '_' + str(counter) 
@@ -87,9 +92,9 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
     val_end = int(0.9 * n)
     test_start = val_end - window_size
 
-    X_train = embeddings[:train_end]
-    X_val = embeddings[val_start:val_end]
-    X_test = embeddings[test_start:]
+    X_train = np.array(embeddings[:train_end], dtype=np.float32)
+    X_val = np.array(embeddings[val_start:val_end], dtype=np.float32)
+    X_test = np.array(embeddings[test_start:], dtype=np.float32)
 
     # Use the DeltaEmbeddingDataset class for training and validation loaders
     train_dataset = DeltaEmbeddingDataset(X_train, k=window_size)
@@ -104,7 +109,7 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
                                     
     # Initialize wandb
     run = wandb.init(
-        project="probs_deltas_pred", 
+        project="toper_plus_probs", 
         name = run_name, 
         config={
         'dataset': dataset,
@@ -123,7 +128,7 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
         reinit=True)
             
     no_improvement_counter = 0
-    model = Decoder(in_channels=input_dim, out_channels=output_dim, hids_size_rnn=[hidden_1], hids_size_other=[hidden_2], num_layers=[num_layer], layers=combo, bias=[True], dropout=[dropout])
+    model = Decoder(in_channels=input_dim, out_channels=output_dim, hids_size_rnn=[hidden_1], hids_size_other=[hidden_2], num_layers=[num_layer], layers=combo, bias=[True], dropout=[dropout]).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr_val, weight_decay=l2_val)
     criterion = nn.MSELoss()
     
@@ -142,6 +147,9 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
         real_embeddings = []
 
         for i, (x, y_delta, x_last) in enumerate(train_loader):
+            x = x.to(device)
+            y_delta = y_delta.to(device)
+            x_last = x_last.to(device)
             optimizer.zero_grad()
             predicted_delta = model(x)
             predicted_delta = predicted_delta[:, -1, :]
@@ -155,16 +163,16 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
             predicted_embedding = x_last + predicted_delta
             real_embedding = x_last + y_delta
             
-            pred_embeddings.extend(predicted_embedding.detach().cpu().numpy())
-            real_embeddings.extend(real_embedding.detach().cpu().numpy())
+            pred_embeddings.extend(predicted_embedding)
+            real_embeddings.extend(real_embedding)
 
             for j in range(len(x)):
                 try:
-                    train_cosine_similarities.append(my_utils.compute_cosine_similarity(predicted_embedding[j].detach().cpu().numpy(), real_embedding[j].detach().cpu().numpy()))
+                    train_cosine_similarities.append(my_utils.compute_cosine_similarity(predicted_embedding[j], real_embedding[j]))
                 except:
                     train_cosine_similarities.append(float('nan'))
                 try:
-                    train_norms.append(my_utils.compute_distances(predicted_embedding[j].detach().cpu().numpy(), real_embedding[j].detach().cpu().numpy()))
+                    train_norms.append(my_utils.compute_distances(predicted_embedding[j], real_embedding[j]))
                 except:
                     train_norms.append(float('nan'))
         
@@ -181,6 +189,9 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
 
         with torch.no_grad():
             for i, (x, y_delta, x_last) in enumerate(valid_loader):
+                x = x.to(device)
+                y_delta = y_delta.to(device)
+                x_last = x_last.to(device)
                 predicted_delta = model(x)
                 predicted_delta = predicted_delta[:, -1, :]
                 predicted_delta = predicted_delta.squeeze(1)
@@ -192,16 +203,16 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
                 predicted_embedding = x_last + predicted_delta
                 real_embedding = x_last + y_delta
                 
-                pred_embeddings.extend(predicted_embedding.detach().cpu().numpy())
-                real_embeddings.extend(real_embedding.detach().cpu().numpy())
+                pred_embeddings.extend(predicted_embedding)
+                real_embeddings.extend(real_embedding)
 
                 for j in range(len(x)):
                     try:
-                        val_cosine_similarities.append(my_utils.compute_cosine_similarity(predicted_embedding[j].detach().cpu().numpy(), real_embedding[j].detach().cpu().numpy()))
+                        val_cosine_similarities.append(my_utils.compute_cosine_similarity(predicted_embedding[j], real_embedding[j]))
                     except:
                         val_cosine_similarities.append(float('nan'))
                     try:
-                        val_norms.append(my_utils.compute_distances(predicted_embedding[j].detach().cpu().numpy(), real_embedding[j].detach().cpu().numpy()))
+                        val_norms.append(my_utils.compute_distances(predicted_embedding[j], real_embedding[j]))
                     except:
                         val_norms.append(float('nan'))
             
@@ -217,6 +228,10 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
 
         with torch.no_grad():
             for i, (x, y_delta, x_last) in enumerate(test_loader):
+                x = x.to(device)
+                y_delta = y_delta.to(device)
+                x_last = x_last.to(device)
+            
                 predicted_delta = model(x)
                 predicted_delta = predicted_delta[:, -1, :]
                 predicted_delta = predicted_delta.squeeze(1)
@@ -228,16 +243,16 @@ def train_and_eval_delta(dataset, window_size, num_back, norm, num_layer, dropou
                 predicted_embedding = x_last + predicted_delta
                 real_embedding = x_last + y_delta
                 
-                pred_embeddings.extend(predicted_embedding.detach().cpu().numpy())
-                real_embeddings.extend(real_embedding.detach().cpu().numpy())
+                pred_embeddings.extend(predicted_embedding)
+                real_embeddings.extend(real_embedding)
                 
                 for j in range(len(x)):
                     try:
-                        test_cosine_similarities.append(my_utils.compute_cosine_similarity(predicted_embedding[j].detach().cpu().numpy(), real_embedding[j].detach().cpu().numpy()))
+                        test_cosine_similarities.append(my_utils.compute_cosine_similarity(predicted_embedding[j], real_embedding[j]))
                     except:
                         test_cosine_similarities.append(float('nan'))
                     try:
-                        test_norms.append(my_utils.compute_distances(predicted_embedding[j].detach().cpu().numpy(), real_embedding[j].detach().cpu().numpy()))
+                        test_norms.append(my_utils.compute_distances(predicted_embedding[j], real_embedding[j]))
                     except:
                         test_norms.append(float('nan'))
             
