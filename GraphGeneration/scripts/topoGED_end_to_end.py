@@ -11,6 +11,8 @@ import pandas as pd
 import os
 import sys
 import yaml
+import pickle 
+import line_profiler
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from GraphGeneration.utils.Evaluator import Evaluator
@@ -65,12 +67,13 @@ class Runner(object):
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
         self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data')
-        common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}'
-        self.edge_eval_dir = f'GraphGeneration/output/results/edges_evaluation/{encoder_config["dataset"]}/{common_suffix}'
-        self.structure_dir = f'GraphGeneration/output/results/structure/{encoder_config["dataset"]}/{common_suffix}'
-        self.kernel_dir = f'GraphGeneration/output/results/kernel/{encoder_config["dataset"]}/{common_suffix}'
-        self.topER_dir = f'GraphGeneration/output/results/topER/{encoder_config["dataset"]}/{common_suffix}'
-
+        self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}'
+        self.edge_eval_dir = f'GraphGeneration/output/results/edges_evaluation/{encoder_config["dataset"]}/{self.common_suffix}'
+        self.structure_dir = f'GraphGeneration/output/results/structure/{encoder_config["dataset"]}/{self.common_suffix}'
+        self.kernel_dir = f'GraphGeneration/output/results/kernel/{encoder_config["dataset"]}/{self.common_suffix}'
+        self.topER_dir = f'GraphGeneration/output/results/topER/{encoder_config["dataset"]}/{self.common_suffix}'
+        self.saved_graph_dir = f'data/output/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}'
+        
         save_dir = os.path.join(self.file_visualization_path, encoder_config["dataset"], encoder_config["encoder_model"]["nodeEmbeddingType"])
         os.makedirs(save_dir, exist_ok=True)
         
@@ -349,6 +352,7 @@ class Runner(object):
                         for j, edge_type in enumerate(self.all_edge_types)
                     }
 
+                # Why are we sampling here, we don't penalize the model off of choosing the wrong old nodes
                 node_types = {
                     "old_nodes": self.sample_old_nodes(
                         self.training_graphs[max(0, snapshot - self.days_back): snapshot],
@@ -443,7 +447,7 @@ class Runner(object):
                             true_embedding, _, _ = embedder.process_graphs_for_embeddings([self.training_graphs[snapshot]])
                             true_embedding = true_embedding[0]
                         else:
-                            pred_embedding = np.zeros(20)
+                            pred_embedding = np.zeros(20)  # Don't hardcode
                             true_embedding = np.zeros(20)
 
                         toper_loss = toper_loss_fn(to_tensor(pred_embedding, device=device).unsqueeze(0), to_tensor(true_embedding, device=device).unsqueeze(0))
@@ -588,7 +592,7 @@ class Runner(object):
         np.random.seed(self.seed)
         
         # Get the edgebank up to the current target snapshot
-        edgebank = self.all_edgebanks[current_target_snapshot]
+        edgebank = self.all_edgebanks[current_target_snapshot] 
         current_target_graph_description = self.graph_descriptions[current_target_snapshot]
         prev_graphs = [graph[-1] for graph in self.target_graphs[max(current_target_snapshot - encoder_config["training"]["day"], 0):current_target_snapshot]]
         
@@ -631,7 +635,7 @@ class Runner(object):
                                 old_node_embeddings=curr_embeddings, top_k=self.current_target_count[flag], graph_num=current_target_snapshot, device=device)
         
             constructing_graph.add_edges_from(sampled_edges)
-            update_degrees(constructing_graph)
+            update_degrees(constructing_graph)  # REDUNDANT
             new_embeddings = compute_embedding(embeddingType=encoder_config["encoder_model"]["nodeEmbeddingType"], graphs=prev_graphs + [constructing_graph], encoder_model=self.encoder_model, device=device)
             curr_embeddings.update(new_embeddings)  # Recompute old node embeddings
         
@@ -677,159 +681,6 @@ class Runner(object):
         filtration_graphs.append(constructing_graph.copy())  # The last graph is the full graph, we add it at the end regardless
 
         return filtration_graphs, node_types
-
-
-    def _setup_clean_files(self, directories, file_paths):
-        """
-        Utility function for emptying files if they exist
-        We don't want to repeatedly add trials to the csvs/txt files after many runs
-        
-        Params:
-            directories (list): The directories to create
-            file_paths (list): The file paths we plan on storing data in
-            
-        Returns:
-            None
-        """
-        for directory in directories:
-            os.makedirs(directory, exist_ok=True)
-
-        # Delete if they exist
-        for path in file_paths:
-            if os.path.exists(path):
-                os.remove(path)
-
-    # ======================= Evaluate =======================
-    def evaluate(self, pred_graph, true_graph, sorted_nodes_pred, sorted_nodes_true):
-        """
-        Evaluate the constructed graph across various metrics including:
-            - Graphlet kernels
-            - Its TopER vector
-            - Precision, Recall, F1 score for various subgraphs
-            - The nodes we added to the constructed graph
-            - The graph's structure
-            
-        Params:
-            pred_graph (nx.Graph/nx.DiGraph): The graph we just finished constructing
-            true_graph (nx.Graph/nx.DiGraph): The target graph
-            sorted_nodes_pred (dict{str: list}): A dictionary storing lists of ids for 'old_nodes' and 'new_nodes' for pred_graph
-            sorted_nodes_true (dict{str: list}): A dictionary storing lists of ids for 'old_nodes' and 'new_nodes' for true_graph
-            
-        Returns:
-            None
-        """
-        # Setup (clearing files if needed)
-        
-        if self.current_target_snapshot == self.starting_graph:
-            directories = [
-                self.file_visualization_path,
-                self.structure_dir,
-                self.edge_eval_dir,
-                self.kernel_dir
-            ]
-                        
-            target_files = [
-                f"{self.edge_eval_dir}/old_nodes_only.csv",
-                f"{self.edge_eval_dir}/new_nodes_only.csv",
-                f"{self.edge_eval_dir}/on_edges_only.csv",
-                f"{self.edge_eval_dir}/all_edges.csv",
-                f"{self.structure_dir}/node_evaluation.csv",
-                f"{self.structure_dir}/structure_true.csv",
-                f"{self.structure_dir}/structure_pred.csv",
-                f"{self.structure_dir}/toper_eval.csv",
-                f"{self.kernel_dir}/kernel_pred.csv",
-                f"{self.kernel_dir}/kernel_true.csv",
-                f"{self.kernel_dir}/kernel_diff.csv",
-                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_old_nodes.txt",
-                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_nn.txt",
-                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_on.txt",
-                f"{self.file_visualization_path}/{encoder_config['dataset']}/{encoder_config['encoder_model']['nodeEmbeddingType']}/kl_results_overall.txt",
-            ]
-            
-            self._setup_clean_files(directories, target_files)
-        
-        
-        # Evaluate the correctness of nodes that we have chosen (old, new, together)
-        results_node_evaluation = self.evaluator.evaluate_node_selection(sorted_nodes_pred, sorted_nodes_true, self.current_target_old_nodes, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the graph of just old nodes (edge types: oo, oon)
-        pred_old_nodes_graph = pred_graph.subgraph(sorted_nodes_pred['old_nodes']).copy()
-        true_old_nodes_graph = true_graph.subgraph(sorted_nodes_true['old_nodes']).copy()
-        
-        old_nodes_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_old_nodes_graph, true_old_nodes_graph, mode="total")
-            
-        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_old_nodes.txt', 
-                                        value=old_nodes_kl_divergence_results, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the AUC here
-        results_old_nodes_edges = self.evaluator.evaluate_graph_edges(pred_old_nodes_graph, true_old_nodes_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the graph of just new nodes (edge types: nn)
-        pred_nn_graph = pred_graph.subgraph(sorted_nodes_pred['new_nodes']).copy()
-        true_nn_graph = true_graph.subgraph(sorted_nodes_true['new_nodes']).copy()
-
-        nn_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_nn_graph, true_nn_graph, mode="total")
-            
-        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_nn.txt', 
-                                        value=nn_kl_divergence_results, graph_num=self.current_target_snapshot)
-        
-        # Want to evaluate AUC of these
-        results_nn_edges = self.evaluator.evaluate_graph_edges(pred_nn_graph, true_nn_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the graph of just edge type on
-        pred_on_graph = create_on_graph(sorted_nodes_pred["new_nodes"], sorted_nodes_pred["old_nodes"], pred_graph.copy(), is_directed=self.is_directed)
-        true_on_graph = create_on_graph(sorted_nodes_true["new_nodes"], sorted_nodes_true["old_nodes"], true_graph.copy(), is_directed=self.is_directed)
-        
-        on_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_on_graph, true_on_graph, mode="total")
-            
-        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_on.txt', 
-                                        value=on_kl_divergence_results, graph_num=self.current_target_snapshot)
-            
-        # Evaluate the AUC here
-        results_on_edges = self.evaluator.evaluate_graph_edges(pred_on_graph, true_on_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the graph of shared nodes (all edge types)
-        results_all_edges = self.evaluator.evaluate_graph_edges(pred_graph, true_graph, is_directed=self.is_directed, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the graphs in terms of structure
-        results_true_structure = self.evaluator.evaluateSingleStructure(true_graph, graph_num=self.current_target_snapshot)
-        results_pred_structure = self.evaluator.evaluateSingleStructure(pred_graph, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the graph in terms of kl divergence
-        overall_kl_divergence_results = self.evaluator.kl_divergence_graphs(pred_graph, true_graph, mode="total")
-
-        self.evaluator.write_kl_results(path=rf'{self.file_visualization_path}/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}/kl_results_overall.txt', 
-                                        value=overall_kl_divergence_results, graph_num=self.current_target_snapshot)
-        
-        # Evaluate the graph in terms of its TopER vector (Degree)
-        embedder = EmbedDegree(include_weights=False)
-
-        # Make the TopER embedding
-        pred_embedding, _, _ = embedder.process_graphs_for_embeddings([pred_graph])
-        pred_toper = pred_embedding[0]
-        true_embedding, _, _ = embedder.process_graphs_for_embeddings([true_graph])
-        true_toper = true_embedding[0]
-
-        results_toper_diff = self.evaluator.evaluateTopER(pred_toper, true_toper, graph_num=self.current_target_snapshot)  # Get the difference
-            
-        # Evaluate the graph in terms of graphlet kernels
-        pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(pred_graph, true_graph)
-                        
-        # Write results
-        for data, path in [
-            (results_old_nodes_edges, f"{self.edge_eval_dir}/old_nodes_only.csv"),
-            (results_nn_edges, f"{self.edge_eval_dir}/new_nodes_only.csv"),
-            (results_on_edges, f"{self.edge_eval_dir}/on_edges_only.csv"),
-            (results_all_edges, f"{self.edge_eval_dir}/all_edges.csv"),
-            (results_node_evaluation, f"{self.structure_dir}/node_evaluation.csv"),
-            (results_true_structure, f"{self.structure_dir}/structure_true.csv"),
-            (results_pred_structure, f"{self.structure_dir}/structure_pred.csv"),
-            (results_toper_diff, f"{self.structure_dir}/toper_eval.csv"),
-            (pred_kernel, f"{self.kernel_dir}/kernel_pred.csv"),
-            (true_kernel, f"{self.kernel_dir}/kernel_true.csv"),
-            (distance, f"{self.kernel_dir}/kernel_diff.csv"),
-        ]:
-            pd.DataFrame([data]).to_csv(path, mode='a', header=not os.path.exists(path), index=False)
         
         
     def run(self):        
@@ -869,6 +720,9 @@ class Runner(object):
         all_node_ids = [node for g in self.old_graphs for node in g.nodes()]
         self.new_node_id = max(all_node_ids) + 1 if all_node_ids else 0
 
+        all_built_graphs = []
+        all_target_graphs = []
+
         # To predict snapshot i, we use snapshot 0,...,i-1 to train
         for i in range(self.starting_graph, len(self.probabilities)): 
             print("INFO: >>> Temporal Graph Construction <<<")
@@ -903,17 +757,27 @@ class Runner(object):
             # Build the filtration sequence using the current parameters
             filtration_sequence, node_types = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=i)
             
-            sorted_nodes_pred = {k: set(v) for k, v in node_types.items()}  # We get this from the construction; cast it to sets
-            sorted_nodes_true = {
-                'old_nodes': self.current_target_old_nodes & set(self.target_graphs[i].nodes()), 
-                'new_nodes': set(self.target_graphs[i].nodes()) - self.current_target_old_nodes
-            }
-            
-            # Evaluate generated graph
-            self.evaluate(pred_graph=filtration_sequence[-1], true_graph=self.target_graphs[i], sorted_nodes_pred=sorted_nodes_pred, sorted_nodes_true=sorted_nodes_true)
+            # Add the graphs to a list to save later
+            built_graph = filtration_sequence[-1]
+            target_graph = self.target_graphs[i]
+            all_built_graphs.append(built_graph)
+            all_target_graphs.append(target_graph)
             
             # Add to the old graphs
             self.old_graphs.append(self.target_graphs[i])
+           
+        
+        output_filepath = os.path.join(self.saved_graph_dir, f"constructed_graphs_{encoder_config["dataset"]}.pkl")
+        os.makedirs(self.saved_graph_dir, exist_ok=True)
+
+        data_to_save = (all_built_graphs, all_target_graphs)
+
+        print("\n======================================")
+        print(f"INFO: Saving {len(all_built_graphs)} pairs of graphs to {output_filepath}")
+        print("======================================")
+
+        with open(output_filepath, "wb") as f:
+            pickle.dump(data_to_save, f) 
             
             
 if __name__ == '__main__':

@@ -5,7 +5,8 @@ from itertools import product
 import math
 from GraphGeneration.models.temporal_gnn.script.config import args
 
-def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=None):
+
+def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=None, is_directed=False): 
     """
     Generate all possible edges that we could add (directed)
     
@@ -15,15 +16,14 @@ def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=
         flag (string): The edge type that we are making candidates for
         nodes_2 (list): The set of destination node ids
         edgebank (dict):  A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
+        is_directed (bool): Whether or not the graph is directed the processing changes slightly
     
     Returns:
         candidates (list): A list of tuples for all possible edges that can be added given the nodes
     """
-    candidates = []  # The edges that we could add
+    candidates = []
+    seen_edges = set()  # used to avoid duplicates for undirected graphs
 
-    # Different processing depending on available nodes for the edge
-
-    # Degree constraint checker
     def can_add_edge(u, v):
         return (
             u in graph.nodes and v in graph.nodes and
@@ -33,40 +33,36 @@ def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=
             graph.degree(v) < graph.nodes[v]['feat']['maxDegree']
         )
 
+    # Select candidate pairs based on the edge type
     if flag == 'o-n':
-        # Edge between one old and one new node, and only one of them is in edgebank
-        candidates = [
-            (u, v) for u, v in product(nodes_1, nodes_2)
-            if can_add_edge(u, v) and (
-                (u in edgebank and v not in edgebank) or (u not in edgebank and v in edgebank)
-            )
-        ]
+        pairs = product(nodes_1, nodes_2)
+        if is_directed:
+            pairs += list(product(nodes_2, nodes_1))
+    elif flag in ['o-o-nobank', 'o-o-bank', 'n-n']:
+        pairs = product(nodes_1, nodes_1)
 
-    elif flag == 'o-o-nobank':
-        # Edge between two old nodes that are not in edgebank
-        candidates = [
-            (u, v) for u, v in product(nodes_1, nodes_1)
-            if can_add_edge(u, v) and v not in edgebank.get(u, [])
-        ]
+    for u, v in pairs:
+        if not can_add_edge(u, v):
+            continue
 
-    elif flag == 'o-o-bank':
-        # Edge between two old nodes that are in edgebank
-        candidates = [
-            (u, v) for u, v in product(nodes_1, nodes_1)
-            if can_add_edge(u, v) and v in edgebank.get(u, [])
-        ]
+        # Check edge bank constraints
+        if flag == 'o-o-nobank' and v in edgebank.get(u, []):
+            continue
+        elif flag == 'o-o-bank' and v not in edgebank.get(u, []):
+            continue
 
-    elif flag == 'n-n':
-        # Edge between two new nodes
-        candidates = [
-            (u, v) for u, v in product(nodes_1, nodes_1)
-            if can_add_edge(u, v)
-        ]
-    
+        # For undirected graphs, skip if reversed version already exists
+        if not is_directed:
+            if (v, u) in seen_edges:
+                continue
+            seen_edges.add((u, v))
+
+        candidates.append((u, v))
+
     return candidates
 
 
-def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decoder, old_node_embeddings, top_k, graph_num, device, train=False):
+def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decoder, old_node_embeddings, top_k, graph_num, device, is_directed=False, train=False):
     """
     Predict what edges we will see in the graph, this is done by passing the node embeddings into the MLP and selecting the top_k most likely edges
     
@@ -84,16 +80,14 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
         top_edges (list): The top_k edges that we have decided to add here
     """
     if edge_type == 'o-o-bank' or edge_type == 'o-o-nobank':
-        available_nodes = node_types['old_nodes']
-        candidate_edges = generate_candidates(graph, nodes_1=available_nodes, nodes_2=None, flag=edge_type, edgebank=edgebank)
+        candidate_edges = generate_candidates(graph, nodes_1=node_types['old_nodes'], nodes_2=None, flag=edge_type, edgebank=edgebank, is_directed=is_directed)
 
     elif edge_type == 'n-n':
-        available_nodes = node_types['new_nodes']
-        candidate_edges = generate_candidates(graph, nodes_1=available_nodes, nodes_2=None, flag=edge_type, edgebank=edgebank)
+        candidate_edges = generate_candidates(graph, nodes_1=node_types['new_nodes'], nodes_2=None, flag=edge_type, is_directed=is_directed)
 
+    # ToDo Check this
     elif edge_type == 'o-n':
-        nodes = set(node_types['old_nodes']).union(node_types['new_nodes'])  # Since all nodes are valid candidates
-        candidate_edges = generate_candidates(graph, nodes_1=nodes, nodes_2=nodes, flag=edge_type, edgebank=edgebank) #TODO kha: check this
+        candidate_edges = generate_candidates(graph, nodes_1=node_types['old_nodes'], nodes_2=node_types['new_nodes'], flag=edge_type, is_directed=is_directed)
     
     # No candidates given
     if len(candidate_edges) == 0:
@@ -112,7 +106,7 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
             
         src_embed = old_node_embeddings[u]
         dst_embed = old_node_embeddings[v]
-
+        
         # Convert to torch.Tensor if necessary
         if isinstance(src_embed, np.ndarray):
             src_embed = torch.tensor(src_embed, dtype=torch.float32).to(device)
@@ -149,7 +143,6 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
         else:
             edge_probs.append((u, v, _))
             
-        
 
     # If we have exhausted our viable options, add the most likely edges regardless of degree constraints
     while len(top_edges) < top_k and edge_probs:
