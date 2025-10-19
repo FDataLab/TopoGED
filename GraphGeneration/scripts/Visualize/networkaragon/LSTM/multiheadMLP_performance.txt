@@ -1,0 +1,4 @@
+Epoch 01 | Edge Type: o-o-bank  | Validation AUCROC 0.6412 | GPU: 217.2MiB
+Epoch 01 | Edge Type: o-o-nobank  | Validation AUCROC 0.6550 | GPU: 217.2MiB
+Epoch 01 | Edge Type: o-n  | Validation AUCROC 0.6633 | GPU: 217.2MiB
+Epoch 01 | Edge Type: n-n  | Validation AUCROC 0.6594 | GPU: 217.2MiB

@@ -78,7 +78,7 @@ class Runner(object):
         os.makedirs(save_dir, exist_ok=True)
         
         # Current target snapshot we want to predict
-        self.starting_graph = 3
+        self.starting_graph = encoder_config["starting_graph_idx"]
         self.current_target_snapshot = self.starting_graph
         
         # Controls our window size and how we actually construct the graph (directed vs undirected)

@@ -1,0 +1,16 @@
+Epoch 01 | Edge Type: o-o-bank  | Validation AUCROC 0.5735 | GPU: 162.7MiB
+Epoch 01 | Edge Type: o-o-nobank  | Validation AUCROC 0.5796 | GPU: 162.7MiB
+Epoch 01 | Edge Type: o-n  | Validation AUCROC 0.5777 | GPU: 162.7MiB
+Epoch 01 | Edge Type: n-n  | Validation AUCROC 0.5747 | GPU: 162.7MiB
+Epoch 01 | Edge Type: o-o-bank  | Validation AUCROC 0.5638 | GPU: 162.7MiB
+Epoch 01 | Edge Type: o-o-nobank  | Validation AUCROC 0.5772 | GPU: 162.7MiB
+Epoch 01 | Edge Type: o-n  | Validation AUCROC 0.5759 | GPU: 162.7MiB
+Epoch 01 | Edge Type: n-n  | Validation AUCROC 0.5732 | GPU: 162.7MiB
+Epoch 02 | Edge Type: o-o-bank  | Validation AUCROC 0.5853 | GPU: 162.7MiB
+Epoch 02 | Edge Type: o-o-nobank  | Validation AUCROC 0.5935 | GPU: 162.7MiB
+Epoch 02 | Edge Type: o-n  | Validation AUCROC 0.5906 | GPU: 162.7MiB
+Epoch 02 | Edge Type: n-n  | Validation AUCROC 0.5882 | GPU: 162.7MiB
+Epoch 02 | Edge Type: o-o-bank  | Validation AUCROC 0.5735 | GPU: 162.7MiB
+Epoch 02 | Edge Type: o-o-nobank  | Validation AUCROC 0.5860 | GPU: 162.7MiB
+Epoch 02 | Edge Type: o-n  | Validation AUCROC 0.5833 | GPU: 162.7MiB
+Epoch 02 | Edge Type: n-n  | Validation AUCROC 0.5809 | GPU: 162.7MiB
