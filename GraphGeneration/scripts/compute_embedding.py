@@ -43,7 +43,8 @@ def compute_linear_gnn_embeddings(G: nx.DiGraph, device):
     
     return embeddings
 
-def compute_node2vec_embeddings(G: nx.DiGraph, device):
+
+def compute_node2vec_embeddings(G, device, old_nodes_days=None):
     """
     Use Node2Vec to embed nodes in the constructed graph. Appends node features onto the end since Node2Vec does not account for features
     One of two available methods
@@ -74,7 +75,7 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
 
     # Used to generate an embedding for isolated nodes
     all_vectors = [model.wv[key] for key in model.wv.index_to_key]
-    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32).to(device)
+    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32).to(device) 
 
     # Get embeddings and concatenate the node features
     embeddings = {}
@@ -82,7 +83,10 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
         if node in model.wv:
             node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32).to(device)
         else:
-            node2vec_emb = mean_vector
+            if old_nodes_days:
+                node2vec_emb = mean_vector if node in old_nodes_days else torch.zeros_like(mean_vector)
+            else:
+                node2vec_emb = mean_vector
             
         # Add on features since Node2Vec doesn't account for features
         # feat_dict = G.nodes[node]['feat']
@@ -93,6 +97,7 @@ def compute_node2vec_embeddings(G: nx.DiGraph, device):
         embeddings[node] = node2vec_emb
     
     return embeddings
+
 
 # LSTM embeddings  
 def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
@@ -217,3 +222,110 @@ def compute_embedding(embeddingType, graphs, device, encoder_model=None):
         final_embeddings = compute_node_embeddings_HTGN(graphs, encoder_model)
     
     return final_embeddings
+
+
+def compute_temporal_node_embeddings(embedding_history, days_back, device, model_type, model=None, graph_snapshots=None):
+    past_days = embedding_history[-days_back:]  # get the last days_back days
+    num_missing = days_back - len(past_days)    # how many days we are short
+
+    # Determine embedding size F from the first available snapshot
+    F = len(next(iter(past_days[0].values())))
+
+    null_embed = torch.zeros(F, device=device, dtype=torch.float32)
+
+    # Prepend zero dicts for missing days
+    if num_missing > 0:
+        all_nodes_in_past = set().union(*[d.keys() for d in past_days])
+        zero_dicts = [{node: null_embed.clone() for node in all_nodes_in_past} for _ in range(num_missing)]
+        past_days = zero_dicts + past_days
+
+    # Get all nodes across the full window
+    all_nodes = set()
+    for emb_dict in past_days:
+        all_nodes.update(emb_dict.keys())
+
+    # Build per-node sequences
+    node_history = {node: [] for node in all_nodes}
+    for emb_dict in past_days:
+        for node in all_nodes:
+            node_history[node].append(emb_dict.get(node, null_embed))
+
+    if model_type == 'LSTM':
+        if model is None:
+            raise ValueError("Provide lstm_model for model_type='LSTM'")
+        final_embeddings = model(node_history)
+
+    elif model_type == 'GCLSTM':
+        if model is None:
+            raise ValueError("Provide gclstm_model for model_type='GCLSTM'")
+        if graph_snapshots is None:
+            raise ValueError("Provide graph_snapshots for GCLSTM to construct edge_index_list")
+
+        if graph_snapshots is not None:
+            num_missing = len(past_days) - len(graph_snapshots)
+            if num_missing > 0:
+                graph_snapshots = [None]*num_missing + graph_snapshots
+
+        node_list = sorted(list(all_nodes))
+        node_id_map = {node: i for i, node in enumerate(node_list)}
+        x_list = []
+        edge_index_list = []
+
+        for i, emb_dict in enumerate(past_days):
+            N = len(node_list)
+            x_t = torch.zeros(N, F, device=device)
+            for node, emb in emb_dict.items():
+                idx = node_id_map[node]
+                x_t[idx] = emb
+            x_list.append(x_t)
+
+            # Build edge_index_list from graph_snapshots if available
+            G = graph_snapshots[i] if graph_snapshots is not None else None
+            if G is None:
+                edge_index = torch.empty((2,0), dtype=torch.long, device=device)
+            else:
+                edges = [[node_id_map[u], node_id_map[v]] for u,v in G.edges()]
+                edge_index = torch.tensor(edges, dtype=torch.long, device=device).t().contiguous()
+            edge_index_list.append(edge_index)
+
+        final_embeddings = model(x_list, edge_index_list, node_list, node_id_map)
+
+    else:
+        raise ValueError(f"Unsupported model_type: {model_type}")
+
+    return final_embeddings
+
+def group_node2vec_embeddings(all_embeddings, old_nodes_days, days_back, use_ma):
+    """
+    Get the embeddings to use for constructing the current graph from the past days_back days
+    If using moving average, only consider days the node existed
+    
+    params:
+        all_embeddings (list[dict]): List of node2vec embeddings for all previous days
+        old_nodes_days (list): The nodes we will see in the current graph (or expect to see in the prediction case)
+        days_back (int): How many days back to consider
+        use_ma (bool): Whether to use moving average or the most recent embedding for a node
+        
+    returns:
+        node_embeddings (dict): The constructed dictionary of {node: [embedding]} pairs
+    """
+    if days_back > len(all_embeddings):
+        recent_embeddings = all_embeddings
+    else:
+        recent_embeddings = all_embeddings[-days_back:]
+
+    node_embeddings = {}
+
+    for node in old_nodes_days:
+        node_embs = []
+
+        node_embs = [emb_dict[node] for emb_dict in recent_embeddings if node in emb_dict]
+        d
+        if use_ma:
+            # Moving average only over days where the node exists
+            node_embeddings[node] = torch.stack(node_embs, dim=0).mean(dim=0)
+        else:
+            # Just take the most recent embedding
+            node_embeddings[node] = node_embs[-1]
+
+    return node_embeddings

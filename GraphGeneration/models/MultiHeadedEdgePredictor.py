@@ -11,7 +11,9 @@ class MultiHeadedEdgePredictor(nn.Module):
             etype: nn.Sequential(
                 nn.Linear(in_channels, hidden_channels),
                 nn.ReLU(),
-                nn.Linear(hidden_channels, 1),
+                nn.Linear(hidden_channels, hidden_channels // 2),
+                nn.ReLU(),
+                nn.Linear(hidden_channels // 2, 1), 
                 nn.Sigmoid()
             )
             for etype in edge_types
