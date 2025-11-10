@@ -94,72 +94,56 @@ def process_starter_graph(graphs: list, thresholds: list, encoder_model):
 
 
 def modifyGraphIds(graphs, thresholds, days_back=5):
-    '''
-    For the target graphs, modify their ids to start at 0 for an instance of a node, then increment throughout the graphs
-    
-    Args:
-        graphs (list(nx.Graph)): A list of graphs to modify
-        thresholds (list): The thresholds to determine the max degree, taken from TopER
-        days_back (int): How many days back we look to determine our edge bank; also known as our context window (default 5)
-        
-    Returns:
-        graphs (list(nx.Graph)): The modified graphs (operations performed in-place)       
-    '''
-    # This dictionary will store the mapping of original node IDs to new node IDs
-    node_mapping = {}
-    new_id = 0
+    all_mappings = []
     updated_graphs = []
+    global_node_counter = 1
 
-    # Iterate over all graphs in the list of lists (where each graph is a subgraph in the list)
-    # First pass: assign a new ID to every unique node
     for i, graph_list in enumerate(graphs):
-        updated_sublist = []
-        old_nodes = set().union(*[graphs[curr_step][-1].nodes() for curr_step in range(max(i - days_back, 0), i)])
-        for graph in graph_list:
-            curr_mapping = {}  # Mapping applies to this specific graph
+        curr_mapping = {}
+        curr_sublist = []
+        start = max(0, i - days_back)
 
-            for node in graph.nodes:
-                # Ensure that 'feat' exists and is properly initialized
-                if 'feat' not in graph.nodes[node]:
-                    graph.nodes[node]['feat'] = {}
+        # Combine past mappings into one dict
+        combined_past = {k: v for mapping in all_mappings[start:i] for k, v in mapping.items()}
 
-                # Mark the node as new or old
-                if node not in old_nodes:
-                    node_mapping[node] = new_id
-                    new_id += 1
-                    graph.nodes[node]['feat']['type'] = 1  # Node is new
-                else:
-                    graph.nodes[node]['feat']['type'] = 0  # Node is old
+        for subgraph in graph_list:
+            for node in subgraph.nodes():
+                if node not in curr_mapping:
+                    if node in combined_past:
+                        # Reuse old mapping
+                        curr_mapping[node] = combined_past[node]
+                    else:
+                        # Assign new ID
+                        curr_mapping[node] = global_node_counter
+                        global_node_counter += 1
 
-                # Map the node and update the ID in the feature dictionary
-                curr_mapping[node] = node_mapping[node]
-                graph.nodes[node]['feat']['id'] = node_mapping[node]
+            # Relabel with new mapping
+            relabeled_g = nx.relabel_nodes(subgraph, curr_mapping, copy=True)
 
-                node_degree = graph.degree(node)  # Current node's degree
-
-                # If thresholds are available, calculate the max degree based on thresholds
-                if np.any(thresholds):
-                    graph.nodes[node]['feat']['currDegree'] = node_degree
-                    graph.nodes[node]['feat']['maxDegree'] = next((t for t in thresholds if node_degree <= t), thresholds[-1])
-                else:
-                    # If no thresholds, use degree as maxDegree
-                    graph.nodes[node]['feat']['currDegree'] = node_degree
-                    graph.nodes[node]['feat']['maxDegree'] = node_degree
-
-            # Relabel the graph nodes according to the new IDs
-            relabeled_graph = nx.relabel_nodes(graph, curr_mapping, copy=True)
-
-            # Preserve features for relabeled nodes
+            # Add node features
             for old_node, new_node in curr_mapping.items():
-                relabeled_graph.nodes[new_node]['feat'] = graph.nodes[old_node]['feat'].copy()
-                # print(f"Old Node: {old_node}, Features: {graph.nodes[old_node]['feat']}")
-                # print(f"New Node: {new_node}, Features: {relabeled_graph.nodes[new_node]['feat']}")
+                relabeled_g.nodes[new_node].setdefault('feat', {})
+                relabeled_g.nodes[new_node]['feat']['id'] = new_node
+                # Mark as new (type=1) if node not seen in combined_past
+                relabeled_g.nodes[new_node]['feat']['type'] = 1 if old_node not in combined_past else 0
 
-            updated_sublist.append(relabeled_graph)
-        updated_graphs.append(updated_sublist)
+                node_degree = subgraph.degree(old_node)
+                if np.any(thresholds):
+                    relabeled_g.nodes[new_node]['feat']['currDegree'] = node_degree
+                    relabeled_g.nodes[new_node]['feat']['maxDegree'] = next(
+                        (t for t in thresholds if node_degree <= t), thresholds[-1]
+                    )
+                else:
+                    relabeled_g.nodes[new_node]['feat']['currDegree'] = node_degree
+                    relabeled_g.nodes[new_node]['feat']['maxDegree'] = node_degree
 
-    return updated_graphs, len(node_mapping)
+            curr_sublist.append(relabeled_g)
 
+        updated_graphs.append(curr_sublist)
+        all_mappings.append(curr_mapping)
+
+    return updated_graphs, global_node_counter - 1
+                    
 
 def build_edgebanks_from_start(graphs, is_directed, days_back=5):
     """

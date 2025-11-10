@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("TkAgg")
 import numpy as np 
 import seaborn as sns
 import networkx as nx
@@ -19,56 +21,99 @@ class Visualizer:
         self.task = task
         
     
-    def display_loss(self, train_loss, valid_loss, num_epochs):
+    def display_loss(self, train_loss, valid_loss, num_epochs=None, edge_type=None, save_path=None):
         """
-        Display the loss of training and validation over time
+        Display and save train/validation loss curve.
 
         Args:
-            train_loss (list): The train loss value over time
-            valid_loss (list): The validation loss value over time
-            num_epochs (int): The number of epochs the model trained for
+            train_loss (list): Train loss per epoch.
+            valid_loss (list): Validation loss per epoch.
+            num_epochs (int, optional): Expected number of epochs. If None, uses len(train_loss).
+            edge_type (str, optional): Edge type label for title/filename.
+            save_path (str, optional): Full path where to save the figure. If None, falls back to figdir_*.
+        """
+        # Use actual length if num_epochs not provided or mismatch
+        n_points = len(train_loss)
+        if num_epochs is not None and num_epochs != n_points:
+            # use actual collected points to avoid x/y length mismatch
+            n_points = len(train_loss)
 
-        Returns:
-            None
-        """
-        epochs = range(0, num_epochs + 1)
-        plt.plot(epochs, train_loss, label="Train Loss", color="blue", marker="o")
-        plt.plot(epochs, valid_loss, label="Validation Loss", color="green", marker="s")
+        if n_points == 0:
+            # nothing to plot
+            return
+
+        epochs = range(1, n_points + 1)
+
+        plt.figure()
+        plt.plot(epochs, train_loss, label="Train Loss", marker="o")
+        plt.plot(epochs, valid_loss, label="Validation Loss", marker="s")
         plt.xlabel("Epochs")
-        plt.ylabel("Loss")
-        plt.title("Training and Validation Loss Over Epochs")
+        plt.ylabel(f"Loss{(' - ' + edge_type) if edge_type else ''}")
+        title_suffix = f" for {edge_type}" if edge_type else ""
+        plt.title("Training and Validation Loss Over Epochs" + title_suffix)
         plt.legend()
+        plt.tight_layout()
+
+        # Determine save path
+        if save_path:
+            out_path = save_path
+        else:
+            # fallback by task
+            fname = f"{self.dataset}_{edge_type or 'all'}_loss_graph.png"
+            if getattr(self, "task", None) == 'regression':
+                os.makedirs(self.figdir_regression, exist_ok=True)
+                out_path = os.path.join(self.figdir_regression, fname)
+            else:
+                # default to binary folder
+                os.makedirs(self.figdir_binary, exist_ok=True)
+                out_path = os.path.join(self.figdir_binary, fname)
+
+        # ensure parent dir exists
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        plt.savefig(out_path)
+        plt.close()
         
-        # Save depending on task
-        if self.task == 'regression':
-            plt.savefig(self.figdir_regression + self.dataset + '_loss_graph.png')
-        elif self.task == 'binary':
-            plt.savefig(self.figdir_binary + self.dataset + '_loss_graph.png')
         
-        plt.clf()
-        
-        
-    def display_aucroc(self, train_aucroc, valid_aucroc, num_epochs):
+    def display_aucroc(self, train_aucroc, valid_aucroc, num_epochs=None, edge_type=None, save_path=None):
         """
-        Display the aucroc scores over time for binary classification task
+        Display and save train/validation AUCROC curve.
 
         Args:
-            train_aucroc (list): The train aucroc value over time
-            valid_aucroc (list): The validation aucroc value over time
-            num_epochs (int): The number of epochs the model trained for
-
-        Returns:
-            None
+            train_aucroc (list): Train AUC per epoch.
+            valid_aucroc (list): Validation AUC per epoch.
+            num_epochs (int, optional): Expected number of epochs. If None, uses len(train_aucroc).
+            edge_type (str, optional): Edge type label for title/filename.
+            save_path (str, optional): Full path where to save the figure. If None, falls back to figdir_binary.
         """
-        epochs = range(0, num_epochs + 1)
-        plt.plot(epochs, train_aucroc, label="Train AUCROC Score", color="blue", marker="o")
-        plt.plot(epochs, valid_aucroc, label="Validation AUCROC Score", color="green", marker="s")
+        n_points = len(train_aucroc)
+        if num_epochs is not None and num_epochs != n_points:
+            n_points = len(train_aucroc)
+
+        if n_points == 0:
+            return
+
+        epochs = range(1, n_points + 1)
+
+        plt.figure()
+        plt.plot(epochs, train_aucroc, label="Train AUCROC", marker="o")
+        plt.plot(epochs, valid_aucroc, label="Validation AUCROC", marker="s")
         plt.xlabel("Epochs")
-        plt.ylabel("AUCROC")
-        plt.title("Training and Validation AUCROC Over Epochs")
+        plt.ylabel(f"AUCROC{(' - ' + edge_type) if edge_type else ''}")
+        title_suffix = f" for {edge_type}" if edge_type else ""
+        plt.title("Training and Validation AUCROC Over Epochs" + title_suffix)
         plt.legend()
-        plt.savefig(self.figdir_binary + self.dataset + '_accuracy_graph.png')
-        plt.clf()
+        plt.tight_layout()
+
+        if save_path:
+            out_path = save_path
+        else:
+            fname = f"{self.dataset}_{edge_type or 'all'}_aucroc_graph.png"
+            os.makedirs(self.figdir_binary, exist_ok=True)
+            out_path = os.path.join(self.figdir_binary, fname)
+
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        plt.savefig(out_path)
+        plt.close()
         
     
     def display_embeddings(self, predicted_embeddings, real_embeddings, linfit_embeddings):

@@ -3,7 +3,7 @@ import torch
 import os
 import sys
 import pickle
-from GraphGeneration.models.temporal_gnn.script.config import args
+#from GraphGeneration.models.temporal_gnn.script.config import args
 import random
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 

@@ -93,6 +93,7 @@ class Runner(object):
         self.best_validation_model_auc = 0
         
         # Load the global encoder & decoder model
+        #TODO have this reference the right things from encoder.yaml
         self.encoder_model, self.input_dim = load_encoder_model(encoder_config, device=device, node2vec_dimensions=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"], 
                                                            hidden_dim=encoder_config["encoder_model"]["hidden_dim"])
         
@@ -508,6 +509,173 @@ class Runner(object):
             )
 
         return self.link_prediction_decoder, self.encoder_model
+    
+    
+    def run_validation_retry(self, samples):
+        pass 
+    
+    
+    def train_multi_head_retry(self, training_samples, validation_samples, test_samples):
+        pass
+        # We aren't going to use a trainable encoder since we have nothing to train node embeddings on
+        # Therefore, just use something like Node2Vec to encode the nodes in create_samples_retry() and loop over those
+        # Basically, we just do binary classification here. We can still add nodes to a graph and compute TopER loss or Graphlet Loss but that isn't as computationally bad
+    
+    
+    def create_samples_retry(self, graphs, days_back, all_edgebanks, is_directed=False):
+        """
+        MOVE THIS TO A SEPARATE FILE; CURRENTLY HERE FOR REFERENCE WHILE REDOING CODE
+        """
+        # Prepare the sorted samples for each edge type, both positive and negative edges 
+        # We will then send them to a pkl file and use them for training the model
+        # Just generate all samples then shuffling and splitting can happen later
+        # Also just use Node2Vec for right now and I can switch it to self.encoder_model later
+        # Need to organize the edges, then create the graphs (4 subgraphs per graph), then encode the nodes to make samples
+        sorted_samples = {
+            'o-o-bank': {'X': [], 'y': []},
+            'o-o-nobank': {'X': [], 'y': []},
+            'o-n': {'X': [], 'y': []},
+            'n-n': {'X': [], 'y': []},
+            }  # A dict to sort embeddings for multiheaded MLP training
+        
+        
+        all_embeddings = []  # Store the embeddings for each snapshot here (completed graphs only)
+        
+        # Organize the edges
+        for i, graph in enumerate(graphs):
+            
+            if i < self.starting_graph_idx:
+                continue 
+            # Old nodes of 'days_back' days before 
+            old_nodes_days = set().union(*[g.nodes() for g in graphs[max(i - days_back, 0): i]]) 
+            old_node_embeddings = {}  # Use encoder_model to embed these nodes first
+            new_edges_count = {
+                'o-o-bank': 0,
+                'o-o-nobank': 0,
+                'o-n': 0,
+                'n-n': 0,
+            }
+            
+            sorted_edges = {
+                'o-o-bank': [],
+                'o-o-nobank': [],
+                'o-n': [],
+                'n-n': [],
+            }
+            
+            for u, v in graph.edges():
+                if u in old_nodes_days and v in old_nodes_days:
+                    if v in all_edgebanks[i].get(u, set()):
+                        edge_type = 'o-o-bank'
+                    else:
+                        edge_type = 'o-o-nobank'
+                elif (u in old_nodes_days and v not in old_nodes_days) or (u not in old_nodes_days and v in old_nodes_days):
+                    edge_type = 'o-n'
+                elif u not in old_nodes_days and v not in old_nodes_days:   
+                    edge_type = 'n-n'
+                else:
+                    print(f'[WARNING] Unknown edge type found in create_samples()')
+                    continue 
+
+                sorted_edges[edge_type].append((u, v))  # Add the edge to sorted samples
+            
+            constructing_graph = nx.DiGraph() if is_directed else nx.Graph()  # We will add samples here for encoder to use
+            
+            # I'm not sure if i want to make the o-o-bank and o-o-nobank edges with the old 
+            # We will let o-o-bank, o-o-nobank, and o-n be formed from the old node embeddings
+            # Before creating n-n, we will embed the graph again
+            for edge_type in ['o-o-bank', 'o-o-nobank', 'o-n']:
+                sorted_samples[edge_type]['X'].append([])
+                sorted_samples[edge_type]['y'].append([])
+                
+                
+                # Since we don't have data for new nodes yet for edge type o-n, we will assign a vector of 0's
+                for u, v in sorted_edges[edge_type]:
+                    u_embedding = old_node_embeddings.get(u, np.zeros(self.input_dim / 2))
+                    v_embedding = old_node_embeddings.get(v, np.zeros(self.input_dim / 2))
+                    sample = u_embedding + v_embedding
+                    sorted_samples[edge_type]['X'][-1].append(sample)
+                    sorted_samples[edge_type]['y'][-1].append(1)
+                
+                # Now get negative samples
+                negative_edges = generate_negative_edges(
+                    graph,
+                    num_samples=new_edges_count[edge_type],
+                    edge_type=edge_type,
+                    old_nodes=old_nodes_days,
+                    is_directed=is_directed,
+                    edgebank=all_edgebanks[i]
+                )
+                
+                for u, v in negative_edges:
+                    u_embedding = old_node_embeddings.get(u, np.zeros(self.input_dim / 2))
+                    v_embedding = old_node_embeddings.get(v, np.zeros(self.input_dim / 2))
+                    sample = u_embedding + v_embedding
+                    sorted_samples[edge_type]['X'][-1].append(sample)
+                    sorted_samples[edge_type]['y'][-1].append(0)
+                
+                
+                constructing_graph.add_edges_from(sorted_edges[edge_type])  # For embedding to get new node information later
+                
+            # Embed graph here    
+                
+            # We will embed the graph before generating these samples
+            edge_type = 'n-n'
+            sorted_samples[edge_type]['X'].append([])
+            sorted_samples[edge_type]['y'].append([])
+            
+        # Generate embedding inputs and labels
+        for i, graph in enumerate(graphs): 
+            # We don't generate samples for graphs we won't generate for (our starting history)
+            if i < self.starting_graph_idx:
+                continue
+            
+            
+            # Generate negative samples for each edge type
+            for edge_type in ['o-o-bank', 'o-o-nobank', 'o-n', 'n-n']:
+                negative_edges = generate_negative_edges(
+                    graph,
+                    num_samples=new_edges_count[edge_type],
+                    edge_type=edge_type,
+                    old_nodes=old_nodes_days,
+                    is_directed=is_directed,
+                    edgebank=all_edgebanks[i]
+                )
+
+                tmp_samples = [torch.tensor([u, v]) for u, v in negative_edges]
+
+                # Add negative samples to the corresponding lists
+                sorted_samples[edge_type]['X'][-1].extend(tmp_samples)
+                sorted_samples[edge_type]['y'][-1].extend([0] * len(negative_edges))
+
+        
+        return sorted_samples
+        
+    
+    def train_models_retry(self):
+        all_samples = self.create_samples_retry(self.target_graphs, self.days_back, self.all_edgebanks, self.is_directed)
+        
+        # Split samples 80%/10%/10%
+        training_samples = {
+            'o-o-bank': {'X': [], 'y': []},
+            'o-o-nobank': {'X': [], 'y': []},
+            'o-n': {'X': [], 'y': []},
+            'n-n': {'X': [], 'y': []},
+            }
+        val_samples = {
+            'o-o-bank': {'X': [], 'y': []},
+            'o-o-nobank': {'X': [], 'y': []},
+            'o-n': {'X': [], 'y': []},
+            'n-n': {'X': [], 'y': []},
+            }
+        test_samples = {
+            'o-o-bank': {'X': [], 'y': []},
+            'o-o-nobank': {'X': [], 'y': []},
+            'o-n': {'X': [], 'y': []},
+            'n-n': {'X': [], 'y': []},
+            }
+        
+        self.train_multi_head_retry(training_samples, val_samples, test_samples)
     
 
     def train_models(self):

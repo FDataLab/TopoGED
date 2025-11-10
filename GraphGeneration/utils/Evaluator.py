@@ -500,7 +500,8 @@ class Evaluator():
             elif mode == "out":
                 degrees = [deg for _, deg in graph.out_degree()]
             elif mode == "total":
-                degrees = [graph.in_degree(n) + graph.out_degree(n) for n in graph.nodes()]
+                # degrees = [graph.in_degree(n) + graph.out_degree(n) for n in graph.nodes()]
+                degrees = [graph.degree(n) for n in graph.nodes()]
             else:
                 raise ValueError("mode must be 'in', 'out', or 'total'")
 
@@ -524,13 +525,13 @@ class Evaluator():
         return kl
     
     
-    def evaluate_node_selection(self, sorted_nodes_pred, sorted_nodes_true, candidate_old_nodes, graph_num=0):
+    def evaluate_node_selection(self, sorted_nodes_pred, sorted_nodes_true, graph_num=0):
         
         # Unpack for readability
-        pred_new_nodes = sorted_nodes_pred.get('new_nodes', set())
-        pred_old_nodes = sorted_nodes_pred.get('old_nodes', set())
-        true_new_nodes = sorted_nodes_true.get('new_nodes', set())
-        true_old_nodes = sorted_nodes_true.get('old_nodes', set())
+        pred_new_nodes = set(sorted_nodes_pred.get('new_nodes', set()))
+        pred_old_nodes = set(sorted_nodes_pred.get('old_nodes', set()))
+        true_new_nodes = set(sorted_nodes_true.get('new_nodes', set()))
+        true_old_nodes = set(sorted_nodes_true.get('old_nodes', set()))
 
         # --- New nodes ---
         new_correct = pred_new_nodes & true_new_nodes
@@ -539,6 +540,8 @@ class Evaluator():
         new_f1 = (2 * new_precision * new_recall / (new_precision + new_recall)
                 if (new_precision + new_recall) > 0 else 0)
 
+        new_node_accuracy = len(new_correct) / len(true_new_nodes) if true_new_nodes else 0
+
         # --- Old nodes ---
         old_correct = pred_old_nodes & true_old_nodes
         old_precision = len(old_correct) / len(pred_old_nodes) if pred_old_nodes else 0
@@ -546,8 +549,7 @@ class Evaluator():
         old_f1 = (2 * old_precision * old_recall / (old_precision + old_recall)
                 if (old_precision + old_recall) > 0 else 0)
         
-        old_node_accuracy = (len(old_correct & candidate_old_nodes) / len(candidate_old_nodes)
-                            if candidate_old_nodes else 0)
+        old_node_accuracy = len(old_correct) / len(true_old_nodes) if true_old_nodes else 0
         
         # --- Combined nodes ---
         pred_all = pred_new_nodes | pred_old_nodes
@@ -563,6 +565,7 @@ class Evaluator():
             'Precision_New': new_precision,
             'Recall_New': new_recall,
             'F1_New': new_f1,
+            'Accuracy_New': new_node_accuracy,
             'Precision_Old': old_precision,
             'Recall_Old': old_recall,
             'F1_Old': old_f1,

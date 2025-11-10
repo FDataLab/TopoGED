@@ -100,7 +100,7 @@ def count_graphlets_from_orbits(orbit_matrix):
     return np.array(graphlet_counts)
 
 
-def get_five_node_graphlet_vector(G, method='orca', binary_path=None, num_samples=20000):
+def get_five_node_graphlet_vector(G, method='orca', binary_path="GraphGeneration/utils/orca/orca.exe", num_samples=20000):
     """
     Unified wrapper for ORCA (exact), GraphletCountOSN (estimated), and pyfglt (exact).
     
@@ -134,7 +134,7 @@ def get_five_node_graphlet_vector(G, method='orca', binary_path=None, num_sample
             subprocess.run([binary_path, "5", in_path, out_path], check=True)
             orbit_matrix = read_orca_output(out_path)
             res = count_graphlets_from_orbits(orbit_matrix)
-            print(res)
+            #print(res)
             return res
 
         elif method == 'osn':

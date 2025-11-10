@@ -44,7 +44,7 @@ def compute_linear_gnn_embeddings(G: nx.DiGraph, device):
     return embeddings
 
 
-def compute_node2vec_embeddings(G, device, old_nodes_days=None):
+def compute_node2vec_embeddings(G, device, old_nodes_days=None, add_degree=True):
     """
     Use Node2Vec to embed nodes in the constructed graph. Appends node features onto the end since Node2Vec does not account for features
     One of two available methods
@@ -88,12 +88,11 @@ def compute_node2vec_embeddings(G, device, old_nodes_days=None):
             else:
                 node2vec_emb = mean_vector
             
-        # Add on features since Node2Vec doesn't account for features
-        # feat_dict = G.nodes[node]['feat']
-        # sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
-        # sorted_values = [feat_dict[k] for k in sorted_keys]
-        # node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
-        # combined = torch.cat([node2vec_emb, node_feat], dim=0)
+        if add_degree:
+            degree = G.degree[node]  # or G.out_degree[node] / G.in_degree[node] for directed graphs
+            degree_tensor = torch.tensor([degree], dtype=torch.float32).to(device)
+            node2vec_emb = torch.cat([node2vec_emb, degree_tensor], dim=0)
+            
         embeddings[node] = node2vec_emb
     
     return embeddings
@@ -295,6 +294,30 @@ def compute_temporal_node_embeddings(embedding_history, days_back, device, model
 
     return final_embeddings
 
+def compute_hks_embeddings(graph, t_values, device='cpu', add_degree=False, add_time=False):
+    """
+    Compute the Heat Kernel Signature (HKS) for each node in the graph.
+    :param graph: NetworkX graph (undirected, unweighted)
+    :param t_values: List of diffusion time values to compute HKS
+    :return: Dictionary with nodes as keys and HKS values as lists
+    """
+    L = nx.laplacian_matrix(graph).toarray()
+    eigvals, eigvecs = np.linalg.eigh(L)  
+
+    hks = {node: [] for node in graph.nodes()}
+    
+    for t in t_values:
+        heat_kernel = np.dot(eigvecs, np.dot(np.diag(np.exp(-t * eigvals)), eigvecs.T))
+        for i, node in enumerate(graph.nodes()):
+            hks[node].append(heat_kernel[i, i])  
+    hks = {node: torch.tensor(values, dtype=torch.float32, device=device) for node, values in hks.items()}
+    return hks
+
+# How to run and extract the 1D features:
+# HKS = compute_hks(G, [0.1]) # you can use other t_values here, more than one
+# HKS_rounded = {node: round(value[0], 6) for node, value in HKS.items()}
+
+
 def group_node2vec_embeddings(all_embeddings, old_nodes_days, days_back, use_ma):
     """
     Get the embeddings to use for constructing the current graph from the past days_back days
@@ -316,12 +339,22 @@ def group_node2vec_embeddings(all_embeddings, old_nodes_days, days_back, use_ma)
 
     node_embeddings = {}
 
+    sample_emb = None
+    for emb_dict in reversed(recent_embeddings):
+        if len(emb_dict) > 0:
+            sample_emb = next(iter(emb_dict.values()))
+            break
+
+    emb_dim = sample_emb.shape[0] if sample_emb is not None else 0
+
     for node in old_nodes_days:
         node_embs = []
 
         node_embs = [emb_dict[node] for emb_dict in recent_embeddings if node in emb_dict]
-        d
-        if use_ma:
+        
+        if not node_embs:
+            node_embeddings[node] = torch.zeros(emb_dim, dtype=torch.float32)
+        elif use_ma:
             # Moving average only over days where the node exists
             node_embeddings[node] = torch.stack(node_embs, dim=0).mean(dim=0)
         else:
