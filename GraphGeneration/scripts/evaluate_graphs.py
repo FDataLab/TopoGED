@@ -54,8 +54,11 @@ class EvaluateGraphs():
         # Load the data
         if self.embedding_method == "hks":
             data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}_{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
+        elif self.embedding_method == "Node2Vec":
+            data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_oobankchanges", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
         else:
-            data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embeddingDegree_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
+            data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_oobankchanges", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
+        data_path = "data/output/constructed_graphs/networkadex_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeNode2Vec_True/Node2Vec_constructed_graphs_networkadex.pkl"
         print(data_path)
         with open(data_path, 'rb') as f:
             self.pred_graphs, self.true_graphs, self.sorted_nodes_pred, self.sorted_nodes_true = pickle.load(f)
@@ -65,7 +68,6 @@ class EvaluateGraphs():
         """
         Utility function for emptying files if they exist
         We don't want to repeatedly add trials to the csvs/txt files after many runs
-        
         Params:
             directories (list): The directories to create
             file_paths (list): The file paths we plan on storing data in
@@ -81,6 +83,7 @@ class EvaluateGraphs():
             if os.path.exists(path):
                 os.remove(path)
                 
+        
 
     def evaluate(self, pred_graph, true_graph, sorted_nodes_pred, sorted_nodes_true, graph_num):
         """

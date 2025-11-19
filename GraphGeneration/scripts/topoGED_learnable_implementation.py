@@ -214,8 +214,8 @@ class Runner(object):
                         # ✅ get embeddings *inside batch* for consistency
                         embeddings = self.embedder.get_embeddings(set(u_ids + v_ids), snapshot_num + i)
 
-                        ub = torch.stack([embeddings[u] for u in u_ids]).to(self.device)
-                        vb = torch.stack([embeddings[v] for v in v_ids]).to(self.device)
+                        ub = torch.stack([embeddings[u] for u in u_ids]).contiguous()
+                        vb = torch.stack([embeddings[v] for v in v_ids]).contiguous()
 
                         with torch.cuda.amp.autocast(enabled=use_cuda):
                             preds = self.link_prediction_decoder(ub, vb, edge_type=edge_type).view(-1, 1)
@@ -399,7 +399,6 @@ class Runner(object):
         return sorted_samples
     
 
-    # TODO Use the cached edges
     def train_multi_head(self, training_samples, val_samples, test_samples):
         """
         params:
@@ -421,6 +420,8 @@ class Runner(object):
 
         self.link_prediction_decoder.train()
         self.embedder.train()
+
+        
 
         optimizer = torch.optim.Adam(
             list(self.link_prediction_decoder.parameters()) + list(self.embedder.parameters()),
@@ -458,9 +459,9 @@ class Runner(object):
 
                         # ✅ Recompute embeddings here — fresh autograd graph each time
                         embeddings = self.embedder.get_embeddings(set(u_ids + v_ids), i)
-
-                        ub = torch.stack([embeddings[u] for u in u_ids]).to(self.device)
-                        vb = torch.stack([embeddings[v] for v in v_ids]).to(self.device)
+                        
+                        ub = torch.stack([embeddings[u] for u in u_ids]).contiguous()
+                        vb = torch.stack([embeddings[v] for v in v_ids]).contiguous()
 
                         optimizer.zero_grad()
                         with torch.cuda.amp.autocast(enabled=use_cuda):
@@ -496,29 +497,37 @@ class Runner(object):
                     f.flush()
 
             # validate using snapshot index self.train_end (your choice)
-            val_results = self.run_validation(batch_size, epoch, val_samples, snapshot_num=self.train_end)
-
-            # collect epoch metrics for plotting later
+            val_results = self.run_validation(batch_size, epoch, val_samples, self.train_end)        
+            
             for et in self.all_edge_types:
-                train_losses_all[et].append(np.mean(epoch_losses[et]) if epoch_losses[et] else 0.0)
-                train_aucs_all[et].append(np.mean(epoch_aucs[et]) if epoch_aucs[et] else 0.0)
-
-        # Save plots & return model (unchanged)
+                # Training metrics
+                train_losses_all[et].append(np.mean(epoch_losses[et]) if len(epoch_losses[et]) else 0)
+                train_aucs_all[et].append(np.mean(epoch_aucs[et]) if len(epoch_aucs[et]) else 0)
+                
+                # Validation metrics
+                val_losses_all[et].append(val_results[et]['loss'])
+                val_aucs_all[et].append(val_results[et]['auc'])
+                
+                
         os.makedirs(self.training_plots_path, exist_ok=True)
         for et in self.all_edge_types:
             loss_path = os.path.join(self.training_plots_path, f'loss_{et}.png')
             aucroc_path = os.path.join(self.training_plots_path, f'aucroc_{et}.png')
+            
+            # Display Loss curves
             self.visualizer.display_loss(
                 train_loss=train_losses_all[et],
-                valid_loss=[0]*len(train_losses_all[et]),  # or pass val losses collected earlier
-                num_epochs=epochs,
+                valid_loss=val_losses_all[et],
+                num_epochs=encoder_config["training"]["epochs"],
                 save_path=loss_path,
                 edge_type=et
             )
+
+            # Display AUC curves
             self.visualizer.display_aucroc(
                 train_aucroc=train_aucs_all[et],
-                valid_aucroc=[0]*len(train_aucs_all[et]),
-                num_epochs=epochs,
+                valid_aucroc=val_aucs_all[et],
+                num_epochs=encoder_config["training"]["epochs"],
                 save_path=aucroc_path,
                 edge_type=et
             )

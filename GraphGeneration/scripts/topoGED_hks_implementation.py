@@ -15,6 +15,7 @@ import pickle
 #import line_profiler
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
+from utils.visualizer import Visualizer
 from GraphGeneration.utils.Evaluator import Evaluator
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached, generate_negative_edges
 from GraphGeneration.utils.sampling_edges_utils import predict_edges
@@ -64,6 +65,7 @@ class Runner(object):
         
         # Set up Evaluator
         self.evaluator = Evaluator()
+        self.visualizer = Visualizer()
         self.device = device
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
@@ -880,6 +882,8 @@ class Runner(object):
 
         all_built_graphs = []
         all_target_graphs = []
+        all_pred_nodes = []
+        all_true_nodes = []
 
         # To predict snapshot i, we use snapshot 0,...,i-1 to train
         for i in range(self.starting_graph, len(self.probabilities)): 
@@ -917,9 +921,16 @@ class Runner(object):
             
             # Add the graphs to a list to save later
             built_graph = filtration_sequence[-1]
-            target_graph = self.target_graphs[i]
+            target_graph = self.target_graphs[i][-1]
             all_built_graphs.append(built_graph)
             all_target_graphs.append(target_graph)
+            all_pred_nodes.append(node_types)
+            
+            # Get the node types for the target graph
+            current_nodes = target_graph.nodes()
+            old_nodes = current_nodes & self.current_target_old_nodes
+            new_nodes = current_nodes - old_nodes
+            all_true_nodes.append({"old_nodes": old_nodes, "new_nodes": new_nodes})
             
             # Add to the old graphs
             self.old_graphs.append(self.target_graphs[i][-1])
@@ -930,7 +941,7 @@ class Runner(object):
         output_filepath = os.path.join(self.saved_graph_dir, f"hks_constructed_graphs_{encoder_config["dataset"]}.pkl")
         os.makedirs(self.saved_graph_dir, exist_ok=True)
 
-        data_to_save = (all_built_graphs, all_target_graphs)
+        data_to_save = (all_built_graphs, all_target_graphs, all_pred_nodes, all_true_nodes)
 
         print("\n======================================")
         print(f"INFO: Saving {len(all_built_graphs)} pairs of graphs to {output_filepath}")

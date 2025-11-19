@@ -526,18 +526,16 @@ class Runner(object):
             if i < self.starting_graph:
                 all_embeddings.append(compute_node2vec_embeddings(graph, device, old_nodes_days=old_nodes_days, add_degree=self.add_degree))  # Store the embedding of this graph's nodes for later use
                 continue 
-
+                
             old_node_embeddings = group_node2vec_embeddings(all_embeddings, old_nodes_days, days_back, self.use_ma)
 
             new_edges_count = {
-                'o-o-bank': 0,
                 'o-o-nobank': 0,
                 'o-n': 0,
                 'n-n': 0,
             }
             
             sorted_edges = {
-                'o-o-bank': [],
                 'o-o-nobank': [],
                 'o-n': [],
                 'n-n': [],
@@ -628,6 +626,8 @@ class Runner(object):
             # Embed graph here before adding n-n edges because we have some information now
             if constructing_graph.number_of_edges() <= 0:
                 all_embeddings.append({})
+                sorted_samples['n-n']['X'].append([])
+                sorted_samples['n-n']['y'].append([])
                 continue
             curr_embeddings = compute_node2vec_embeddings(constructing_graph, device, old_nodes_days=old_nodes_days, add_degree=self.add_degree)  # Get the current embeddings (handles empty nodes)
                 
@@ -772,7 +772,7 @@ class Runner(object):
             print(f"[INFO] {edge_type}: {len(data['X'])} graphs total")
             non_empty = sum(1 for x in data['X'] if x)
             print(f"        {non_empty} graphs with non-empty X lists")
-                
+                  
         # Split samples 80%/10%/10%
         edge_types = all_samples.keys()
         num_graphs = len(next(iter(all_samples.values()))['X'])  # Number of graphs
@@ -788,11 +788,13 @@ class Runner(object):
         for edge_type in ['o-o-nobank', 'o-n', 'n-n']:  # Exclude o-o-bank for training
             for idx, (graph_X, graph_y) in enumerate(zip(all_samples[edge_type]['X'], all_samples[edge_type]['y'])):
                 if not graph_X:  # skip empty sample sets
-                    continue
+                    graph_X = []
+                    graph_y = []
 
-                combined = list(zip(graph_X, graph_y))
-                random.shuffle(combined)
-                graph_X, graph_y = zip(*combined) if combined else ([], [])
+                else:
+                    combined = list(zip(graph_X, graph_y))
+                    random.shuffle(combined)
+                    graph_X, graph_y = zip(*combined) if combined else ([], [])
 
                 if idx < n_train:
                     training_samples[edge_type]['X'].append(list(graph_X))
@@ -803,9 +805,7 @@ class Runner(object):
                 else:
                     test_samples[edge_type]['X'].append(list(graph_X))
                     test_samples[edge_type]['y'].append(list(graph_y))
-        
-        print(training_samples)
-        
+                
         self.train_multi_head(training_samples, val_samples, test_samples)
             
             

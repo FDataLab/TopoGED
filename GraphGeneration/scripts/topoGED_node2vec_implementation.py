@@ -16,6 +16,7 @@ import pickle
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from GraphGeneration.utils.Evaluator import Evaluator
+from utils.visualizer import Visualizer
 from load_data import load_data, generate_training_data_cached, generate_validation_data_cached, generate_negative_edges
 from GraphGeneration.utils.sampling_edges_utils import predict_edges
 from GraphGeneration.utils.casting_type import to_tensor
@@ -64,17 +65,19 @@ class Runner(object):
         
         # Set up Evaluator
         self.evaluator = Evaluator()
+        self.visualizer = Visualizer()
         self.device = device
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
         self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data_node2vec_{self.use_ma}')
         self.saved_samples = os.path.join(self.saved_input, 'saved_samples.pkl')
-        self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}_node2vec_{self.use_ma}'
+        self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.use_ma}'
         self.edge_eval_dir = f'GraphGeneration/output/results/edges_evaluation/{encoder_config["dataset"]}/{self.common_suffix}'
         self.structure_dir = f'GraphGeneration/output/results/structure/{encoder_config["dataset"]}/{self.common_suffix}'
         self.kernel_dir = f'GraphGeneration/output/results/kernel/{encoder_config["dataset"]}/{self.common_suffix}'
         self.topER_dir = f'GraphGeneration/output/results/topER/{encoder_config["dataset"]}/{self.common_suffix}'
-        self.saved_graph_dir = f'data/output/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}'
+        self.saved_graph_dir =  f'data/output/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}'
+        self.training_plots_path = f'GraphGeneration/output/results/training_plots/{encoder_config["dataset"]}/{encoder_config["encoder_model"]["nodeEmbeddingType"]}_{self.use_ma}'
         
         save_dir = os.path.join(self.file_visualization_path, encoder_config["dataset"], encoder_config["encoder_model"]["nodeEmbeddingType"])
         os.makedirs(save_dir, exist_ok=True)
@@ -99,8 +102,11 @@ class Runner(object):
                                                            hidden_dim=encoder_config["encoder_model"]["hidden_dim"])
         
         # Check if there is any add-on features we will plug at the end of encoder embedding
-        # if encoder_config["encoder_model"]["addOnFeature"] in ['NodeType', 'Position']:
-        #     self.input_dim += 1
+        self.add_degree = False
+        if encoder_config["encoder_model"]["addOnFeature"] in ['NodeType', 'Position', 'Degree']:
+            self.input_dim += 1
+            if encoder_config["encoder_model"]["addOnFeature"] == 'Degree':
+                self.add_degree = True
         
         self.link_prediction_decoder = setupMLP(embedding_dim=self.input_dim*2, mlpEncoding=encoder_config["decoder_model"]["encode_links"])
         self.link_prediction_decoder.to(device)
@@ -134,7 +140,7 @@ class Runner(object):
         self.new_node_id = 0  # The ID we will assign new node (incremented as we add nodes)
 
         # Exclusive to this iteration of topoGED (with Node2Vec)
-        self.node_embedding_history = [compute_node2vec_embeddings(self.target_graphs[i][-1], device) for i in range(0, self.starting_graph)]  # Store the history of node embeddings for Node2Vec
+        self.node_embedding_history = [compute_node2vec_embeddings(self.target_graphs[i][-1], device, add_degree=self.add_degree) for i in range(0, self.starting_graph)]  # Store the history of node embeddings for Node2Vec
         
 
     # ======================= HELPER FUNCTIONS =======================
@@ -153,7 +159,7 @@ class Runner(object):
         np.random.seed(self.seed)
         
         # Sample old nodes
-        probs = compute_reappearance_probabilities(graphs=prev_graphs, days_back=self.days_back)
+        probs = compute_reappearance_probabilities(graphs=prev_graphs, days_back=self.days_back, decay_factor=1.0, alpha=3.0)
         node_ids = list(probs.keys())
         weights = list(probs.values())
 
@@ -172,7 +178,7 @@ class Runner(object):
         use_cuda = (self.device.type == "cuda")
         criterion = nn.BCELoss()
         embedder = EmbedDegree(include_weights=False)
-        lambda_toper = 0.1  # Weight for TopER structural loss
+        lambda_toper = 0  # Weight for TopER structural loss
         toper_loss_fn = GraphletLoss()
 
         results = {edge_type: {'loss': [], 'auc': []} for edge_type in validation_samples.keys()}
@@ -249,7 +255,8 @@ class Runner(object):
                 auc = roc_auc_score(y_tensor.cpu().numpy().flatten(), all_preds_flat)
 
                 results[edge_type]['loss'].append(total_loss)
-                results[edge_type]['auc'].append(auc)
+                if not np.isnan(auc):
+                    results[edge_type]['auc'].append(auc)
 
                 # Optional: keep predicted graph for temporal continuity
                 validation_graphs.append(constructing_graph)
@@ -315,6 +322,13 @@ class Runner(object):
         Returns:
 
         """
+        # For storing losses and aucs
+        train_losses_all = {et: [] for et in self.all_edge_types}
+        train_aucs_all   = {et: [] for et in self.all_edge_types}
+        val_losses_all   = {et: [] for et in self.all_edge_types}
+        val_aucs_all     = {et: [] for et in self.all_edge_types}
+        
+        
         lr = encoder_config["training"]["lr"]
         batch_size = encoder_config["training"]["batch_size"]
         epochs = encoder_config["training"]["epochs"]
@@ -331,7 +345,7 @@ class Runner(object):
         criterion = nn.BCELoss()  # Switching to BCELoss from BCEWithLogitsLoss
         toper_loss_fn = GraphletLoss()  # Rename TODO
         scaler = torch.cuda.amp.GradScaler(enabled=use_cuda)
-        lambda_toper = 0.1  # weight for the Graphlet loss term
+        lambda_toper = 0  # weight for the Graphlet loss term
 
         num_snapshots = len(next(iter(training_samples.values()))['X'])
         embedder = EmbedDegree(include_weights=False)
@@ -351,7 +365,7 @@ class Runner(object):
                 for flag in self.all_edge_types:
                     X_list = training_samples[flag]['X'][snapshot]
                     y_list = training_samples[flag]['y'][snapshot]
-
+                    
                     if len(X_list) == 0:
                         continue
 
@@ -431,7 +445,8 @@ class Runner(object):
                     preds_cpu = all_preds_flat
                     y_cpu = y.numpy().flatten()
                     auc = roc_auc_score(y_cpu, preds_cpu)
-                    epoch_aucs[flag].append(auc)
+                    if not np.isnan(auc):
+                        epoch_aucs[flag].append(auc)
                     epoch_losses[flag].append(total_loss.item())                                 
 
             # Get results for this epoch
@@ -449,8 +464,41 @@ class Runner(object):
                     f.flush()
                     
             # Run validation
-            self.run_validation(validation_samples, batch_size, epoch)        
+            val_results = self.run_validation(validation_samples, batch_size, epoch)        
             
+            for et in self.all_edge_types:
+                # Training metrics
+                train_losses_all[et].append(np.mean(epoch_losses[et]) if len(epoch_losses[et]) else 0)
+                train_aucs_all[et].append(np.mean(epoch_aucs[et]) if len(epoch_aucs[et]) else 0)
+                
+                # Validation metrics
+                val_losses_all[et].append(val_results[et]['loss'])
+                val_aucs_all[et].append(val_results[et]['auc'])
+                
+                
+        os.makedirs(self.training_plots_path, exist_ok=True)
+        for et in self.all_edge_types:
+            loss_path = os.path.join(self.training_plots_path, f'loss_{et}.png')
+            aucroc_path = os.path.join(self.training_plots_path, f'aucroc_{et}.png')
+            
+            # Display Loss curves
+            self.visualizer.display_loss(
+                train_loss=train_losses_all[et],
+                valid_loss=val_losses_all[et],
+                num_epochs=encoder_config["training"]["epochs"],
+                save_path=loss_path,
+                edge_type=et
+            )
+
+            # Display AUC curves
+            self.visualizer.display_aucroc(
+                train_aucroc=train_aucs_all[et],
+                valid_aucroc=val_aucs_all[et],
+                num_epochs=encoder_config["training"]["epochs"],
+                save_path=aucroc_path,
+                edge_type=et
+            )
+                        
         return self.link_prediction_decoder
     
     
@@ -477,7 +525,7 @@ class Runner(object):
         for i, graph in enumerate(graphs):
             old_nodes_days = set().union(*[g.nodes() for g in graphs[max(i - days_back, 0): i]])   # Old nodes of days_back days before
             if i < self.starting_graph:
-                all_embeddings.append(compute_node2vec_embeddings(graph, device, old_nodes_days=old_nodes_days))  # Store the embedding of this graph's nodes for later use
+                all_embeddings.append(compute_node2vec_embeddings(graph, device, old_nodes_days=old_nodes_days, add_degree=self.add_degree))  # Store the embedding of this graph's nodes for later use
                 continue 
 
             old_node_embeddings = group_node2vec_embeddings(all_embeddings, old_nodes_days, days_back, self.use_ma)
@@ -571,7 +619,10 @@ class Runner(object):
                 constructing_graph.add_edges_from(sorted_edges[edge_type])  # For embedding to get new node information later
                 
             # Embed graph here before adding n-n edges because we have some information now
-            curr_embeddings = compute_node2vec_embeddings(constructing_graph, device, old_nodes_days=old_nodes_days)  # Get the current embeddings (handles empty nodes)
+            if constructing_graph.number_of_edges() <= 0:
+                all_embeddings.append({})
+                continue
+            curr_embeddings = compute_node2vec_embeddings(constructing_graph, device, old_nodes_days=old_nodes_days, add_degree=self.add_degree)  # Get the current embeddings (handles empty nodes)
                 
             edge_type = 'n-n'
             sorted_samples[edge_type]['X'].append([])
@@ -620,9 +671,78 @@ class Runner(object):
         
             
             # Embed the graph before moving to the next graph (for referencing old nodes)
-            all_embeddings.append(compute_node2vec_embeddings(graph, device, old_nodes_days=old_nodes_days))  # Store the embedding of this graph's nodes for later use
-            
-            
+            all_embeddings.append(compute_node2vec_embeddings(graph, device, old_nodes_days=old_nodes_days, add_degree=self.add_degree))  # Store the embedding of this graph's nodes for later use
+            emb_dict = all_embeddings[-1]
+            if isinstance(emb_dict, dict) and len(emb_dict) > 0:
+                embs = list(emb_dict.values())
+                if len(embs) > 1:
+                    embs_tensor = torch.stack([e.detach().cpu() for e in embs])
+
+                    # Pairwise distance and uniqueness
+                    pairwise_diff = torch.cdist(embs_tensor, embs_tensor)
+                    mean_dist = pairwise_diff.mean().item()
+                    unique_rows = len(torch.unique(embs_tensor, dim=0))
+
+                    # Zero embeddings
+                    zero_embs = sum(torch.allclose(e, torch.zeros_like(e)) for e in embs)
+
+                    # Variance stats
+                    variances = embs_tensor.var(dim=0)
+                    avg_var = variances.mean().item()
+                    min_var = variances.min().item()
+
+                    print(
+                        f"[DEBUG] Graph {len(all_embeddings)-1}: "
+                        f"{unique_rows}/{len(embs)} unique | "
+                        f"mean_dist={mean_dist:.6f} | "
+                        f"zero={zero_embs} | "
+                        f"avg_var={avg_var:.6f}, min_var={min_var:.6f}"
+                    )
+        from torch.nn.functional import cosine_similarity
+
+        threshold = 0.999  # cosine similarity threshold to consider "identical"
+        conflicts = []
+
+        for edge_type, data in sorted_samples.items():
+            X_batches = data['X']
+            y_batches = data['y']
+            for batch_i, (X_list, y_list) in enumerate(zip(X_batches, y_batches)):
+                if not X_list:
+                    continue
+
+                embeddings = []
+                labels = []
+                ids = []
+
+                for i, sample in enumerate(X_list):
+                    emb = torch.cat([sample['u_embedding'], sample['v_embedding']]).detach().cpu()
+                    embeddings.append(emb)
+                    labels.append(int(y_list[i]))
+                    ids.append((sample['u_id'], sample['v_id']))
+
+                embeddings = torch.stack(embeddings)
+                labels = torch.tensor(labels)
+
+                # Compare each pair within this batch
+                for i in range(len(embeddings)):
+                    sims = cosine_similarity(embeddings[i].unsqueeze(0), embeddings).flatten()
+                    for j in range(i + 1, len(embeddings)):
+                        if sims[j] >= threshold and labels[i] != labels[j]:
+                            conflicts.append({
+                                'edge_type': edge_type,
+                                'batch': batch_i,
+                                'pair': (ids[i], ids[j]),
+                                'similarity': sims[j].item(),
+                                'labels': (labels[i].item(), labels[j].item())
+                            })
+
+        if conflicts:
+            print(f"[WARNING] Found {len(conflicts)} conflicting samples with near-identical embeddings:")
+            for c in conflicts[:10]:  # show first few
+                print(f"  [{c['edge_type']}] {c['pair']} | sim={c['similarity']:.4f} | labels={c['labels']}")
+        else:
+            print("[INFO] No conflicting near-duplicate samples detected.")  
+             
         return sorted_samples
         
     
@@ -740,7 +860,7 @@ class Runner(object):
             edge_pool = edge_pool + sampled_edges
             
         flag = 'n-n'  # Embed the graph before computing this edge type now that we have info for new nodes
-        curr_embeddings = compute_node2vec_embeddings(constructing_graph, device)  # Re-embed the graph to get new node embeddings
+        curr_embeddings = compute_node2vec_embeddings(constructing_graph, device, add_degree=self.add_degree)  # Re-embed the graph to get new node embeddings
             
         # Get the edges
         sampled_edges = predict_edges(constructing_graph, edge_type=flag, node_types=node_types, edgebank=edgebank, link_prediction_decoder=self.link_prediction_decoder, 
@@ -791,18 +911,23 @@ class Runner(object):
         else:
             # Train the Decoder and Encoder model
             print('Training the Link Prediction Decoder and Encoder')
-            self.link_prediction_decoder = self.train_models()
+            self.train_models()
             print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
        
         # Old graphs that we know up to now
         self.old_graphs = [self.target_graphs[x][-1] for x in range(self.starting_graph)]
         
-        all_node_ids = [node for graphs in self.old_graphs for node in graphs.nodes()]
         
+        all_node_ids = set(node for graph in self.old_graphs for node in graph.nodes())        
         self.new_node_id = max(all_node_ids) + 1 if all_node_ids else 0
+
+        
 
         all_built_graphs = []
         all_target_graphs = []
+        all_pred_nodes = []
+        all_true_nodes = []
+
 
         # To predict snapshot i, we use snapshot 0,...,i-1 to train
         for i in range(self.starting_graph, len(self.probabilities)): 
@@ -840,20 +965,27 @@ class Runner(object):
             
             # Add the graphs to a list to save later
             built_graph = filtration_sequence[-1]
-            target_graph = self.target_graphs[i]
+            target_graph = self.target_graphs[i][-1]
             all_built_graphs.append(built_graph)
             all_target_graphs.append(target_graph)
+            all_pred_nodes.append(node_types)
+            
+            # Get the node types for the target graph
+            current_nodes = target_graph.nodes()
+            old_nodes = current_nodes & self.current_target_old_nodes
+            new_nodes = current_nodes - old_nodes
+            all_true_nodes.append({"old_nodes": old_nodes, "new_nodes": new_nodes})
             
             # Add to the old graphs
             self.old_graphs.append(self.target_graphs[i][-1])
             
             old_nodes_days = set().union(*[g.nodes() for g in self.old_graphs[max(i - self.days_back, 0): i]])   # Old nodes of days_back days before
-            self.node_embedding_history.append(compute_node2vec_embeddings(self.target_graphs[i][-1], device, old_nodes_days=old_nodes_days))
+            self.node_embedding_history.append(compute_node2vec_embeddings(self.target_graphs[i][-1], device, old_nodes_days=old_nodes_days, add_degree=self.add_degree))
         
-        output_filepath = os.path.join(self.saved_graph_dir, f"node2vec_constructed_graphs_{encoder_config["dataset"]}.pkl")
+        output_filepath = os.path.join(self.saved_graph_dir, f"Node2Vec_constructed_graphs_{encoder_config["dataset"]}.pkl")
         os.makedirs(self.saved_graph_dir, exist_ok=True)
 
-        data_to_save = (all_built_graphs, all_target_graphs)
+        data_to_save = (all_built_graphs, all_target_graphs, all_pred_nodes, all_true_nodes)
 
         print("\n======================================")
         print(f"INFO: Saving {len(all_built_graphs)} pairs of graphs to {output_filepath}")
@@ -869,3 +1001,18 @@ if __name__ == '__main__':
 
 # To run the script
 # python GraphGeneration/scripts/topoGED_end_to_end.py 
+
+
+"""
+[WARNING] Found 4270286 conflicting samples with near-identical embeddings:
+  [o-o-bank] ((1492, 3628), (1492, 1624)) | sim=0.9997 | labels=(1, 0)
+  [o-o-bank] ((1492, 3628), (1492, 1623)) | sim=0.9996 | labels=(1, 0)
+  [o-o-bank] ((1492, 3628), (1492, 1693)) | sim=1.0000 | labels=(1, 0)
+  [o-o-bank] ((1492, 3628), (1492, 1576)) | sim=0.9999 | labels=(1, 0)
+  [o-o-bank] ((1492, 3628), (1492, 5128)) | sim=0.9999 | labels=(1, 0)
+  [o-o-bank] ((1492, 5130), (1492, 1624)) | sim=0.9996 | labels=(1, 0)
+  [o-o-bank] ((1492, 5130), (1492, 1623)) | sim=0.9995 | labels=(1, 0)
+  [o-o-bank] ((1492, 5130), (1492, 1693)) | sim=0.9999 | labels=(1, 0)
+  [o-o-bank] ((1492, 5130), (1492, 1576)) | sim=0.9999 | labels=(1, 0)
+  [o-o-bank] ((1492, 5130), (1492, 5128)) | sim=1.0000 | labels=(1, 0)
+  """

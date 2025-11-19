@@ -146,51 +146,44 @@ def generate_negative_edges(G, num_samples, edge_type, edgebank=None):
     Returns:
         list(negatives) (list): A list of negative edges for training the MLP
     """
+    if edgebank is None:
+        edgebank = {}
+
     all_nodes = list(G.nodes())
-    negatives = set()
-    
-    # Remove if unnecessary
-    max_attempts = 250000
-    attempts = 0
-    print(f'For edge type {edge_type}')
-    while len(negatives) < num_samples and attempts < max_attempts:
-        u = random.choice(all_nodes)
-        v = random.choice(all_nodes)
-        
-        # Skip if u == v (self-loops not allowed)
-        if u == v:
+    negatives = []
+
+    print(f"Generating negatives for edge type: {edge_type}")
+
+    for u, v in itertools.permutations(all_nodes, 2):
+        # skip existing edges
+        if G.has_edge(u, v):
             continue
-        
-        # Filter edges based on edge_type
+
+        u_type = G.nodes[u]['feat']['type']
+        v_type = G.nodes[v]['feat']['type']
+
+        # apply edge-type-specific rules
         if edge_type == 'o-o-bank':
-            # This may stall, so there is a precaution to stop this
-            if G.nodes[u]['feat']['type'] == 0 and G.nodes[v]['feat']['type'] == 0 and v in edgebank.get(u, []):
-                if not G.has_edge(u, v) and (u, v) not in negatives:
-                    negatives.add((u, v))
-            else:
-                attempts += 1
+            if u_type == 0 and v_type == 0 and v in edgebank.get(u, []):
+                negatives.append((u, v))
+
         elif edge_type == 'o-o-nobank':
-            if G.nodes[u]['feat']['type'] == 0 and G.nodes[v]['feat']['type'] == 0 and v not in edgebank.get(u, []):
-                if not G.has_edge(u, v) and (u, v) not in negatives:
-                    negatives.add((u, v))
-            else:
-                attempts += 1
+            if u_type == 0 and v_type == 0 and v not in edgebank.get(u, []):
+                negatives.append((u, v))
+
         elif edge_type == 'n-n':
-            if G.nodes[u]['feat']['type'] == 1 and G.nodes[v]['feat']['type'] == 1:
-                if not G.has_edge(u, v) and (u, v) not in negatives:
-                    negatives.add((u, v))
-            else:
-                attempts += 1
+            if u_type == 1 and v_type == 1:
+                negatives.append((u, v))
+
         elif edge_type == 'o-n':
-            if (G.nodes[u]['feat']['type'], G.nodes[v]['feat']['type']) in [(0, 1), (1, 0)]:
-                if not G.has_edge(u, v) and (u, v) not in negatives:
-                    negatives.add((u, v))
-            else:
-                attempts += 1
-                    
-    negatives = list(negatives)
+            if (u_type, v_type) in [(0, 1), (1, 0)]:
+                negatives.append((u, v))
+
+        if len(negatives) >= num_samples:
+            break
+
     if len(negatives) < num_samples:
-        print(f"Only {len(negatives)} unique negative edges found for type {edge_type}, requested {num_samples}")
+        print(f"⚠️ Only {len(negatives)} negatives found for {edge_type} (requested {num_samples})")
 
     return negatives
 
