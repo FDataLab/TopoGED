@@ -58,7 +58,7 @@ class EvaluateGraphs():
             data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_oobankchanges", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
         else:
             data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_oobankchanges", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
-        data_path = "data/output/constructed_graphs/networkadex_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeNode2Vec_True/Node2Vec_constructed_graphs_networkadex.pkl"
+        data_path = "data/output/constructed_graphs/networkadex_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_True/Node2Vec_constructed_graphs_networkadex.pkl"
         print(data_path)
         with open(data_path, 'rb') as f:
             self.pred_graphs, self.true_graphs, self.sorted_nodes_pred, self.sorted_nodes_true = pickle.load(f)
@@ -229,8 +229,7 @@ if __name__ == "__main__":
     # Add arguments
     parser.add_argument("--dataset", type=str, default="CollegeMsg",
                         help="Name of the dataset to use")
-    parser.add_argument("--embedding_method", type=str, required=True, help="The node embedding method", 
-                        choices=["Node2Vec", "hks", "Learnable", "LearnableFeat"])
+    parser.add_argument("--embedding_method", type=str, required=True, help="The node embedding method")
     parser.add_argument("--use_ma", type=bool, required=False, help="Whether to use moving average, only supported for Node2Vec and HKS")
 
     # Parse arguments

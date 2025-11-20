@@ -48,15 +48,13 @@ warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 # Set up device
 try:
     if torch.cuda.is_available():
-        # device = torch.device("cuda")
-        # print("Using CUDA (NVIDIA GPU)")
         device = torch.device("cuda")
-        print("Using ROCm (AMD GPU)")
+        print("Using CUDA (NVIDIA GPU)")
     else:
         device = torch.device("cpu")
 except Exception:
     device = torch.device("cpu")
-  
+print(f"Using device: {device}")
 
 # Load YAML config
 with open("GraphGeneration/encoder.yaml", "r") as file:
@@ -848,7 +846,7 @@ class Runner(object):
             
             old_nodes_days = set().union(*[g.nodes() for g in self.old_graphs[max(i - self.days_back, 0): i]])   # Old nodes of days_back days before
         
-        output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config["encoder_model"]["nodeEmbeddingType"]}_constructed_graphs_{encoder_config["dataset"]}.pkl")
+        output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}.pkl")
         os.makedirs(self.saved_graph_dir, exist_ok=True)
 
         data_to_save = (all_built_graphs, all_target_graphs, all_pred_nodes, all_true_nodes)

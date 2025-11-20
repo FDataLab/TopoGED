@@ -1,6 +1,12 @@
 import random
+import torch
 import numpy as np 
 import networkx as nx
+from GraphGeneration.scripts.compute_embedding import compute_node2vec_embeddings
+
+from GraphGeneration.encoders.TGN.utils.my_utils import build_graph_data, GraphData
+from GraphGeneration.encoders.TGN.utils.utils import get_neighbor_finder
+
 
 def compute_reappearance_probabilities(graphs, days_back, decay_factor=3.0, alpha=1.0, epsilon=1e-8):
     """
@@ -133,3 +139,180 @@ def update_degrees(graph: nx.DiGraph):
         else:
             graph.nodes[node]['feat']['currDegree'] = graph.degree(node)
      
+     
+def generate_tgcn_node_features(target_graphs, embedding_dim, feature_type='node2vec', device="cpu"):
+    all_nodes = sorted(set(node for graphs in target_graphs for node in graphs[-1].nodes()))
+    node_to_idx = {node: idx for idx, node in enumerate(all_nodes)}
+    num_nodes = len(all_nodes)
+    
+    if feature_type == 'node2vec':
+        node_features = torch.zeros((num_nodes, embedding_dim), device=device) # Current node features
+        node_features_sorted = [node_features.clone()]  # We put the features of what we know up to this point (looking only one day ahead)
+
+        for i in range(1, len(target_graphs)):
+            curr_embeddings = compute_node2vec_embeddings(target_graphs[i - 1][-1], device=device, add_degree=False)
+
+            for node, emb in curr_embeddings.items():
+                if node in node_to_idx:
+                    node_idx = node_to_idx[node]
+                    node_features[node_idx] = emb.to(device)
+            
+            node_features_sorted.append(node_features.clone())
+            
+        print('Generated TGCN node features using Node2Vec embeddings.')
+        return node_features_sorted
+        
+    elif feature_type == 'one_hot':
+        return torch.eye(num_nodes).to(device)
+    
+    
+    elif feature_type == 'binary':
+        node_features = torch.zeros((num_nodes, embedding_dim), device=device) # Current node features
+        
+        for node_id in range(num_nodes):
+            bin_str = format(node_id, f'0{embedding_dim}b')  # Make it binary
+            node_features[node_id] = torch.tensor([float(b) for b in bin_str], dtype=torch.float32, device=device)
+        
+        return node_features
+    
+
+    elif feature_type == 'zeros':
+        return torch.zeros((num_nodes, embedding_dim), device=device)
+    
+    
+def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_graphs, days_back, embedding_dim, curr_nodes, device='cpu'):
+    # For the last days_back graphs, compute embeddings
+    history = prev_graphs[-days_back:] if len(prev_graphs) >= days_back else prev_graphs
+    all_embeddings = {id: torch.zeros(embedding_dim) for id in range(max(curr_nodes) + 1)}
+    
+    if feature_type == 'GAT' or feature_type == 'GCN':        
+        for graphs in history:
+            curr_graph = graphs[-1]  # Since our target_graphs are lists of graphs
+            
+            # Original node IDs in this graph
+            nodes_in_graph = list(curr_graph.nodes())
+            # Map original node IDs to 0..N-1 indices
+            node_id_map = {nid: i for i, nid in enumerate(nodes_in_graph)}
+
+            # Remap edges to local indices
+            edge_index = torch.tensor(
+                [[node_id_map[u], node_id_map[v]] for u, v in curr_graph.edges()],
+                dtype=torch.long,
+                device=device
+            ).t().contiguous()
+
+            # Get features for these nodes
+            nodes_tensor = torch.tensor([nid for nid in nodes_in_graph], dtype=torch.long, device=device)
+            curr_features = input_features[nodes_tensor]
+
+            # Forward pass through the GNN
+            if feature_type == 'GAT':
+                out = embedder((curr_features, edge_index))
+                curr_embeddings = out[0] if isinstance(out, tuple) else out
+            else:  # GCN
+                curr_embeddings = embedder(curr_features, edge_index)
+
+            # Map back embeddings to original node IDs
+            for nid, local_idx in node_id_map.items():
+                all_embeddings[nid] = curr_embeddings[local_idx]
+
+        # Stack embeddings for all current nodes in order
+        max_node_id = max(all_embeddings.keys())
+        emb_matrix = torch.stack([all_embeddings[nid] for nid in range(max_node_id + 1)])
+        
+        return emb_matrix
+    
+    elif feature_type == 'GCLSTM':
+        x_list = []
+        edge_index_list = []
+
+        global_N = input_features.shape[0]  # total number of global nodes
+
+        for graphs in prev_graphs:
+            curr_graph = graphs[-1]
+
+            # ---- GLOBAL NODE FEATURES ----
+            # Create full matrix (N × feat_dim)
+            # nodes not in graph get zero features
+            x_t = torch.zeros((global_N, input_features.shape[1]), device=device)
+            
+            nodes_in_graph = list(curr_graph.nodes())
+            nodes_tensor = torch.tensor(nodes_in_graph, dtype=torch.long, device=device)
+
+            # fill in the features for present nodes
+            x_t[nodes_tensor] = input_features[nodes_tensor]
+
+            # ---- GLOBAL EDGE INDEX ----
+            # Use global node IDs directly
+            edges = torch.tensor(list(curr_graph.edges()),
+                                dtype=torch.long, device=device)
+
+            # transpose to shape [2, num_edges]
+            edge_index_t = edges.t().contiguous()
+
+            x_list.append(x_t)
+            edge_index_list.append(edge_index_t)
+
+        # Required params
+        node_id_list = list(curr_nodes)                     
+        node_id_map = {nid: nid for nid in node_id_list}     
+
+        all_embeddings = embedder(x_list, edge_index_list, node_id_list, node_id_map)
+
+        # Now gather embeddings for the current graph's nodes
+        curr_nodes = list(curr_nodes)
+        global_N = input_features.shape[0]   # total number of global nodes
+        embedding_dim = next(iter(all_embeddings.values())).shape[0]
+
+        # Initialize full matrix (zeros for nodes never seen)
+        emb_matrix = torch.zeros((global_N, embedding_dim), device=device)
+
+        for nid, emb in all_embeddings.items():
+            emb_matrix[nid] = emb
+
+        return emb_matrix
+        
+    elif feature_type == 'TGN':
+        print('Generating TGN node embeddings...')
+        sources = []
+        destinations = []
+        times = []
+        e_idxs = []
+        curr_idx = 0
+        
+        for i, graphs in enumerate(prev_graphs):
+            curr_graph = graphs[-1]
+            edges = list(curr_graph.edges())
+            
+            for (u, v) in edges:
+                sources.append(u)
+                destinations.append(v)
+                times.append(i)
+                e_idxs.append(curr_idx)
+                curr_idx += 1
+        data = GraphData()
+        data.sources = sources
+        data.destinations = destinations
+        data.timestamps = times
+        data.edge_idxs = e_idxs   
+        
+        neighbor_finder = get_neighbor_finder(data, uniform=False)
+        embedder.set_neighbor_finder(neighbor_finder)
+             
+        sources = np.array(sources)
+        destinations = np.array(destinations)
+        e_idxs = np.array(e_idxs)
+        times = np.array(times)
+        negative_nodes = destinations.copy() # Dummy negative nodes
+        
+        src_embs, dst_embs, neg_embs = embedder.compute_temporal_embeddings(
+            sources, destinations, negative_nodes, times, e_idxs)
+        
+        for i, node_id in enumerate(sources):
+            all_embeddings[node_id] = src_embs[i]
+        for i, node_id in enumerate(destinations):
+            all_embeddings[node_id] = dst_embs[i]
+        
+        max_node_id = max(all_embeddings.keys())
+        emb_matrix = torch.stack([all_embeddings[nid] for nid in range(max_node_id + 1)])
+        return emb_matrix

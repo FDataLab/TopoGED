@@ -2,30 +2,51 @@ encoder_model:
   name: topoGED
   node2vec_setup:
     node2vec_dimensions: 64 # We add features onto the end since Node2Vec doesn't embed features
-    node2vec_walk_length: 50 # Number of nodes visited per walk (Higher is more global, smaller is local)
-    node2vec_num_walks: 10 # Number of walks to start per node (Higher is more detailed and stable)
-    node2vec_p: 1.0 # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
-    node2vec_q: 1.0 # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
+    node2vec_walk_length: 80 # Number of nodes visited per walk (Higher is more global, smaller is local)
+    node2vec_num_walks: 30 # Number of walks to start per node (Higher is more detailed and stable)
+    node2vec_p: 0.5 # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
+    node2vec_q: 2.0 # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
     node2vec_window: 10 # The context size (Higher is broader learning)
     node2vec_min_count: 1 # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
     node2vec_batch_words: 4 # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
     node2vec_workers: 1 # Number of workers (threads)
-  hidden_dim: 64
-  nodeEmbeddingType: "LSTM"
-  addOnFeature: "Position"
+  lstm_setup:
+    num_layers: 2
+  tgcn_setup:
+    feature_type: 'zeros'
+    binary_dim: 64
+    improved: False
+    cached: False
+    add_self_loops: True
+  other_models:
+    feature_type: 'binary'
+    feature_dim: 32
+    embedding_dim: 64
+    num_layers: 2
+    model_type: 'GCLSTM'
+  hidden_dim: 128
+  nodeEmbeddingType: "Node2Vec"
+  addOnFeature: "Degree"
+
+learnable_embedder:
+  setup:
+    init_type: "zeros"
+    hks_num_scales: 64
 
 decoder_model:
   encode_links: "Concat"
 
 training:
   batch_size: 32 # play around
-  lr: 0.001
-  epochs: 200
+  lr: 0.01
+  epochs: 100
   day: 5
 
-dataset: networkcentra
+dataset: networkadex
 seed: 1024
 days_back: 5
 directed_flag: False
 use_predicted_vals: False
 starting_graph_idx: 2 
+
+use_moving_average: True

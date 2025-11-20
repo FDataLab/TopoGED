@@ -95,17 +95,25 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
     
     # Predict edge probabilities using the MLP
     edge_probs = []
-    any_node = next(iter(old_node_embeddings))
-    embed_dim = len(old_node_embeddings[any_node])
+    if isinstance(old_node_embeddings, dict):
+        any_node = next(iter(old_node_embeddings))
+        embed_dim = len(old_node_embeddings[any_node])
+    elif isinstance(old_node_embeddings, torch.Tensor):
+        embed_dim = old_node_embeddings.shape[1]
     
     for u, v in candidate_edges:
-        if u not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
-            old_node_embeddings[u] = torch.zeros(embed_dim, device=device)
-        if v not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
-            old_node_embeddings[v] = torch.zeros(embed_dim, device=device)
-            
-        src_embed = old_node_embeddings[u]
-        dst_embed = old_node_embeddings[v]
+        if isinstance(old_node_embeddings, dict):
+            if u not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
+                old_node_embeddings[u] = torch.zeros(embed_dim, device=device)
+            if v not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
+                old_node_embeddings[v] = torch.zeros(embed_dim, device=device)
+
+            src_embed = old_node_embeddings[u]
+            dst_embed = old_node_embeddings[v]
+
+        else:
+            src_embed = old_node_embeddings[torch.tensor(u, dtype=torch.long, device=device)]
+            dst_embed = old_node_embeddings[torch.tensor(v, dtype=torch.long, device=device)]
         
         # Convert to torch.Tensor if necessary
         if isinstance(src_embed, np.ndarray):
