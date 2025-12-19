@@ -22,10 +22,11 @@ encoder_model:
     feature_type: 'binary'
     feature_dim: 32
     embedding_dim: 64
-    num_layers: 2
-    model_type: 'GCLSTM'
+    num_layers: 1
+    model_type: 'GCN'
+    n_neighbors: 10
   hidden_dim: 128
-  nodeEmbeddingType: "Node2Vec"
+  nodeEmbeddingType: "GCN"
   addOnFeature: "Degree"
 
 learnable_embedder:
@@ -38,15 +39,61 @@ decoder_model:
 
 training:
   batch_size: 32 # play around
-  lr: 0.01
+  lr: 0.001
   epochs: 100
-  day: 5
+  day: 10000
 
+sampling:
+  # aion
+  # beta: 1.6405
+  # decay_factor: 2.5743
+
+  # Bancor
+  # beta: 1.9292
+  # decay_factor: 3.0540
+
+  # aion
+  #beta: 1.6405
+  #decay_factor: 2.5743
+
+  # College
+  # beta: 0.6365
+  # decay_factor: 3.1867 
+
+  # networkaeternity
+  # beta: 1.5281
+  # decay_factor: 2.5341
+
+  # networkadex
+  beta: 1.8660
+  decay_factor: 2.2884
+
+  # networkcentra
+  # beta: 1.8929
+  # decay_factor: 2.1588
+
+  # networkaragon
+  # beta: 1.9114
+  # decay_factor: 2.2486
+
+  # networkcoindash
+  # beta: 1.8498
+  # decay_factor: 2.2329
+  alpha: 0
+
+
+# dataset: networkaion  # Silently fails on 77 idk why
+# dataset: networkbancor
+# dataset: CollegeMsg
+# dataset: networkaeternity
 dataset: networkadex
+# dataset: networkaragon
+# dataset: networkcoindash
+# dataset: networkcentra  # Silently fails
 seed: 1024
-days_back: 5
+days_back: 5  # Use 10000 as meaning 'all'
 directed_flag: False
 use_predicted_vals: False
 starting_graph_idx: 2 
-
+# data/output/constructed_graphs/networkadex_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_binary_lr0.001_predictednodesTrue_allback/GCN_constructed_graphs_networkadex.pkl
 use_moving_average: True

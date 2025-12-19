@@ -122,8 +122,8 @@ class Runner(object):
         # Snapshots that we will use for traininng
         # Convert number of snapshots to integer
         self.num_snapshots = len(self.target_graphs)
-        self.train_end = int(0.8 * self.num_snapshots)
-        self.val_end = int(0.9 * self.num_snapshots)
+        self.train_end = int(0.7 * self.num_snapshots)
+        self.val_end = int(0.85 * self.num_snapshots)
 
         # Assign snapshots
         self.training_graphs = [self.target_graphs[i][-1] for i in range(self.train_end)]

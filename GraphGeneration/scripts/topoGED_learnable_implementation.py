@@ -709,8 +709,6 @@ class Runner(object):
             self.train_models()
             print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
        
-        print("EXITING SINCE WE ARE ONLY TESTING TRAINING MLP RIGHT NOW")
-        exit()  # For debugging training right now
         # Old graphs that we know up to now
         self.old_graphs = [self.target_graphs[x][-1] for x in range(self.starting_graph)]
         

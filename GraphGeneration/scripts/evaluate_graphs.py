@@ -45,7 +45,7 @@ class EvaluateGraphs():
         self.use_ma = getattr(args, 'use_ma', None)
         self.is_directed=False
         
-        prefix = f"GraphGeneration/scripts/results/{self.dataset}/{self.embedding_method}{f'_ma{self.use_ma}' if self.use_ma else ''}/"
+        prefix = f"GraphGeneration/scripts/results/{self.dataset}/{self.embedding_method}{f'_ma{self.use_ma}' if self.use_ma else ''}_lr001_5back_htgn/"
         self.file_visualization_path = os.path.join(prefix, "file_visualization")
         self.structure_dir = os.path.join(prefix, "structure")
         self.edge_eval_dir = os.path.join(prefix, "edge_evaluation")
@@ -55,14 +55,57 @@ class EvaluateGraphs():
         if self.embedding_method == "hks":
             data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}_{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
         elif self.embedding_method == "Node2Vec":
-            data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_oobankchanges", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
+            data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_lr001", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
         else:
-            data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_oobankchanges", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
-        data_path = "data/output/constructed_graphs/networkadex_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_True/Node2Vec_constructed_graphs_networkadex.pkl"
+            data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_lr001", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
+        data_path = "data/output/constructed_graphs/networkadex_topoGED_embeddingDegree_htgn_predictednodesFalse_5back_learnedparams/GCN_constructed_graphs_networkadex.pkl"
         print(data_path)
         with open(data_path, 'rb') as f:
             self.pred_graphs, self.true_graphs, self.sorted_nodes_pred, self.sorted_nodes_true = pickle.load(f)
         
+        num_snapshots = min(len(self.sorted_nodes_pred), len(self.sorted_nodes_true))
+
+        for i in range(num_snapshots):
+            pred_new_nodes = set(self.sorted_nodes_pred[i].get("new_nodes", []))
+            true_new_nodes = set(self.sorted_nodes_true[i].get("new_nodes", []))
+
+            # --- Set Comparison Logic ---
+            
+            # 1. Correctly Predicted (Intersection)
+            correct_nodes = pred_new_nodes.intersection(true_new_nodes)
+            
+            # 2. Missing Nodes (True but missed in Prediction)
+            missing_nodes = true_new_nodes.difference(pred_new_nodes)
+            
+            # 3. Spurious Nodes (Predicted but not True)
+            spurious_nodes = pred_new_nodes.difference(true_new_nodes)
+            
+            
+            # --- Print Results ---
+            print(f"\n--- Snapshot Index: {i} ---")
+            
+            # Overall counts
+            print(f"  [COUNTS] True New Nodes: {len(true_new_nodes)} | Predicted New Nodes: {len(pred_new_nodes)}")
+            
+            # Difference breakdown
+            print(f"  [MATCH] Correctly Identified: {len(correct_nodes)} nodes")
+            print(f"  [MISSING] True Nodes Not Predicted (FN): {len(missing_nodes)}")
+            print(f"  [SPURIOUS] Predicted Nodes That Are Wrong (FP): {len(spurious_nodes)}")
+            
+            # Detailed list (only if the number is small)
+            if len(missing_nodes) > 0:
+                print(f"    - Missing List (First 5): {list(missing_nodes)[:5]}...")
+            if len(spurious_nodes) > 0:
+                print(f"    - Spurious List (First 5): {list(spurious_nodes)[:5]}...")
+            
+            # Overall success metric
+            if len(true_new_nodes) > 0:
+                precision = len(correct_nodes) / len(pred_new_nodes) if len(pred_new_nodes) > 0 else 0
+                recall = len(correct_nodes) / len(true_new_nodes)
+                f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+                
+                print(f"  [METRICS] Precision: {precision:.4f} | Recall: {recall:.4f} | F1 Score: {f1:.4f}")
+            
         
     def _setup_clean_files(self, directories, file_paths):
         """
@@ -118,6 +161,7 @@ class EvaluateGraphs():
                 f"{self.edge_eval_dir}/new_nodes_only.csv",
                 f"{self.edge_eval_dir}/on_edges_only.csv",
                 f"{self.edge_eval_dir}/all_edges.csv",
+                f"{self.edge_eval_dir}/real_edge_eval.csv",
                 f"{self.structure_dir}/node_evaluation.csv",
                 f"{self.structure_dir}/structure_true.csv",
                 f"{self.structure_dir}/structure_pred.csv",
@@ -199,13 +243,16 @@ class EvaluateGraphs():
             
         # Evaluate the graph in terms of graphlet kernels
         pred_kernel, true_kernel, distance = self.evaluator.evaluateOrca(pred_graph, true_graph, )
-                        
+        
+        edge_results_real = self.evaluator.evaluateEdgesNew(pred_graph, true_graph, sorted_nodes_true["old_nodes"], sorted_nodes_pred["old_nodes"])
+        
         # Write results
         for data, path in [
             (results_old_nodes_edges, f"{self.edge_eval_dir}/old_nodes_only.csv"),
             (results_nn_edges, f"{self.edge_eval_dir}/new_nodes_only.csv"),
             (results_on_edges, f"{self.edge_eval_dir}/on_edges_only.csv"),
             (results_all_edges, f"{self.edge_eval_dir}/all_edges.csv"),
+            (edge_results_real, f"{self.edge_eval_dir}/real_edge_eval.csv"),
             (results_node_evaluation, f"{self.structure_dir}/node_evaluation.csv"),
             (results_true_structure, f"{self.structure_dir}/structure_true.csv"),
             (results_pred_structure, f"{self.structure_dir}/structure_pred.csv"),

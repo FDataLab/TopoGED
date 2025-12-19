@@ -78,6 +78,9 @@ def read_orca_output(file_path):
 
 
 def count_graphlets_from_orbits(orbit_matrix):
+    if orbit_matrix is None or orbit_matrix.size == 0 or len(orbit_matrix.shape) < 2:
+        # Return a zero vector for 5-node graphlet counts
+        return np.zeros(73, dtype=float)
     num_orbits = orbit_matrix.shape[1]
     #print(f"[DEBUG] ORCA orbit matrix shape: {orbit_matrix.shape}")
 

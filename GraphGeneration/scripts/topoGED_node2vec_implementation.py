@@ -116,7 +116,7 @@ class Runner(object):
                                                                                                      encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], str(encoder_config["days_back"]), encoder_config["use_predicted_vals"])
         
         # Modify the graph ids to 1,2,3,...
-        self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, self.days_back)
+        self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, 10000)
 
         # Build the edgebanks for construction
         self.all_edgebanks = build_edgebanks_from_start(self.target_graphs, self.days_back)        

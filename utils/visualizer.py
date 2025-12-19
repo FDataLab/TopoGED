@@ -1,6 +1,6 @@
-import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use("TkAgg")
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import numpy as np 
 import seaborn as sns
 import networkx as nx
@@ -178,7 +178,7 @@ class Visualizer:
             # For now just takes last one
             #plt.savefig(self.figdir_regression + self.dataset + '_embedding_graph.png')
             plt.show()
-            plt.clf()
+            plt.close()
             
             
     def display_embeddings_once(self, predicted_embedding, real_embedding, linfit_embedding):
@@ -242,7 +242,7 @@ class Visualizer:
         # For now just takes last one
         #plt.savefig(self.figdir_regression + self.dataset + '_embedding_graph.png')
         plt.show()
-        plt.clf()
+        plt.close()
             
             
     def display_single_embedding(self, embedding, num_buckets=10):
@@ -286,7 +286,7 @@ class Visualizer:
         
         # For now just takes last one
         plt.show()
-        plt.clf()
+        plt.close()
     
     
     def display_differences(self, predicted_embeddings, real_embeddings, linfit_embeddings):
@@ -306,7 +306,7 @@ class Visualizer:
             plt.title('Absolute Differences Between Vectors')
             plt.xlabel('Dimension')
             plt.show()
-            plt.clf()
+            plt.close()
             
         
     def display_composite_embeddings(self, betweenness_embeddings, closeness_embeddings, degree_embeddings, forman_embeddings, weight_embeddings, num_buckets=10, display_idx=0):
@@ -387,7 +387,7 @@ class Visualizer:
         ax3.set_title(f"Plot of Weight Counts {num_buckets} Thresholds")
         
         plt.show()
-        plt.clf()
+        plt.close()
         
 
     def display_pred_graph_vs_true_graph(self, predGraph, trueGraph):
@@ -450,7 +450,7 @@ class Visualizer:
         # Make sure the directory exists
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, bbox_inches='tight')
-        plt.clf()
+        plt.close()
         
     
     def plot_line_graph(true_vals, pred_vals, prob_type, xlabel="Time Index", ylabel="Probability", title="True vs Real: ", save_path="plot.png"):

@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 import os
+from sklearn.metrics import roc_auc_score, average_precision_score, precision_recall_fscore_support
 from grakel import GraphKernel
 from grakel import Graph
 from scipy.stats import wasserstein_distance
@@ -233,6 +234,130 @@ class Evaluator():
         
         return res
     
+    
+    def evaluateEdgesNew(self, pred_graph, true_graph, old_true, old_pred):
+        """
+        pred_graph: NxN numpy or tensor of predicted probabilities
+        true_graph: NxN numpy or tensor of 0/1
+        old_true:   iterable of old node IDs in the *true* graph
+        old_pred:   iterable of old node IDs in the *predicted* graph
+
+        Returns dict of metrics, including:
+        - ROC (old-old only)
+        - AP for all 6 categories
+        - precision, recall, F1 for all 6 categories
+        - counts of invalid edges
+        """
+        old_true = set(old_true)
+        old_pred = set(old_pred)
+        old_nodes = sorted(list(old_true.intersection(old_pred)))
+
+        N = len(true_graph.nodes)
+        all_nodes = list(range(N))
+        new_nodes = sorted(list(set(all_nodes) - set(old_nodes)))
+
+        invalid_edge_count = 0
+
+        def collect_pairs(A, B):
+            y_true, y_pred = [], []
+            true_counts, false_counts = 0, 0
+            for i in A:
+                for j in B:
+                    if i == j:
+                        continue
+                    # If either node doesn't exist in TRUE graph → invalid edge
+                    if i not in true_graph.nodes or j not in true_graph.nodes:
+                        nonlocal invalid_edge_count
+                        invalid_edge_count += 1
+                        y_true.append(0)
+                        y_pred.append(int(pred_graph.has_edge(i, j)))
+                        continue
+
+                    label = int(true_graph.has_edge(i, j))
+                    pred = int(pred_graph.has_edge(i, j))
+
+                    y_true.append(label)
+                    y_pred.append(pred)
+
+                    if pred == 1:
+                        if label == 1:
+                            true_counts += 1
+                        else:
+                            false_counts += 1
+            return np.array(y_true), np.array(y_pred), true_counts, false_counts
+
+        # -------------------------- Groups --------------------------
+        y_true_oo, y_pred_oo, tp_oo, fp_oo = collect_pairs(old_nodes, old_nodes)
+        y_true_on, y_pred_on, tp_on, fp_on = collect_pairs(old_nodes, new_nodes)
+        y_true_nn, y_pred_nn, tp_nn, fp_nn = collect_pairs(new_nodes, new_nodes)
+
+        # Split old-old by true label
+        mask_bank = y_true_oo == 1
+        mask_nobank = y_true_oo == 0
+
+        y_true_oobank = y_true_oo[mask_bank]
+        y_pred_oobank = y_pred_oo[mask_bank]
+
+        y_true_oonobank = y_true_oo[mask_nobank]
+        y_pred_oonobank = y_pred_oo[mask_nobank]
+
+        # ------------------------ Metrics ---------------------------
+        def safe_roc(y, p):
+            return float("nan") if len(np.unique(y)) < 2 else roc_auc_score(y, p)
+
+        def safe_ap(y, p):
+            return float("nan") if len(y) == 0 else average_precision_score(y, p)
+
+        def pr_metrics(y, p):
+            if len(y) == 0 or np.sum(y) == 0:
+                return 0.0, 0.0, 0.0
+            preds = (p > 0.5).astype(int)
+            prec, rec, f1, _ = precision_recall_fscore_support(y, preds, average="binary", zero_division=0)
+            return prec, rec, f1
+
+        # ------------------------ Build Output -----------------------
+        results = {
+            # ROC (old-old only)
+            "roc_o-o_nobank": safe_roc(y_true_oonobank, y_pred_oonobank),
+            "roc_o-o_bank": safe_roc(y_true_oobank, y_pred_oobank),
+            "roc_o-o_overall": safe_roc(y_true_oo, y_pred_oo),
+
+            # AP
+            "ap_o-o_nobank": safe_ap(y_true_oonobank, y_pred_oonobank),
+            "ap_o-o_bank": safe_ap(y_true_oobank, y_pred_oobank),
+            "ap_o-n": safe_ap(y_true_on, y_pred_on),
+            "ap_n-n": safe_ap(y_true_nn, y_pred_nn),
+            "ap_o-o_overall": safe_ap(y_true_oo, y_pred_oo),
+            "ap_all": safe_ap(
+                np.concatenate([y_true_oo, y_true_on, y_true_nn]),
+                np.concatenate([y_pred_oo, y_pred_on, y_pred_nn])
+            ),
+
+            # Precision / Recall / F1
+            "prf_o-o_nobank": pr_metrics(y_true_oonobank, y_pred_oonobank),
+            "prf_o-o_bank": pr_metrics(y_true_oobank, y_pred_oobank),
+            "prf_o-n": pr_metrics(y_true_on, y_pred_on),
+            "prf_n-n": pr_metrics(y_true_nn, y_pred_nn),
+            "prf_o-o_overall": pr_metrics(y_true_oo, y_pred_oo),
+            "prf_all": pr_metrics(
+                np.concatenate([y_true_oo, y_true_on, y_true_nn]),
+                np.concatenate([y_pred_oo, y_pred_on, y_pred_nn])
+            ),
+
+            # Counts of invalid edges
+            "invalid_pred_edge_count": invalid_edge_count,
+
+            # True / False edges in pred
+            "tp_o-o": tp_oo,
+            "fp_o-o": fp_oo,
+            "tp_o-n": tp_on,
+            "fp_o-n": fp_on,
+            "tp_n-n": tp_nn,
+            "fp_n-n": fp_nn,
+        }
+
+        return results
+        
     
     def evaluateGraphletKernel(self, pred_graph: nx.DiGraph, true_graph: nx.DiGraph):
         # Must be undirected
@@ -486,8 +611,16 @@ class Evaluator():
         
     
     def __calculateEigenvalues(self, graph: nx.Graph, num_values=5):
+        if graph.number_of_nodes() == 0:
+            return np.zeros(num_values)
+        if graph.number_of_nodes() < num_values:
+            # Pad with zeros
+            return np.zeros(num_values)
         matrix = nx.to_numpy_array(graph)
-        eigenvals = np.linalg.eigvals(matrix).real
+        try:
+            eigenvals = np.linalg.eigvals(matrix).real
+        except:
+            return np.zeros(num_values)
         
         top_k_vals = sorted(eigenvals, key=lambda x: abs(x), reverse=True)[:num_values]
         

@@ -21,6 +21,12 @@ class EmbedDegree:
             degrees = dict(graph.degree()).values()
             all_degrees.extend(degrees)
         
+        # --- ERROR HANDLING: no degrees available ---
+        if len(all_degrees) == 0:
+            # Return safe uniform thresholds OR raise a clear error
+            # Option 1: Safe fallback (recommended for robustness)
+            return np.zeros(self.num_buckets)
+        
         # Compute the thresholds based on percentiles of the degree distribution
         thresholds = np.percentile(all_degrees, np.linspace(0, 100, self.num_buckets + 1)[1:])
         

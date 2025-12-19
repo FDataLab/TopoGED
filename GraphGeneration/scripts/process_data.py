@@ -96,7 +96,7 @@ def process_starter_graph(graphs: list, thresholds: list, encoder_model):
 def modifyGraphIds(graphs, thresholds, days_back=5):
     all_mappings = []
     updated_graphs = []
-    global_node_counter = 1
+    global_node_counter = 0
 
     for i, graph_list in enumerate(graphs):
         curr_mapping = {}

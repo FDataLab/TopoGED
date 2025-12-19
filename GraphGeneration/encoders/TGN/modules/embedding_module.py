@@ -108,7 +108,7 @@ class GraphEmbedding(EmbeddingModule):
                                                            source_nodes,
                                                            timestamps,
                                                            n_layers=n_layers - 1,
-                                                           n_neighbors=n_neighbors)
+                                                           n_neighbors=n_neighbors).clone()
 
       neighbors, edge_idxs, edge_times = self.neighbor_finder.get_temporal_neighbor(
         source_nodes,
@@ -128,7 +128,7 @@ class GraphEmbedding(EmbeddingModule):
                                                    neighbors,
                                                    np.repeat(timestamps, n_neighbors),
                                                    n_layers=n_layers - 1,
-                                                   n_neighbors=n_neighbors)
+                                                   n_neighbors=n_neighbors).clone()
 
       effective_n_neighbors = n_neighbors if n_neighbors > 0 else 1
       neighbor_embeddings = neighbor_embeddings.view(len(source_nodes), effective_n_neighbors, -1)

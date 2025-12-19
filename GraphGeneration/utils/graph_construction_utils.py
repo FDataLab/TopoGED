@@ -2,13 +2,14 @@ import random
 import torch
 import numpy as np 
 import networkx as nx
+from collections import defaultdict
 from GraphGeneration.scripts.compute_embedding import compute_node2vec_embeddings
 
 from GraphGeneration.encoders.TGN.utils.my_utils import build_graph_data, GraphData
 from GraphGeneration.encoders.TGN.utils.utils import get_neighbor_finder
 
 
-def compute_reappearance_probabilities(graphs, days_back, decay_factor=3.0, alpha=1.0, epsilon=1e-8):
+def compute_reappearance_probabilities(graphs, days_back, decay_factor=1.0, alpha=3.0, beta=5.0, epsilon=1e-8):
     """
     Compute the probability for each node to reappear given how long ago it was seen and its latest degree
     Nodes of higher degree, and nodes seen more recently are preferred
@@ -25,24 +26,30 @@ def compute_reappearance_probabilities(graphs, days_back, decay_factor=3.0, alph
         probs (dict):  A dictionary of {node_id: percent probability} probabilities for each node in nodes
     """
     nodes = dict()
+    frequency = defaultdict(int)
     # Create the nodes dict degree history
     # nodes (dict): A dict of {node_id: (last_seen_timestamp, last_seen_degree)} used for computing probabilities
     
     for t, G in enumerate(graphs):
         for node in G.nodes():
             nodes[node] = (t, G.degree(node))
+            frequency[node] += 1
     
     if not nodes:
         return {}
     
     max_degree = max(degree for _, (_, degree) in nodes.items())
-
+    
     probs = {}
-    t_curr = len(graphs)  # The next available graph (will be days_back + 1)
+    t_curr = len(graphs)  # Makes the formula work best
+    
     for node_id, (last_seen, degree) in nodes.items():
-        recency_score = np.exp(-max(0, t_curr - last_seen) / decay_factor)
-        degree_score = (degree / max_degree) ** alpha if max_degree > 0 else epsilon
-        raw_score = recency_score * degree_score
+        recency_score = np.exp(-(t_curr - last_seen) / decay_factor) if decay_factor > 0 else 1.0
+        degree_score = (degree / max_degree) ** alpha if max_degree > 0 else 1.0
+        frequency_score = (frequency[node_id] ** beta) if beta > 0 else 1.0
+        
+        raw_score = recency_score * degree_score * frequency_score
+        
         probs[node_id] = max(raw_score, epsilon)  # Apply epsilon floor to avoid exact 0
 
     # Normalize to make a valid probability distribution
@@ -180,10 +187,15 @@ def generate_tgcn_node_features(target_graphs, embedding_dim, feature_type='node
         return torch.zeros((num_nodes, embedding_dim), device=device)
     
     
-def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_graphs, days_back, embedding_dim, curr_nodes, device='cpu'):
+def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_graphs, days_back, embedding_dim, curr_nodes, device='cpu', max_id=None):
     # For the last days_back graphs, compute embeddings
     history = prev_graphs[-days_back:] if len(prev_graphs) >= days_back else prev_graphs
-    all_embeddings = {id: torch.zeros(embedding_dim) for id in range(max(curr_nodes) + 1)}
+    if curr_nodes is None or len(curr_nodes) == 0:
+        curr_nodes = [10000]  # Simple fix while I find why the error happens
+    if max_id is None:
+        max_id = max(curr_nodes)
+        
+    all_embeddings = {id: torch.zeros(embedding_dim) for id in range(max_id + 1)}
     
     if feature_type == 'GAT' or feature_type == 'GCN':        
         for graphs in history:
@@ -217,8 +229,11 @@ def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_gr
                 all_embeddings[nid] = curr_embeddings[local_idx]
 
         # Stack embeddings for all current nodes in order
-        max_node_id = max(all_embeddings.keys())
-        emb_matrix = torch.stack([all_embeddings[nid] for nid in range(max_node_id + 1)])
+        max_nid = max(all_embeddings.keys())
+        emb_matrix = torch.zeros(max_nid + 1, embedding_dim, device=device)
+
+        for nid, emb in all_embeddings.items():
+            emb_matrix[nid] = emb
         
         return emb_matrix
     
@@ -291,6 +306,10 @@ def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_gr
                 e_idxs.append(curr_idx)
                 curr_idx += 1
         data = GraphData()
+        sources = np.array(sources)
+        destinations = np.array(destinations)
+        e_idxs = np.array(e_idxs)
+        times = np.array(times)
         data.sources = sources
         data.destinations = destinations
         data.timestamps = times
@@ -299,19 +318,16 @@ def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_gr
         neighbor_finder = get_neighbor_finder(data, uniform=False)
         embedder.set_neighbor_finder(neighbor_finder)
              
-        sources = np.array(sources)
-        destinations = np.array(destinations)
-        e_idxs = np.array(e_idxs)
-        times = np.array(times)
+        
         negative_nodes = destinations.copy() # Dummy negative nodes
         
         src_embs, dst_embs, neg_embs = embedder.compute_temporal_embeddings(
             sources, destinations, negative_nodes, times, e_idxs)
         
         for i, node_id in enumerate(sources):
-            all_embeddings[node_id] = src_embs[i]
+            all_embeddings[node_id] = src_embs[i].detach().clone()
         for i, node_id in enumerate(destinations):
-            all_embeddings[node_id] = dst_embs[i]
+            all_embeddings[node_id] = dst_embs[i].detach().clone()
         
         max_node_id = max(all_embeddings.keys())
         emb_matrix = torch.stack([all_embeddings[nid] for nid in range(max_node_id + 1)])

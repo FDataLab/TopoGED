@@ -1,0 +1,431 @@
+Epoch: 01 | Edge Type: o-o-bank | Val Loss: 0.5890 | Val AUCROC: 0.6608
+Epoch: 01 | Edge Type: n-n | Val Loss: 0.6926 | Val AUCROC: 0.5306
+Epoch: 01 | Edge Type: o-n | Val Loss: 0.6550 | Val AUCROC: 0.5484
+Epoch: 01 | Edge Type: o-o-nobank | Val Loss: 0.6529 | Val AUCROC: 0.6889
+Epoch: 01 | Edge Type: n-n | Val Loss: 0.6967 | Val AUCROC: 0.3433
+Epoch: 01 | Edge Type: o-n | Val Loss: 0.6620 | Val AUCROC: 0.5542
+Epoch: 01 | Edge Type: o-o-nobank | Val Loss: 0.6449 | Val AUCROC: 0.7014
+Epoch: 01 | Task: o-o-bank | Val Loss: 0.5878 | Val AUCROC: 0.6612
+Epoch: 01 | Task: o-o-nobank | Val Loss: 0.6461 | Val AUCROC: 0.7169
+Epoch: 01 | Task: o-n | Val Loss: 0.6586 | Val AUCROC: 0.5596
+Epoch: 01 | Task: n-n | Val Loss: 0.6961 | Val AUCROC: 0.3894
+Epoch: 01 | Task: node | Val Loss: 1.1017 | Val AUCROC: 0.3078
+Epoch: 02 | Edge Type: o-o-bank | Val Loss: 0.6423 | Val AUCROC: 0.6513
+Epoch: 02 | Edge Type: n-n | Val Loss: 0.6924 | Val AUCROC: 0.5549
+Epoch: 02 | Edge Type: o-n | Val Loss: 0.6552 | Val AUCROC: 0.5566
+Epoch: 02 | Edge Type: o-o-nobank | Val Loss: 0.6433 | Val AUCROC: 0.6816
+Epoch: 02 | Edge Type: n-n | Val Loss: 0.6964 | Val AUCROC: 0.3365
+Epoch: 02 | Edge Type: o-n | Val Loss: 0.6621 | Val AUCROC: 0.5582
+Epoch: 02 | Edge Type: o-o-nobank | Val Loss: 0.6416 | Val AUCROC: 0.6851
+Epoch: 02 | Task: o-o-bank | Val Loss: 0.5881 | Val AUCROC: 0.6717
+Epoch: 02 | Task: o-o-nobank | Val Loss: 0.6433 | Val AUCROC: 0.6966
+Epoch: 02 | Task: o-n | Val Loss: 0.6488 | Val AUCROC: 0.5670
+Epoch: 02 | Task: n-n | Val Loss: 0.6967 | Val AUCROC: 0.4221
+Epoch: 02 | Task: node | Val Loss: 1.5132 | Val AUCROC: 0.3129
+Epoch: 03 | Edge Type: o-o-bank | Val Loss: 0.6391 | Val AUCROC: 0.6501
+Epoch: 03 | Edge Type: n-n | Val Loss: 0.6927 | Val AUCROC: 0.5378
+Epoch: 03 | Edge Type: o-n | Val Loss: 0.6536 | Val AUCROC: 0.5606
+Epoch: 03 | Edge Type: o-o-nobank | Val Loss: 0.6500 | Val AUCROC: 0.6630
+Epoch: 03 | Task: o-o-bank | Val Loss: 0.6420 | Val AUCROC: 0.6595
+Epoch: 03 | Task: o-o-nobank | Val Loss: 0.6425 | Val AUCROC: 0.6998
+Epoch: 03 | Task: o-n | Val Loss: 0.6479 | Val AUCROC: 0.5742
+Epoch: 03 | Task: n-n | Val Loss: 0.6952 | Val AUCROC: 0.3963
+Epoch: 03 | Task: node | Val Loss: 1.7639 | Val AUCROC: 0.3200
+Epoch: 03 | Edge Type: n-n | Val Loss: 0.6956 | Val AUCROC: 0.3583
+Epoch: 03 | Edge Type: o-n | Val Loss: 0.6592 | Val AUCROC: 0.5552
+Epoch: 03 | Edge Type: o-o-nobank | Val Loss: 0.6423 | Val AUCROC: 0.6806
+Epoch: 04 | Edge Type: o-o-bank | Val Loss: 0.6415 | Val AUCROC: 0.6498
+Epoch: 04 | Edge Type: n-n | Val Loss: 0.6939 | Val AUCROC: 0.4796
+Epoch: 04 | Edge Type: o-n | Val Loss: 0.6460 | Val AUCROC: 0.5775
+Epoch: 04 | Edge Type: o-o-nobank | Val Loss: 0.6618 | Val AUCROC: 0.6369
+Epoch: 04 | Task: o-o-bank | Val Loss: 0.6474 | Val AUCROC: 0.6516
+Epoch: 04 | Task: o-o-nobank | Val Loss: 0.6444 | Val AUCROC: 0.6903
+Epoch: 04 | Task: o-n | Val Loss: 0.6491 | Val AUCROC: 0.5718
+Epoch: 04 | Task: n-n | Val Loss: 0.6950 | Val AUCROC: 0.3888
+Epoch: 04 | Task: node | Val Loss: 1.8802 | Val AUCROC: 0.3250
+Epoch: 04 | Edge Type: n-n | Val Loss: 0.6947 | Val AUCROC: 0.4106
+Epoch: 04 | Edge Type: o-n | Val Loss: 0.6556 | Val AUCROC: 0.5643
+Epoch: 04 | Edge Type: o-o-nobank | Val Loss: 0.6466 | Val AUCROC: 0.6627
+Epoch: 05 | Edge Type: o-o-bank | Val Loss: 0.6426 | Val AUCROC: 0.6517
+Epoch: 05 | Edge Type: n-n | Val Loss: 0.6939 | Val AUCROC: 0.4849
+Epoch: 05 | Edge Type: o-n | Val Loss: 0.6475 | Val AUCROC: 0.5901
+Epoch: 05 | Edge Type: o-o-nobank | Val Loss: 0.6606 | Val AUCROC: 0.6441
+Epoch: 05 | Task: o-o-bank | Val Loss: 0.6389 | Val AUCROC: 0.6569
+Epoch: 05 | Task: o-o-nobank | Val Loss: 0.6444 | Val AUCROC: 0.6912
+Epoch: 05 | Task: o-n | Val Loss: 0.6463 | Val AUCROC: 0.5922
+Epoch: 05 | Task: n-n | Val Loss: 0.6949 | Val AUCROC: 0.3878
+Epoch: 05 | Task: node | Val Loss: 1.9887 | Val AUCROC: 0.3250
+Epoch: 05 | Edge Type: n-n | Val Loss: 0.6946 | Val AUCROC: 0.4175
+Epoch: 05 | Edge Type: o-n | Val Loss: 0.6649 | Val AUCROC: 0.5874
+Epoch: 05 | Edge Type: o-o-nobank | Val Loss: 0.6525 | Val AUCROC: 0.6463
+Epoch: 06 | Edge Type: o-o-bank | Val Loss: 0.6338 | Val AUCROC: 0.6584
+Epoch: 06 | Edge Type: n-n | Val Loss: 0.6942 | Val AUCROC: 0.5053
+Epoch: 06 | Edge Type: o-n | Val Loss: 0.6463 | Val AUCROC: 0.5939
+Epoch: 06 | Edge Type: o-o-nobank | Val Loss: 0.6619 | Val AUCROC: 0.6390
+Epoch: 06 | Task: o-o-bank | Val Loss: 0.5920 | Val AUCROC: 0.6683
+Epoch: 06 | Task: o-o-nobank | Val Loss: 0.6511 | Val AUCROC: 0.6752
+Epoch: 06 | Task: o-n | Val Loss: 0.6545 | Val AUCROC: 0.6046
+Epoch: 06 | Task: n-n | Val Loss: 0.6948 | Val AUCROC: 0.4138
+Epoch: 06 | Task: node | Val Loss: 2.0431 | Val AUCROC: 0.3281
+Epoch: 07 | Edge Type: o-o-bank | Val Loss: 0.5904 | Val AUCROC: 0.6562
+Epoch: 07 | Edge Type: n-n | Val Loss: 0.6945 | Val AUCROC: 0.4672
+Epoch: 07 | Edge Type: o-n | Val Loss: 0.6677 | Val AUCROC: 0.5956
+Epoch: 07 | Edge Type: o-o-nobank | Val Loss: 0.6677 | Val AUCROC: 0.6645
+Epoch: 06 | Edge Type: n-n | Val Loss: 0.6944 | Val AUCROC: 0.4278
+Epoch: 06 | Edge Type: o-n | Val Loss: 0.6885 | Val AUCROC: 0.5961
+Epoch: 06 | Edge Type: o-o-nobank | Val Loss: 0.6577 | Val AUCROC: 0.6361
+Epoch: 07 | Task: o-o-bank | Val Loss: 0.5875 | Val AUCROC: 0.6768
+Epoch: 07 | Task: o-o-nobank | Val Loss: 0.6545 | Val AUCROC: 0.6638
+Epoch: 07 | Task: o-n | Val Loss: 0.6548 | Val AUCROC: 0.5900
+Epoch: 07 | Task: n-n | Val Loss: 0.6947 | Val AUCROC: 0.4106
+Epoch: 07 | Task: node | Val Loss: 2.0692 | Val AUCROC: 0.3322
+Epoch: 08 | Edge Type: o-o-bank | Val Loss: 0.5850 | Val AUCROC: 0.6618
+Epoch: 08 | Edge Type: n-n | Val Loss: 0.6942 | Val AUCROC: 0.4830
+Epoch: 08 | Edge Type: o-n | Val Loss: 0.6609 | Val AUCROC: 0.5964
+Epoch: 08 | Edge Type: o-o-nobank | Val Loss: 0.6681 | Val AUCROC: 0.6611
+Epoch: 07 | Edge Type: n-n | Val Loss: 0.6943 | Val AUCROC: 0.4329
+Epoch: 07 | Edge Type: o-n | Val Loss: 0.7345 | Val AUCROC: 0.5860
+Epoch: 07 | Edge Type: o-o-nobank | Val Loss: 0.6688 | Val AUCROC: 0.6011
+Epoch: 08 | Task: o-o-bank | Val Loss: 0.5782 | Val AUCROC: 0.6736
+Epoch: 08 | Task: o-o-nobank | Val Loss: 0.6666 | Val AUCROC: 0.6619
+Epoch: 08 | Task: o-n | Val Loss: 0.6794 | Val AUCROC: 0.6198
+Epoch: 08 | Task: n-n | Val Loss: 0.6943 | Val AUCROC: 0.4496
+Epoch: 08 | Task: node | Val Loss: 2.0743 | Val AUCROC: 0.3282
+Epoch: 09 | Edge Type: o-o-bank | Val Loss: 0.5784 | Val AUCROC: 0.6653
+Epoch: 09 | Edge Type: n-n | Val Loss: 0.6949 | Val AUCROC: 0.4607
+Epoch: 09 | Edge Type: o-n | Val Loss: 0.6656 | Val AUCROC: 0.5992
+Epoch: 09 | Edge Type: o-o-nobank | Val Loss: 0.6813 | Val AUCROC: 0.6565
+Epoch: 08 | Edge Type: n-n | Val Loss: 0.6941 | Val AUCROC: 0.4495
+Epoch: 08 | Edge Type: o-n | Val Loss: 0.7342 | Val AUCROC: 0.6034
+Epoch: 08 | Edge Type: o-o-nobank | Val Loss: 0.6800 | Val AUCROC: 0.6095
+Epoch: 09 | Task: o-o-bank | Val Loss: 0.5768 | Val AUCROC: 0.6849
+Epoch: 09 | Task: o-o-nobank | Val Loss: 0.6805 | Val AUCROC: 0.6667
+Epoch: 09 | Task: o-n | Val Loss: 0.6776 | Val AUCROC: 0.6173
+Epoch: 09 | Task: n-n | Val Loss: 0.6939 | Val AUCROC: 0.4665
+Epoch: 09 | Task: node | Val Loss: 2.1275 | Val AUCROC: 0.3297
+Epoch: 10 | Edge Type: o-o-bank | Val Loss: 0.5859 | Val AUCROC: 0.6647
+Epoch: 10 | Edge Type: n-n | Val Loss: 0.6956 | Val AUCROC: 0.4416
+Epoch: 10 | Edge Type: o-n | Val Loss: 0.6719 | Val AUCROC: 0.6171
+Epoch: 10 | Edge Type: o-o-nobank | Val Loss: 0.6820 | Val AUCROC: 0.6538
+Epoch: 10 | Task: o-o-bank | Val Loss: 0.5731 | Val AUCROC: 0.6840
+Epoch: 10 | Task: o-o-nobank | Val Loss: 0.6869 | Val AUCROC: 0.6601
+Epoch: 10 | Task: o-n | Val Loss: 0.7307 | Val AUCROC: 0.6125
+Epoch: 10 | Task: n-n | Val Loss: 0.6942 | Val AUCROC: 0.4511
+Epoch: 10 | Task: node | Val Loss: 2.1565 | Val AUCROC: 0.3318
+Epoch: 11 | Edge Type: o-o-bank | Val Loss: 0.5744 | Val AUCROC: 0.6762
+Epoch: 11 | Edge Type: n-n | Val Loss: 0.6956 | Val AUCROC: 0.4313
+Epoch: 11 | Edge Type: o-n | Val Loss: 0.6744 | Val AUCROC: 0.6236
+Epoch: 11 | Edge Type: o-o-nobank | Val Loss: 0.6733 | Val AUCROC: 0.6672
+Epoch: 09 | Edge Type: n-n | Val Loss: 0.6946 | Val AUCROC: 0.4033
+Epoch: 09 | Edge Type: o-n | Val Loss: 0.7816 | Val AUCROC: 0.6134
+Epoch: 09 | Edge Type: o-o-nobank | Val Loss: 0.6897 | Val AUCROC: 0.5949
+Epoch: 12 | Edge Type: o-o-bank | Val Loss: 0.5801 | Val AUCROC: 0.6695
+Epoch: 12 | Edge Type: n-n | Val Loss: 0.6953 | Val AUCROC: 0.4337
+Epoch: 12 | Edge Type: o-n | Val Loss: 0.6914 | Val AUCROC: 0.6137
+Epoch: 12 | Edge Type: o-o-nobank | Val Loss: 0.7026 | Val AUCROC: 0.6270
+Epoch: 11 | Task: o-o-bank | Val Loss: 0.5745 | Val AUCROC: 0.6888
+Epoch: 11 | Task: o-o-nobank | Val Loss: 0.7070 | Val AUCROC: 0.6676
+Epoch: 11 | Task: o-n | Val Loss: 0.7367 | Val AUCROC: 0.6211
+Epoch: 11 | Task: n-n | Val Loss: 0.6940 | Val AUCROC: 0.4614
+Epoch: 11 | Task: node | Val Loss: 2.1793 | Val AUCROC: 0.3319
+Epoch: 10 | Edge Type: n-n | Val Loss: 0.6942 | Val AUCROC: 0.4377
+Epoch: 10 | Edge Type: o-n | Val Loss: 0.7887 | Val AUCROC: 0.6209
+Epoch: 10 | Edge Type: o-o-nobank | Val Loss: 0.7143 | Val AUCROC: 0.5949
+Epoch: 13 | Edge Type: o-o-bank | Val Loss: 0.5821 | Val AUCROC: 0.6811
+Epoch: 13 | Edge Type: n-n | Val Loss: 0.6955 | Val AUCROC: 0.4292
+Epoch: 13 | Edge Type: o-n | Val Loss: 0.7093 | Val AUCROC: 0.6315
+Epoch: 13 | Edge Type: o-o-nobank | Val Loss: 0.7055 | Val AUCROC: 0.6387
+Epoch: 12 | Task: o-o-bank | Val Loss: 0.5758 | Val AUCROC: 0.6773
+Epoch: 12 | Task: o-o-nobank | Val Loss: 0.7207 | Val AUCROC: 0.6846
+Epoch: 12 | Task: o-n | Val Loss: 0.7914 | Val AUCROC: 0.6371
+Epoch: 12 | Task: n-n | Val Loss: 0.6940 | Val AUCROC: 0.4597
+Epoch: 12 | Task: node | Val Loss: 2.2054 | Val AUCROC: 0.3333
+Epoch: 11 | Edge Type: n-n | Val Loss: 0.6947 | Val AUCROC: 0.4122
+Epoch: 11 | Edge Type: o-n | Val Loss: 0.8117 | Val AUCROC: 0.6406
+Epoch: 11 | Edge Type: o-o-nobank | Val Loss: 0.7108 | Val AUCROC: 0.6129
+Epoch: 14 | Edge Type: o-o-bank | Val Loss: 0.5848 | Val AUCROC: 0.6849
+Epoch: 14 | Edge Type: n-n | Val Loss: 0.6967 | Val AUCROC: 0.3992
+Epoch: 14 | Edge Type: o-n | Val Loss: 0.7256 | Val AUCROC: 0.6366
+Epoch: 14 | Edge Type: o-o-nobank | Val Loss: 0.7250 | Val AUCROC: 0.6082
+Epoch: 13 | Task: o-o-bank | Val Loss: 0.5767 | Val AUCROC: 0.6827
+Epoch: 13 | Task: o-o-nobank | Val Loss: 0.7190 | Val AUCROC: 0.6786
+Epoch: 13 | Task: o-n | Val Loss: 0.7745 | Val AUCROC: 0.6448
+Epoch: 13 | Task: n-n | Val Loss: 0.6941 | Val AUCROC: 0.4741
+Epoch: 13 | Task: node | Val Loss: 2.2514 | Val AUCROC: 0.3314
+Epoch: 12 | Edge Type: n-n | Val Loss: 0.6947 | Val AUCROC: 0.4134
+Epoch: 12 | Edge Type: o-n | Val Loss: 0.8382 | Val AUCROC: 0.6500
+Epoch: 12 | Edge Type: o-o-nobank | Val Loss: 0.7485 | Val AUCROC: 0.6065
+Epoch: 15 | Edge Type: o-o-bank | Val Loss: 0.5753 | Val AUCROC: 0.6879
+Epoch: 15 | Edge Type: n-n | Val Loss: 0.6957 | Val AUCROC: 0.4218
+Epoch: 15 | Edge Type: o-n | Val Loss: 0.7733 | Val AUCROC: 0.6290
+Epoch: 15 | Edge Type: o-o-nobank | Val Loss: 0.7614 | Val AUCROC: 0.6062
+Epoch: 14 | Task: o-o-bank | Val Loss: 0.5731 | Val AUCROC: 0.6848
+Epoch: 14 | Task: o-o-nobank | Val Loss: 0.7550 | Val AUCROC: 0.6684
+Epoch: 14 | Task: o-n | Val Loss: 0.7632 | Val AUCROC: 0.6411
+Epoch: 14 | Task: n-n | Val Loss: 0.6941 | Val AUCROC: 0.4473
+Epoch: 14 | Task: node | Val Loss: 2.2653 | Val AUCROC: 0.3328
+Epoch: 13 | Edge Type: n-n | Val Loss: 0.6944 | Val AUCROC: 0.4296
+Epoch: 13 | Edge Type: o-n | Val Loss: 0.8735 | Val AUCROC: 0.6352
+Epoch: 13 | Edge Type: o-o-nobank | Val Loss: 0.7592 | Val AUCROC: 0.6111
+Epoch: 16 | Edge Type: o-o-bank | Val Loss: 0.5766 | Val AUCROC: 0.6883
+Epoch: 16 | Edge Type: n-n | Val Loss: 0.6963 | Val AUCROC: 0.3964
+Epoch: 16 | Edge Type: o-n | Val Loss: 0.7151 | Val AUCROC: 0.6320
+Epoch: 16 | Edge Type: o-o-nobank | Val Loss: 0.7641 | Val AUCROC: 0.6174
+Epoch: 15 | Task: o-o-bank | Val Loss: 0.5792 | Val AUCROC: 0.6866
+Epoch: 15 | Task: o-o-nobank | Val Loss: 0.7953 | Val AUCROC: 0.6594
+Epoch: 15 | Task: o-n | Val Loss: 0.7574 | Val AUCROC: 0.6342
+Epoch: 15 | Task: n-n | Val Loss: 0.6940 | Val AUCROC: 0.4643
+Epoch: 15 | Task: node | Val Loss: 2.3185 | Val AUCROC: 0.3312
+Epoch: 17 | Edge Type: o-o-bank | Val Loss: 0.5684 | Val AUCROC: 0.6865
+Epoch: 17 | Edge Type: n-n | Val Loss: 0.6965 | Val AUCROC: 0.3895
+Epoch: 17 | Edge Type: o-n | Val Loss: 0.7730 | Val AUCROC: 0.6499
+Epoch: 17 | Edge Type: o-o-nobank | Val Loss: 0.8201 | Val AUCROC: 0.6003
+Epoch: 14 | Edge Type: n-n | Val Loss: 0.6946 | Val AUCROC: 0.4280
+Epoch: 14 | Edge Type: o-n | Val Loss: 0.8683 | Val AUCROC: 0.6455
+Epoch: 14 | Edge Type: o-o-nobank | Val Loss: 0.7912 | Val AUCROC: 0.6254
+Epoch: 16 | Task: o-o-bank | Val Loss: 0.5750 | Val AUCROC: 0.6893
+Epoch: 16 | Task: o-o-nobank | Val Loss: 0.7435 | Val AUCROC: 0.6598
+Epoch: 16 | Task: o-n | Val Loss: 0.8685 | Val AUCROC: 0.6427
+Epoch: 16 | Task: n-n | Val Loss: 0.6940 | Val AUCROC: 0.4655
+Epoch: 16 | Task: node | Val Loss: 2.3229 | Val AUCROC: 0.3352
+Epoch: 18 | Edge Type: o-o-bank | Val Loss: 0.5736 | Val AUCROC: 0.6905
+Epoch: 18 | Edge Type: n-n | Val Loss: 0.6963 | Val AUCROC: 0.4045
+Epoch: 18 | Edge Type: o-n | Val Loss: 0.7256 | Val AUCROC: 0.6224
+Epoch: 18 | Edge Type: o-o-nobank | Val Loss: 0.8461 | Val AUCROC: 0.6158
+Epoch: 15 | Edge Type: n-n | Val Loss: 0.6946 | Val AUCROC: 0.4368
+Epoch: 15 | Edge Type: o-n | Val Loss: 0.8936 | Val AUCROC: 0.6497
+Epoch: 15 | Edge Type: o-o-nobank | Val Loss: 0.8537 | Val AUCROC: 0.6518
+Epoch: 17 | Task: o-o-bank | Val Loss: 0.5752 | Val AUCROC: 0.6780
+Epoch: 17 | Task: o-o-nobank | Val Loss: 0.8268 | Val AUCROC: 0.6455
+Epoch: 17 | Task: o-n | Val Loss: 0.8002 | Val AUCROC: 0.6226
+Epoch: 17 | Task: n-n | Val Loss: 0.6941 | Val AUCROC: 0.4494
+Epoch: 17 | Task: node | Val Loss: 2.3645 | Val AUCROC: 0.3307
+Epoch: 19 | Edge Type: o-o-bank | Val Loss: 0.5785 | Val AUCROC: 0.6871
+Epoch: 19 | Edge Type: n-n | Val Loss: 0.6956 | Val AUCROC: 0.4048
+Epoch: 19 | Edge Type: o-n | Val Loss: 0.7417 | Val AUCROC: 0.6146
+Epoch: 19 | Edge Type: o-o-nobank | Val Loss: 0.8279 | Val AUCROC: 0.6250
+Epoch: 18 | Task: o-o-bank | Val Loss: 0.5952 | Val AUCROC: 0.6663
+Epoch: 18 | Task: o-o-nobank | Val Loss: 0.7366 | Val AUCROC: 0.6510
+Epoch: 18 | Task: o-n | Val Loss: 0.7842 | Val AUCROC: 0.6152
+Epoch: 18 | Task: n-n | Val Loss: 0.6947 | Val AUCROC: 0.4059
+Epoch: 18 | Task: node | Val Loss: 2.3424 | Val AUCROC: 0.3313
+Epoch: 16 | Edge Type: n-n | Val Loss: 0.6946 | Val AUCROC: 0.4193
+Epoch: 16 | Edge Type: o-n | Val Loss: 0.8899 | Val AUCROC: 0.6356
+Epoch: 16 | Edge Type: o-o-nobank | Val Loss: 0.8487 | Val AUCROC: 0.6403
+Epoch: 20 | Edge Type: o-o-bank | Val Loss: 0.5944 | Val AUCROC: 0.6824
+Epoch: 20 | Edge Type: n-n | Val Loss: 0.6958 | Val AUCROC: 0.4100
+Epoch: 20 | Edge Type: o-n | Val Loss: 0.8158 | Val AUCROC: 0.6050
+Epoch: 20 | Edge Type: o-o-nobank | Val Loss: 0.8212 | Val AUCROC: 0.6583
+Epoch: 19 | Task: o-o-bank | Val Loss: 0.5773 | Val AUCROC: 0.6819
+Epoch: 19 | Task: o-o-nobank | Val Loss: 0.9040 | Val AUCROC: 0.6386
+Epoch: 19 | Task: o-n | Val Loss: 0.8776 | Val AUCROC: 0.5922
+Epoch: 19 | Task: n-n | Val Loss: 0.6947 | Val AUCROC: 0.4112
+Epoch: 19 | Task: node | Val Loss: 2.3877 | Val AUCROC: 0.3306
+Epoch: 17 | Edge Type: n-n | Val Loss: 0.6945 | Val AUCROC: 0.4233
+Epoch: 17 | Edge Type: o-n | Val Loss: 0.9321 | Val AUCROC: 0.6401
+Epoch: 17 | Edge Type: o-o-nobank | Val Loss: 0.9046 | Val AUCROC: 0.6670
+Epoch: 21 | Edge Type: o-o-bank | Val Loss: 0.5667 | Val AUCROC: 0.6972
+Epoch: 21 | Edge Type: n-n | Val Loss: 0.6969 | Val AUCROC: 0.3827
+Epoch: 21 | Edge Type: o-n | Val Loss: 0.8790 | Val AUCROC: 0.6086
+Epoch: 21 | Edge Type: o-o-nobank | Val Loss: 0.8400 | Val AUCROC: 0.6485
+Epoch: 20 | Task: o-o-bank | Val Loss: 0.5855 | Val AUCROC: 0.6835
+Epoch: 20 | Task: o-o-nobank | Val Loss: 0.9773 | Val AUCROC: 0.6518
+Epoch: 20 | Task: o-n | Val Loss: 1.0196 | Val AUCROC: 0.5835
+Epoch: 20 | Task: n-n | Val Loss: 0.6947 | Val AUCROC: 0.4181
+Epoch: 20 | Task: node | Val Loss: 2.4190 | Val AUCROC: 0.3259
+Epoch: 22 | Edge Type: o-o-bank | Val Loss: 0.5733 | Val AUCROC: 0.6948
+Epoch: 22 | Edge Type: n-n | Val Loss: 0.6956 | Val AUCROC: 0.4122
+Epoch: 22 | Edge Type: o-n | Val Loss: 0.9735 | Val AUCROC: 0.5982
+Epoch: 22 | Edge Type: o-o-nobank | Val Loss: 0.9563 | Val AUCROC: 0.6355
+Epoch: 18 | Edge Type: n-n | Val Loss: 0.6943 | Val AUCROC: 0.4296
+Epoch: 18 | Edge Type: o-n | Val Loss: 1.0280 | Val AUCROC: 0.6410
+Epoch: 18 | Edge Type: o-o-nobank | Val Loss: 0.9087 | Val AUCROC: 0.6677
+Epoch: 23 | Edge Type: o-o-bank | Val Loss: 0.5565 | Val AUCROC: 0.7198
+Epoch: 23 | Edge Type: n-n | Val Loss: 0.6967 | Val AUCROC: 0.3881
+Epoch: 23 | Edge Type: o-n | Val Loss: 0.9917 | Val AUCROC: 0.5874
+Epoch: 23 | Edge Type: o-o-nobank | Val Loss: 0.9180 | Val AUCROC: 0.6669
+Epoch: 21 | Task: o-o-bank | Val Loss: 0.5929 | Val AUCROC: 0.6665
+Epoch: 21 | Task: o-o-nobank | Val Loss: 0.9594 | Val AUCROC: 0.6587
+Epoch: 21 | Task: o-n | Val Loss: 0.8849 | Val AUCROC: 0.6044
+Epoch: 21 | Task: n-n | Val Loss: 0.6948 | Val AUCROC: 0.4167
+Epoch: 21 | Task: node | Val Loss: 2.4314 | Val AUCROC: 0.3309
+Epoch: 19 | Edge Type: n-n | Val Loss: 0.6943 | Val AUCROC: 0.4227
+Epoch: 19 | Edge Type: o-n | Val Loss: 1.0494 | Val AUCROC: 0.6362
+Epoch: 19 | Edge Type: o-o-nobank | Val Loss: 0.9346 | Val AUCROC: 0.6443
+Epoch: 24 | Edge Type: o-o-bank | Val Loss: 0.5817 | Val AUCROC: 0.6946
+Epoch: 24 | Edge Type: n-n | Val Loss: 0.6973 | Val AUCROC: 0.3786
+Epoch: 24 | Edge Type: o-n | Val Loss: 0.9395 | Val AUCROC: 0.5929
+Epoch: 24 | Edge Type: o-o-nobank | Val Loss: 0.8845 | Val AUCROC: 0.6680
+Epoch: 22 | Task: o-o-bank | Val Loss: 0.5862 | Val AUCROC: 0.6767
+Epoch: 22 | Task: o-o-nobank | Val Loss: 1.1923 | Val AUCROC: 0.6602
+Epoch: 22 | Task: o-n | Val Loss: 0.8801 | Val AUCROC: 0.5796
+Epoch: 22 | Task: n-n | Val Loss: 0.6954 | Val AUCROC: 0.3788
+Epoch: 22 | Task: node | Val Loss: 2.4964 | Val AUCROC: 0.3261
+Epoch: 20 | Edge Type: n-n | Val Loss: 0.6944 | Val AUCROC: 0.4192
+Epoch: 20 | Edge Type: o-n | Val Loss: 1.0978 | Val AUCROC: 0.6221
+Epoch: 20 | Edge Type: o-o-nobank | Val Loss: 0.9491 | Val AUCROC: 0.6392
+Epoch: 25 | Edge Type: o-o-bank | Val Loss: 0.5844 | Val AUCROC: 0.6883
+Epoch: 25 | Edge Type: n-n | Val Loss: 0.6979 | Val AUCROC: 0.3723
+Epoch: 25 | Edge Type: o-n | Val Loss: 0.9186 | Val AUCROC: 0.5842
+Epoch: 25 | Edge Type: o-o-nobank | Val Loss: 0.8790 | Val AUCROC: 0.6481
+Epoch: 23 | Task: o-o-bank | Val Loss: 0.5875 | Val AUCROC: 0.6800
+Epoch: 23 | Task: o-o-nobank | Val Loss: 1.0059 | Val AUCROC: 0.6633
+Epoch: 23 | Task: o-n | Val Loss: 1.1388 | Val AUCROC: 0.5823
+Epoch: 23 | Task: n-n | Val Loss: 0.6952 | Val AUCROC: 0.4133
+Epoch: 23 | Task: node | Val Loss: 2.5090 | Val AUCROC: 0.3266
+Epoch: 21 | Edge Type: n-n | Val Loss: 0.6945 | Val AUCROC: 0.4103
+Epoch: 21 | Edge Type: o-n | Val Loss: 1.2029 | Val AUCROC: 0.6091
+Epoch: 21 | Edge Type: o-o-nobank | Val Loss: 1.0844 | Val AUCROC: 0.6678
+Epoch: 26 | Edge Type: o-o-bank | Val Loss: 0.5850 | Val AUCROC: 0.6981
+Epoch: 26 | Edge Type: n-n | Val Loss: 0.6973 | Val AUCROC: 0.3694
+Epoch: 26 | Edge Type: o-n | Val Loss: 0.9079 | Val AUCROC: 0.5967
+Epoch: 26 | Edge Type: o-o-nobank | Val Loss: 0.9228 | Val AUCROC: 0.6425
+Epoch: 24 | Task: o-o-bank | Val Loss: 0.5978 | Val AUCROC: 0.6614
+Epoch: 24 | Task: o-o-nobank | Val Loss: 1.0778 | Val AUCROC: 0.6493
+Epoch: 24 | Task: o-n | Val Loss: 1.1578 | Val AUCROC: 0.5765
+Epoch: 24 | Task: n-n | Val Loss: 0.6949 | Val AUCROC: 0.4037
+Epoch: 24 | Task: node | Val Loss: 2.4770 | Val AUCROC: 0.3290
+Epoch: 27 | Edge Type: o-o-bank | Val Loss: 0.5808 | Val AUCROC: 0.6999
+Epoch: 27 | Edge Type: n-n | Val Loss: 0.6971 | Val AUCROC: 0.3756
+Epoch: 27 | Edge Type: o-n | Val Loss: 1.1553 | Val AUCROC: 0.5811
+Epoch: 27 | Edge Type: o-o-nobank | Val Loss: 1.0575 | Val AUCROC: 0.6155
+Epoch: 22 | Edge Type: n-n | Val Loss: 0.6943 | Val AUCROC: 0.4223
+Epoch: 22 | Edge Type: o-n | Val Loss: 1.1829 | Val AUCROC: 0.5992
+Epoch: 22 | Edge Type: o-o-nobank | Val Loss: 1.0669 | Val AUCROC: 0.6428
+Epoch: 25 | Task: o-o-bank | Val Loss: 0.5814 | Val AUCROC: 0.6739
+Epoch: 25 | Task: o-o-nobank | Val Loss: 1.0495 | Val AUCROC: 0.6503
+Epoch: 25 | Task: o-n | Val Loss: 1.0744 | Val AUCROC: 0.5727
+Epoch: 25 | Task: n-n | Val Loss: 0.6951 | Val AUCROC: 0.3980
+Epoch: 25 | Task: node | Val Loss: 2.5241 | Val AUCROC: 0.3290
+Epoch: 28 | Edge Type: o-o-bank | Val Loss: 0.5955 | Val AUCROC: 0.6859
+Epoch: 28 | Edge Type: n-n | Val Loss: 0.6982 | Val AUCROC: 0.3757
+Epoch: 28 | Edge Type: o-n | Val Loss: 0.9051 | Val AUCROC: 0.5891
+Epoch: 28 | Edge Type: o-o-nobank | Val Loss: 0.8993 | Val AUCROC: 0.6424
+Epoch: 23 | Edge Type: n-n | Val Loss: 0.6946 | Val AUCROC: 0.4067
+Epoch: 23 | Edge Type: o-n | Val Loss: 1.1539 | Val AUCROC: 0.6144
+Epoch: 23 | Edge Type: o-o-nobank | Val Loss: 1.0974 | Val AUCROC: 0.6483
+Epoch: 26 | Task: o-o-bank | Val Loss: 0.5912 | Val AUCROC: 0.6687
+Epoch: 26 | Task: o-o-nobank | Val Loss: 1.3633 | Val AUCROC: 0.6066
+Epoch: 26 | Task: o-n | Val Loss: 1.3832 | Val AUCROC: 0.6005
+Epoch: 26 | Task: n-n | Val Loss: 0.6957 | Val AUCROC: 0.3746
+Epoch: 26 | Task: node | Val Loss: 2.5609 | Val AUCROC: 0.3250
+Epoch: 29 | Edge Type: o-o-bank | Val Loss: 0.5909 | Val AUCROC: 0.6883
+Epoch: 29 | Edge Type: n-n | Val Loss: 0.6967 | Val AUCROC: 0.3919
+Epoch: 29 | Edge Type: o-n | Val Loss: 1.1487 | Val AUCROC: 0.6034
+Epoch: 29 | Edge Type: o-o-nobank | Val Loss: 0.9869 | Val AUCROC: 0.6680
+Epoch: 24 | Edge Type: n-n | Val Loss: 0.6946 | Val AUCROC: 0.4109
+Epoch: 24 | Edge Type: o-n | Val Loss: 1.0387 | Val AUCROC: 0.5887
+Epoch: 24 | Edge Type: o-o-nobank | Val Loss: 0.9230 | Val AUCROC: 0.6280
+Epoch: 27 | Task: o-o-bank | Val Loss: 0.5846 | Val AUCROC: 0.6758
+Epoch: 27 | Task: o-o-nobank | Val Loss: 1.1908 | Val AUCROC: 0.6258
+Epoch: 27 | Task: o-n | Val Loss: 1.0779 | Val AUCROC: 0.6047
+Epoch: 27 | Task: n-n | Val Loss: 0.6951 | Val AUCROC: 0.4063
+Epoch: 27 | Task: node | Val Loss: 2.5555 | Val AUCROC: 0.3288
+Epoch: 30 | Edge Type: o-o-bank | Val Loss: 0.5816 | Val AUCROC: 0.6933
+Epoch: 30 | Edge Type: n-n | Val Loss: 0.6971 | Val AUCROC: 0.3837
+Epoch: 30 | Edge Type: o-n | Val Loss: 1.1335 | Val AUCROC: 0.5641
+Epoch: 30 | Edge Type: o-o-nobank | Val Loss: 1.0013 | Val AUCROC: 0.6522
+Epoch: 25 | Edge Type: n-n | Val Loss: 0.6944 | Val AUCROC: 0.4116
+Epoch: 25 | Edge Type: o-n | Val Loss: 1.1024 | Val AUCROC: 0.6213
+Epoch: 25 | Edge Type: o-o-nobank | Val Loss: 0.9124 | Val AUCROC: 0.6538
+Epoch: 28 | Task: o-o-bank | Val Loss: 0.6059 | Val AUCROC: 0.6576
+Epoch: 28 | Task: o-o-nobank | Val Loss: 1.5146 | Val AUCROC: 0.6190
+Epoch: 28 | Task: o-n | Val Loss: 1.3402 | Val AUCROC: 0.6063
+Epoch: 28 | Task: n-n | Val Loss: 0.6955 | Val AUCROC: 0.3831
+Epoch: 28 | Task: node | Val Loss: 2.5765 | Val AUCROC: 0.3286
+Epoch: 31 | Edge Type: o-o-bank | Val Loss: 0.5800 | Val AUCROC: 0.6922
+Epoch: 31 | Edge Type: n-n | Val Loss: 0.6965 | Val AUCROC: 0.4017
+Epoch: 31 | Edge Type: o-n | Val Loss: 1.1942 | Val AUCROC: 0.5600
+Epoch: 31 | Edge Type: o-o-nobank | Val Loss: 1.0268 | Val AUCROC: 0.6778
+Epoch: 26 | Edge Type: n-n | Val Loss: 0.6947 | Val AUCROC: 0.3957
+Epoch: 26 | Edge Type: o-n | Val Loss: 1.0869 | Val AUCROC: 0.6356
+Epoch: 26 | Edge Type: o-o-nobank | Val Loss: 0.9844 | Val AUCROC: 0.6383
+Epoch: 29 | Task: o-o-bank | Val Loss: 0.5884 | Val AUCROC: 0.6677
+Epoch: 29 | Task: o-o-nobank | Val Loss: 1.1018 | Val AUCROC: 0.6306
+Epoch: 29 | Task: o-n | Val Loss: 1.0412 | Val AUCROC: 0.6246
+Epoch: 29 | Task: n-n | Val Loss: 0.6952 | Val AUCROC: 0.3842
+Epoch: 29 | Task: node | Val Loss: 2.6109 | Val AUCROC: 0.3285
+Epoch: 32 | Edge Type: o-o-bank | Val Loss: 0.5830 | Val AUCROC: 0.6964
+Epoch: 32 | Edge Type: n-n | Val Loss: 0.6957 | Val AUCROC: 0.4172
+Epoch: 32 | Edge Type: o-n | Val Loss: 1.3400 | Val AUCROC: 0.5641
+Epoch: 32 | Edge Type: o-o-nobank | Val Loss: 1.0420 | Val AUCROC: 0.6817
+Epoch: 27 | Edge Type: n-n | Val Loss: 0.6947 | Val AUCROC: 0.3871
+Epoch: 27 | Edge Type: o-n | Val Loss: 1.1495 | Val AUCROC: 0.6184
+Epoch: 27 | Edge Type: o-o-nobank | Val Loss: 0.9959 | Val AUCROC: 0.6703
+Epoch: 30 | Task: o-o-bank | Val Loss: 0.5839 | Val AUCROC: 0.6624
+Epoch: 30 | Task: o-o-nobank | Val Loss: 3.0665 | Val AUCROC: 0.6338
+Epoch: 30 | Task: o-n | Val Loss: 2.8045 | Val AUCROC: 0.6190
+Epoch: 30 | Task: n-n | Val Loss: 0.6954 | Val AUCROC: 0.3697
+Epoch: 30 | Task: node | Val Loss: 2.6486 | Val AUCROC: 0.3292
+Epoch: 33 | Edge Type: o-o-bank | Val Loss: 0.5641 | Val AUCROC: 0.7132
+Epoch: 33 | Edge Type: n-n | Val Loss: 0.6976 | Val AUCROC: 0.3625
+Epoch: 33 | Edge Type: o-n | Val Loss: 1.0046 | Val AUCROC: 0.5677
+Epoch: 33 | Edge Type: o-o-nobank | Val Loss: 0.9897 | Val AUCROC: 0.6441
+Epoch: 28 | Edge Type: n-n | Val Loss: 0.6945 | Val AUCROC: 0.4061
+Epoch: 28 | Edge Type: o-n | Val Loss: 1.1275 | Val AUCROC: 0.5988
+Epoch: 28 | Edge Type: o-o-nobank | Val Loss: 1.0712 | Val AUCROC: 0.6355
+Epoch: 31 | Task: o-o-bank | Val Loss: 0.5869 | Val AUCROC: 0.6771
+Epoch: 31 | Task: o-o-nobank | Val Loss: 3.3838 | Val AUCROC: 0.6083
+Epoch: 31 | Task: o-n | Val Loss: 1.8617 | Val AUCROC: 0.5903
+Epoch: 31 | Task: n-n | Val Loss: 0.6960 | Val AUCROC: 0.3538
+Epoch: 31 | Task: node | Val Loss: 2.6697 | Val AUCROC: 0.3311
+Epoch: 34 | Edge Type: o-o-bank | Val Loss: 0.5769 | Val AUCROC: 0.6921
+Epoch: 34 | Edge Type: n-n | Val Loss: 0.6973 | Val AUCROC: 0.3827
+Epoch: 34 | Edge Type: o-n | Val Loss: 1.0635 | Val AUCROC: 0.5742
+Epoch: 34 | Edge Type: o-o-nobank | Val Loss: 0.9847 | Val AUCROC: 0.6639
+Epoch: 35 | Edge Type: o-o-bank | Val Loss: 0.5864 | Val AUCROC: 0.6874
+Epoch: 35 | Edge Type: n-n | Val Loss: 0.6975 | Val AUCROC: 0.3705
+Epoch: 35 | Edge Type: o-n | Val Loss: 1.2143 | Val AUCROC: 0.5889
+Epoch: 35 | Edge Type: o-o-nobank | Val Loss: 1.0756 | Val AUCROC: 0.6665
+Epoch: 29 | Edge Type: n-n | Val Loss: 0.6949 | Val AUCROC: 0.4066
+Epoch: 29 | Edge Type: o-n | Val Loss: 1.4658 | Val AUCROC: 0.6121
+Epoch: 29 | Edge Type: o-o-nobank | Val Loss: 1.2526 | Val AUCROC: 0.6733
+Epoch: 32 | Task: o-o-bank | Val Loss: 0.5807 | Val AUCROC: 0.6795
+Epoch: 32 | Task: o-o-nobank | Val Loss: 1.0709 | Val AUCROC: 0.6338
+Epoch: 32 | Task: o-n | Val Loss: 1.0385 | Val AUCROC: 0.6085
+Epoch: 32 | Task: n-n | Val Loss: 0.6955 | Val AUCROC: 0.3842
+Epoch: 32 | Task: node | Val Loss: 2.6869 | Val AUCROC: 0.3290
+Epoch: 33 | Task: o-o-bank | Val Loss: 0.5795 | Val AUCROC: 0.6769
+Epoch: 33 | Task: o-o-nobank | Val Loss: 1.4395 | Val AUCROC: 0.6256
+Epoch: 33 | Task: o-n | Val Loss: 1.3500 | Val AUCROC: 0.6249
+Epoch: 33 | Task: n-n | Val Loss: 0.6953 | Val AUCROC: 0.3874
+Epoch: 33 | Task: node | Val Loss: 2.6759 | Val AUCROC: 0.3310
+Epoch: 30 | Edge Type: n-n | Val Loss: 0.6947 | Val AUCROC: 0.3947
+Epoch: 30 | Edge Type: o-n | Val Loss: 1.0727 | Val AUCROC: 0.5813
+Epoch: 30 | Edge Type: o-o-nobank | Val Loss: 0.9200 | Val AUCROC: 0.6139
+Epoch: 34 | Task: o-o-bank | Val Loss: 0.6005 | Val AUCROC: 0.6685
+Epoch: 34 | Task: o-o-nobank | Val Loss: 1.8468 | Val AUCROC: 0.6518
+Epoch: 34 | Task: o-n | Val Loss: 1.2753 | Val AUCROC: 0.6206
+Epoch: 34 | Task: n-n | Val Loss: 0.6959 | Val AUCROC: 0.3603
+Epoch: 34 | Task: node | Val Loss: 2.7475 | Val AUCROC: 0.3303
+Epoch: 31 | Edge Type: n-n | Val Loss: 0.6942 | Val AUCROC: 0.4151
+Epoch: 31 | Edge Type: o-n | Val Loss: 1.3288 | Val AUCROC: 0.6227
+Epoch: 31 | Edge Type: o-o-nobank | Val Loss: 1.0652 | Val AUCROC: 0.6691
+Epoch: 35 | Task: o-o-bank | Val Loss: 0.5826 | Val AUCROC: 0.6705
+Epoch: 35 | Task: o-o-nobank | Val Loss: 1.7811 | Val AUCROC: 0.6123
+Epoch: 35 | Task: o-n | Val Loss: 1.2682 | Val AUCROC: 0.6094
+Epoch: 35 | Task: n-n | Val Loss: 0.6953 | Val AUCROC: 0.3892
+Epoch: 35 | Task: node | Val Loss: 2.6641 | Val AUCROC: 0.3309
+Epoch: 32 | Edge Type: n-n | Val Loss: 0.6940 | Val AUCROC: 0.4175
+Epoch: 32 | Edge Type: o-n | Val Loss: 1.3236 | Val AUCROC: 0.6101
+Epoch: 32 | Edge Type: o-o-nobank | Val Loss: 1.1945 | Val AUCROC: 0.6831
+Epoch: 36 | Task: o-o-bank | Val Loss: 0.5870 | Val AUCROC: 0.6684
+Epoch: 36 | Task: o-o-nobank | Val Loss: 1.7027 | Val AUCROC: 0.6437
+Epoch: 36 | Task: o-n | Val Loss: 1.1631 | Val AUCROC: 0.6118
+Epoch: 36 | Task: n-n | Val Loss: 0.6952 | Val AUCROC: 0.3900
+Epoch: 36 | Task: node | Val Loss: 2.6787 | Val AUCROC: 0.3305
+Epoch: 33 | Edge Type: n-n | Val Loss: 0.6938 | Val AUCROC: 0.4347
+Epoch: 33 | Edge Type: o-n | Val Loss: 1.4801 | Val AUCROC: 0.5491
+Epoch: 33 | Edge Type: o-o-nobank | Val Loss: 1.3395 | Val AUCROC: 0.6038
+Epoch: 34 | Edge Type: n-n | Val Loss: 0.6939 | Val AUCROC: 0.4250
+Epoch: 34 | Edge Type: o-n | Val Loss: 1.4946 | Val AUCROC: 0.6154
+Epoch: 34 | Edge Type: o-o-nobank | Val Loss: 1.2927 | Val AUCROC: 0.6767
+Epoch: 35 | Edge Type: n-n | Val Loss: 0.6942 | Val AUCROC: 0.4036
+Epoch: 35 | Edge Type: o-n | Val Loss: 1.4826 | Val AUCROC: 0.6352
+Epoch: 35 | Edge Type: o-o-nobank | Val Loss: 1.2338 | Val AUCROC: 0.6547
+Epoch: 36 | Edge Type: n-n | Val Loss: 0.6940 | Val AUCROC: 0.4147
+Epoch: 36 | Edge Type: o-n | Val Loss: 1.5200 | Val AUCROC: 0.6219
+Epoch: 36 | Edge Type: o-o-nobank | Val Loss: 1.3253 | Val AUCROC: 0.6410
+Epoch: 37 | Edge Type: n-n | Val Loss: 0.6936 | Val AUCROC: 0.4475
+Epoch: 37 | Edge Type: o-n | Val Loss: 1.6302 | Val AUCROC: 0.5955
+Epoch: 37 | Edge Type: o-o-nobank | Val Loss: 1.4901 | Val AUCROC: 0.6251

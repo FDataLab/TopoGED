@@ -1,0 +1,12 @@
+Epoch: 01 | Edge Type: o-o-bank | Val Loss: 0.7041 | Val AUCROC: 0.6789
+Epoch: 01 | Edge Type: n-n | Val Loss: 0.6931 | Val AUCROC: 0.5027
+Epoch: 01 | Edge Type: o-n | Val Loss: 0.5991 | Val AUCROC: 0.6809
+Epoch: 01 | Edge Type: o-o-nobank | Val Loss: 0.6572 | Val AUCROC: 0.5994
+Epoch: 02 | Edge Type: o-o-bank | Val Loss: 0.7223 | Val AUCROC: 0.6751
+Epoch: 02 | Edge Type: n-n | Val Loss: 0.6931 | Val AUCROC: 0.5041
+Epoch: 02 | Edge Type: o-n | Val Loss: 0.5963 | Val AUCROC: 0.6977
+Epoch: 02 | Edge Type: o-o-nobank | Val Loss: 0.6571 | Val AUCROC: 0.6384
+Epoch: 03 | Edge Type: o-o-bank | Val Loss: 0.7257 | Val AUCROC: 0.6753
+Epoch: 03 | Edge Type: n-n | Val Loss: 0.6931 | Val AUCROC: 0.5036
+Epoch: 03 | Edge Type: o-n | Val Loss: 0.5883 | Val AUCROC: 0.7218
+Epoch: 03 | Edge Type: o-o-nobank | Val Loss: 0.6569 | Val AUCROC: 0.6422

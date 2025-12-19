@@ -153,7 +153,7 @@ class TGN(torch.nn.Module):
                                                              timestamps=timestamps,
                                                              n_layers=self.n_layers,
                                                              n_neighbors=n_neighbors,
-                                                             time_diffs=time_diffs)
+                                                             time_diffs=time_diffs).clone()
 
     source_node_embedding = node_embedding[:n_samples]
     destination_node_embedding = node_embedding[n_samples: 2 * n_samples]
