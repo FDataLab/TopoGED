@@ -16,12 +16,14 @@ class Evaluator():
     def __init__(self):
         pass 
     
-    def evaluateSingleStructure(self, graph, graph_num=1):
+    def evaluateSingleStructure(self, graph: nx.Graph, graph_num=1):
         # print('Generating statistics for one graph')
-        
+        if graph.number_of_nodes() == 0:
+            print('GRAPH HAS NO NODES')
         # Compute the eigenvalues first
         eigenvals = self.__calculateEigenvalues(graph, num_values=5)
         eigen_dict = {f'Eigenvalue_{i + 1}': eigenvals[i] for i in range(len(eigenvals))}
+        
         
         res = {
             'Graph Number': graph_num,
@@ -37,6 +39,8 @@ class Evaluator():
             #'Number of 3-Motifs': self.__countMotifs(graph),
             #'Number of Cliques': self.__countCliques(graph),
             #'Number of Cycles': self.__countCycles(graph), 
+            'Number of Triangles': sum(nx.triangles(graph).values()) // 3,  # Since each node is counted 3 times per triangle, we divide by 3
+            'Number of Connected Components': nx.number_connected_components(graph),
             'Number of Weakly Connected Components': self.__countWeakComponents(graph),
             'Number of Strongly Connected Components': self.__countStrongComponents(graph),
             'Number of Nodes': graph.number_of_nodes(),
@@ -496,7 +500,8 @@ class Evaluator():
             avg_degree = sum(degrees.values()) / graph.number_of_nodes()
             return avg_degree 
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateAvgDegree: {e}")
             return float('inf')
         
         
@@ -506,7 +511,8 @@ class Evaluator():
             unique_degrees = set(degrees.values())
             return len(unique_degrees)
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateUniqueDegrees: {e}")
             return float('inf')
         
         
@@ -514,7 +520,8 @@ class Evaluator():
         try:
             return np.mean(list(nx.betweenness_centrality(graph).values()))
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateBetweenness: {e}")
             return float('inf')
         
         
@@ -522,7 +529,8 @@ class Evaluator():
         try:
             return np.mean(list(nx.closeness_centrality(graph).values()))
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateCloseness: {e}")
             return float('inf')
         
         
@@ -530,15 +538,17 @@ class Evaluator():
         try:
             return np.mean(list(nx.degree_centrality(graph).values()))
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateDegreeCentrality: {e}")
             return float('inf')
         
         
-    def __calculateAssortivity(self, graph: nx.DiGraph):
+    def __calculateAssortivity(self, graph: nx.Graph):
         try:
             return nx.degree_assortativity_coefficient(graph)
             
-        except:
+        except Exception as e:
+            print(f"Error in __calculateAssortivity: {e}")
             return float('inf')
         
         
@@ -546,18 +556,20 @@ class Evaluator():
         try:
             return nx.average_clustering(graph.to_undirected())
         
-        except:
-            return float('inf')
+        except Exception as e:
+            print(f"Error in __calculateClustering: {e}")
+            return -1.0
         
-        
+    
     def __calculateDensity(self, graph: nx.DiGraph):
         try:
             return nx.density(graph)
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateDensity: {e}")
             return float('inf')
-        
-        
+    
+
     def __calculateDiameter(self, graph: nx.DiGraph):
         try:
             # Since the graph must be strongly connected for this to work
@@ -606,7 +618,8 @@ class Evaluator():
         try:
             return len(list(nx.strongly_connected_components(graph)))
         
-        except:
+        except Exception as e:
+            # print(f"Error in __countStrongComponents: {e}")
             return float('inf')
         
     
@@ -708,49 +721,122 @@ class Evaluator():
             'F1_All': all_f1,
         }
 
-    
-    def evaluate_graph_edges(self, pred_graph, true_graph, is_directed=False, graph_num=0):
-        # Get overlapping nodes (we can't compute metrics with node mismatch)
+        
+    def evaluate_graph_edges(self, pred_graph, true_graph, is_directed=False, graph_num=0, edgebank=None):
+        # 1. Get the Node Universe (Union of both graphs)
         pred_nodes = set(pred_graph.nodes())
         true_nodes = set(true_graph.nodes())
-        common_nodes = pred_nodes & true_nodes
-
-        # Calculate how many nodes we removed
-        removed_pred_nodes = len(pred_nodes - common_nodes)
-        removed_true_nodes = len(true_nodes - common_nodes)
-
-        # Make the nodes line up
-        pred_sub = pred_graph.subgraph(common_nodes)
-        true_sub = true_graph.subgraph(common_nodes)
-
-        # Edge processing differs if graph is directed or not
+        all_nodes = list(pred_nodes | true_nodes)
+        num_total_nodes = len(all_nodes)
+        
+        # 2. Standardize Edge Sets
         if is_directed:
-            pred_edges = set(pred_sub.edges())
-            true_edges = set(true_sub.edges())
+            pred_edges = set(pred_graph.edges())
+            true_edges = set(true_graph.edges())
         else:
-            pred_edges = {tuple(sorted(e)) for e in pred_sub.edges()}
-            true_edges = {tuple(sorted(e)) for e in true_sub.edges()}
+            pred_edges = {tuple(sorted(e)) for e in pred_graph.edges()}
+            true_edges = {tuple(sorted(e)) for e in true_graph.edges()}
 
-        # Compute metrics
-        correct_edges = pred_edges & true_edges
-        precision = len(correct_edges) / len(pred_edges) if pred_edges else 0
-        recall = len(correct_edges) / len(true_edges) if true_edges else 0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        if edgebank is not None:
+            pred_bank = {e for e in pred_edges if e[1] in edgebank.get(e[0], [])}
+            pred_nobank = pred_edges - pred_bank
 
-        results = {
-            "Graph_Num": graph_num,
-            "Num_Pred_Nodes": len(pred_nodes),
-            "Num_True_Nodes": len(true_nodes),
-            "Common_Nodes": len(common_nodes),
-            "Removed_From_Pred": removed_pred_nodes,
-            "Removed_From_True": removed_true_nodes,
-            "Num_Pred_Edges": len(pred_edges),
-            "Num_True_Edges": len(true_edges),
-            "Correct_Edges": len(correct_edges),
-            "Precision": precision,
-            "Recall": recall,
-            "F1": f1,
-        }
+            true_bank = {e for e in true_edges if e[1] in edgebank.get(e[0], [])}
+            true_nobank = true_edges - true_bank
+
+            # Bank Metrics
+            tp_bank = len(pred_bank & true_bank)
+            fp_bank = len(pred_bank - true_bank)
+            fn_bank = len(true_bank - pred_bank)
+
+            # No-Bank Metrics
+            tp_nobank = len(pred_nobank & true_nobank)
+            fp_nobank = len(pred_nobank - true_nobank)
+            fn_nobank = len(true_nobank - pred_nobank)
+
+            # Observation Spaces for TN calculation
+            if is_directed:
+                total_possible = num_total_nodes * (num_total_nodes - 1)
+            else:
+                total_possible = (num_total_nodes * (num_total_nodes - 1)) // 2
+
+            # Count potential bank edges (pairs existing in historical edgebank involving current nodes)
+            bank_possible_count = sum(len(neighbors) for node, neighbors in edgebank.items() if node in all_nodes)
+            if not is_directed:
+                bank_possible_count = bank_possible_count // 2
+            
+            nobank_possible_count = total_possible - bank_possible_count
+
+            # True Negatives
+            tn_bank = bank_possible_count - (tp_bank + fp_bank + fn_bank)
+            tn_nobank = nobank_possible_count - (tp_nobank + fp_nobank + fn_nobank)
+
+            # Ratios
+            precision_bank = tp_bank / (tp_bank + fp_bank) if (tp_bank + fp_bank) > 0 else 0
+            recall_bank = tp_bank / (tp_bank + fn_bank) if (tp_bank + fn_bank) > 0 else 0
+            accuracy_bank = (tp_bank + tn_bank) / bank_possible_count if bank_possible_count > 0 else 0
+            f1_bank = 2 * precision_bank * recall_bank / (precision_bank + recall_bank) if (precision_bank + recall_bank) > 0 else 0
+
+            precision_nobank = tp_nobank / (tp_nobank + fp_nobank) if (tp_nobank + fp_nobank) > 0 else 0
+            recall_nobank = tp_nobank / (tp_nobank + fn_nobank) if (tp_nobank + fn_nobank) > 0 else 0
+            accuracy_nobank = (tp_nobank + tn_nobank) / nobank_possible_count if nobank_possible_count > 0 else 0
+            f1_nobank = 2 * precision_nobank * recall_nobank / (precision_nobank + recall_nobank) if (precision_nobank + recall_nobank) > 0 else 0
+        else:
+            # 3. Intersection and Differences
+            tp = len(pred_edges & true_edges)  # True Positives
+            fp = len(pred_edges - true_edges)  # False Positives
+            fn = len(true_edges - pred_edges)  # False Negatives
+            
+            # 4. Accuracy Logic: The "Observation Space"
+            # To calculate Accuracy, we need TN (True Negatives).
+            # We define the space as all edges that COULD have been predicted between existing nodes.
+            if is_directed:
+                possible_edges_count = num_total_nodes * (num_total_nodes - 1)
+            else:
+                possible_edges_count = (num_total_nodes * (num_total_nodes - 1)) // 2
+            
+            # TN is every possible edge that was NOT predicted and DOES NOT exist
+            tn = possible_edges_count - (tp + fp + fn)
+
+            # 5. Metric Calculations
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            # Accuracy = (TP + TN) / (TP + TN + FP + FN)
+            accuracy = (tp + tn) / possible_edges_count if possible_edges_count > 0 else 0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+        if edgebank is not None:
+            results = {
+                "Graph_Num": graph_num,
+                "TP_bank": tp_bank,
+                "FP_bank": fp_bank,
+                "TN_bank": tn_bank,
+                "FN_bank": fn_bank,
+                "TP_nobank": tp_nobank,
+                "FP_nobank": fp_nobank,
+                "TN_nobank": tn_nobank,
+                "FN_nobank": fn_nobank,
+                "Precision_bank": precision_bank,
+                "Recall_bank": recall_bank,
+                "Accuracy_bank": accuracy_bank,                
+                "Precision_nobank": precision_nobank,
+                "Recall_nobank": recall_nobank,
+                "Accuracy_nobank": accuracy_nobank,
+                "F1_bank": f1_bank,
+                "F1_nobank": f1_nobank
+            }
+        else:
+            results = {
+                "Graph_Num": graph_num,
+                "TP": tp,
+                "FP": fp,
+                "TN": tn,
+                "FN": fn,
+                "Precision": precision,
+                "Recall": recall,
+                "Accuracy": accuracy,
+                "F1": f1
+            }
 
         return results
     

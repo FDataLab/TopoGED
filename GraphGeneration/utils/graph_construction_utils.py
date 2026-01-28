@@ -147,7 +147,7 @@ def update_degrees(graph: nx.DiGraph):
             graph.nodes[node]['feat']['currDegree'] = graph.degree(node)
      
      
-def generate_tgcn_node_features(target_graphs, embedding_dim, feature_type='node2vec', device="cpu"):
+def generate_tgcn_node_features(target_graphs, embedding_dim, feature_type='binary', device="cpu"):
     all_nodes = sorted(set(node for graphs in target_graphs for node in graphs[-1].nodes()))
     node_to_idx = {node: idx for idx, node in enumerate(all_nodes)}
     num_nodes = len(all_nodes)

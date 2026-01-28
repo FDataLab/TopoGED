@@ -21,45 +21,54 @@ def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=
     Returns:
         candidates (list): A list of tuples for all possible edges that can be added given the nodes
     """
-    candidates = []
-    seen_edges = set()  # used to avoid duplicates for undirected graphs
-
-    def can_add_edge(u, v):
-        return (
-            u in graph.nodes and v in graph.nodes and
-            u != v and
-            not graph.has_edge(u, v) and
-            graph.degree(u) < graph.nodes[u]['feat']['maxDegree'] and
-            graph.degree(v) < graph.nodes[v]['feat']['maxDegree']
-        )
-
-    # Select candidate pairs based on the edge type
+    active_1 = [n for n in nodes_1 if graph.degree(n) < graph.nodes[n]['feat']['maxDegree']]
+    
     if flag == 'o-n':
-        pairs = product(nodes_1, nodes_2)
+        active_2 = [n for n in nodes_2 if graph.degree(n) < graph.nodes[n]['feat']['maxDegree']]
+        # Use sets for O(1) edge lookup
+        existing_edges = set(graph.edges())
+        
+        candidates = []
+        # Check O -> N
+        for u in active_1:
+            for v in active_2:
+                if u != v and (u, v) not in existing_edges:
+                    candidates.append((u, v))
+        
+        # Check N -> O if directed
         if is_directed:
-            pairs += list(product(nodes_2, nodes_1))
+            for u in active_2:
+                for v in active_1:
+                    if u != v and (u, v) not in existing_edges:
+                        candidates.append((u, v))
+        return candidates
+
     elif flag in ['o-o-nobank', 'o-o-bank', 'n-n']:
-        pairs = product(nodes_1, nodes_1)
+        existing_edges = set(graph.edges())
+        candidates = []
+        seen_undirected = set()
+        
+        # Convert edgebank to set for O(1) lookup if it exists
+        eb_lookup = edgebank if edgebank is not None else {}
 
-    for u, v in pairs:
-        if not can_add_edge(u, v):
-            continue
-
-        # Check edge bank constraints
-        if flag == 'o-o-nobank' and v in edgebank.get(u, []):
-            continue
-        elif flag == 'o-o-bank' and v not in edgebank.get(u, []):
-            continue
-
-        # For undirected graphs, skip if reversed version already exists
-        if not is_directed:
-            if (v, u) in seen_edges:
-                continue
-            seen_edges.add((u, v))
-
-        candidates.append((u, v))
-
-    return candidates
+        for i, u in enumerate(active_1):
+            for v in active_1: # For bank/nobank, we usually check against same set
+                if u == v or (u, v) in existing_edges:
+                    continue
+                
+                # Bank constraints logic
+                if flag == 'o-o-nobank' and v in eb_lookup.get(u, set()):
+                    continue
+                elif flag == 'o-o-bank' and v not in eb_lookup.get(u, set()):
+                    continue
+                
+                if not is_directed:
+                    if (v, u) in seen_undirected:
+                        continue
+                    seen_undirected.add((u, v))
+                
+                candidates.append((u, v))
+        return candidates
 
 
 def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decoder, old_node_embeddings, top_k, graph_num, device, is_directed=False, train=False):
@@ -79,85 +88,70 @@ def predict_edges(graph, edge_type, node_types, edgebank, link_prediction_decode
     Returns:
         top_edges (list): The top_k edges that we have decided to add here
     """
-    if edge_type == 'o-o-bank' or edge_type == 'o-o-nobank':
+    if edge_type in ['o-o-bank', 'o-o-nobank']:
         candidate_edges = generate_candidates(graph, nodes_1=node_types['old_nodes'], nodes_2=None, flag=edge_type, edgebank=edgebank, is_directed=is_directed)
-
     elif edge_type == 'n-n':
         candidate_edges = generate_candidates(graph, nodes_1=node_types['new_nodes'], nodes_2=None, flag=edge_type, is_directed=is_directed)
-
-    # ToDo Check this
     elif edge_type == 'o-n':
         candidate_edges = generate_candidates(graph, nodes_1=node_types['old_nodes'], nodes_2=node_types['new_nodes'], flag=edge_type, is_directed=is_directed)
     
-    # No candidates given
-    if len(candidate_edges) == 0:
+    if not candidate_edges or top_k <= 0:
         return []
-    
-    # Predict edge probabilities using the MLP
-    edge_probs = []
-    if isinstance(old_node_embeddings, dict):
-        any_node = next(iter(old_node_embeddings))
-        embed_dim = len(old_node_embeddings[any_node])
-    elif isinstance(old_node_embeddings, torch.Tensor):
-        embed_dim = old_node_embeddings.shape[1]
-    
-    for u, v in candidate_edges:
-        if isinstance(old_node_embeddings, dict):
-            if u not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
-                old_node_embeddings[u] = torch.zeros(embed_dim, device=device)
-            if v not in old_node_embeddings and edge_type in ['n-n', 'o-n']:
-                old_node_embeddings[v] = torch.zeros(embed_dim, device=device)
 
-            src_embed = old_node_embeddings[u]
-            dst_embed = old_node_embeddings[v]
+    # 2. Vectorized Probability Prediction
+    # Convert list of tuples to tensors immediately
+    candidates_arr = np.array(candidate_edges)
+    u_indices = torch.tensor(candidates_arr[:, 0], dtype=torch.long, device=device)
+    v_indices = torch.tensor(candidates_arr[:, 1], dtype=torch.long, device=device)
 
-        else:
-            src_embed = old_node_embeddings[torch.tensor(u, dtype=torch.long, device=device)]
-            dst_embed = old_node_embeddings[torch.tensor(v, dtype=torch.long, device=device)]
+    # Perform bulk inference
+    with torch.no_grad():
+        # This assumes old_node_embeddings is the tensor we've been building
+        src_embeds = old_node_embeddings[u_indices]
+        dst_embeds = old_node_embeddings[v_indices]
         
-        # Convert to torch.Tensor if necessary
-        if isinstance(src_embed, np.ndarray):
-            src_embed = torch.tensor(src_embed, dtype=torch.float32).to(device)
-        if isinstance(dst_embed, np.ndarray):
-            dst_embed = torch.tensor(dst_embed, dtype=torch.float32).to(device)
+        # Single forward pass for ALL candidates
+        probs = link_prediction_decoder(src_embeds, dst_embeds, edge_type).view(-1)
 
-        # Add batch dimension if needed
-        if src_embed.dim() == 1:
-            src_embed = src_embed.unsqueeze(0)
-        if dst_embed.dim() == 1:
-            dst_embed = dst_embed.unsqueeze(0)
-            
-        # Predict edge probability
-        prob = link_prediction_decoder(src_embed, dst_embed, edge_type)
-        
-        edge_probs.append((u, v, prob.item()))
+    # 3. Sort by probability (descending)
+    # We move to CPU here to handle the NetworkX degree logic which is CPU-bound
+    probs_cpu = probs.cpu().numpy()
+    sorted_idx = np.argsort(-probs_cpu) # Negative for descending
+    
+    sorted_candidates = candidates_arr[sorted_idx]
+    sorted_probs = probs_cpu[sorted_idx]
 
-    # Sort and select top_k
-    edge_probs.sort(key=lambda x: x[2], reverse=True)
-    # top_edges = [(u, v) for u, v, _ in edge_probs[:top_k]]  # Removed for now, trying something new below
-
-    # The following logic ensures that we respect the maximum degree of a given node
+    # 4. Degree Constraint Logic (CPU Optimized)
     top_edges = []
-    queue_len = len(edge_probs)
-    for j in range(queue_len):
-        # This is at the beginning because we want to avoid adding edges when we need 0
-        if len(edge_probs) >= top_k:
-            break
-        u, v, _ = edge_probs.pop(0)
-        if graph.nodes[u]['feat']['currDegree'] < graph.nodes[u]['feat']['maxDegree'] and graph.nodes[v]['feat']['currDegree'] < graph.nodes[v]['feat']['maxDegree']:
-            top_edges.append((u, v))
-            graph.nodes[u]['feat']['currDegree'] += 1
-            graph.nodes[v]['feat']['currDegree'] += 1
-        else:
-            edge_probs.append((u, v, _))
-            
+    rejected_edges = []
+    
+    # Pre-fetch degrees to avoid repeated dict lookups in the loop
+    # Using a local cache for speed
+    node_feats = {n: graph.nodes[n]['feat'] for n in np.unique(candidates_arr)}
 
-    # If we have exhausted our viable options, add the most likely edges regardless of degree constraints
-    while len(top_edges) < top_k and edge_probs:
-        u, v, _ = edge_probs.pop(0)
-        top_edges.append((u, v))
-        graph.nodes[u]['feat']['currDegree'] += 1
-        graph.nodes[v]['feat']['currDegree'] += 1
+    for i in range(len(sorted_candidates)):
+        if len(top_edges) >= top_k:
+            break
+            
+        u, v = sorted_candidates[i]
+        u_feat = node_feats[u]
+        v_feat = node_feats[v]
+        
+        if u_feat['currDegree'] < u_feat['maxDegree'] and v_feat['currDegree'] < v_feat['maxDegree']:
+            top_edges.append((int(u), int(v)))
+            u_feat['currDegree'] += 1
+            v_feat['currDegree'] += 1
+        else:
+            rejected_edges.append((int(u), int(v)))
+
+    # 5. Fill remaining if degree constraints were too strict
+    if len(top_edges) < top_k and rejected_edges:
+        needed = top_k - len(top_edges)
+        top_edges.extend(rejected_edges[:needed])
+        # Update degrees for the forced edges
+        for u, v in rejected_edges[:needed]:
+            node_feats[u]['currDegree'] += 1
+            node_feats[v]['currDegree'] += 1
 
     # Likely to be an issue in the early graphs
     if top_k != len(top_edges):

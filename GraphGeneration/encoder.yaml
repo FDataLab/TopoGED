@@ -29,6 +29,29 @@ encoder_model:
   nodeEmbeddingType: "GCN"
   addOnFeature: "Degree"
 
+benchmarking:
+  roland:
+    nfeat: 64
+    nhid: 64
+    dropout: 0.1
+  tgcn:
+    nfeat: 64
+    nhid: 64
+  wingnn:
+    nfeat: 64
+    nhid: 64
+  gclstm:
+    nfeat: 64
+    nhid: 64
+    chebyshev_filter: 2
+  evolve_gcn:
+    nfeat: 64
+    nhid: 64
+  vgae:
+    input_dim: 64
+    hidden1_dim: 32
+    hidden2_dim: 64
+
 learnable_embedder:
   setup:
     init_type: "zeros"
@@ -42,6 +65,7 @@ training:
   lr: 0.001
   epochs: 100
   day: 10000
+  weight_decay: 0.0
 
 sampling:
   # aion
@@ -53,47 +77,20 @@ sampling:
   # decay_factor: 3.0540
 
   # aion
-  #beta: 1.6405
-  #decay_factor: 2.5743
+  beta: 0.8789
+  decay_factor: 3.6224
 
-  # College
-  # beta: 0.6365
-  # decay_factor: 3.1867 
 
-  # networkaeternity
-  # beta: 1.5281
-  # decay_factor: 2.5341
-
-  # networkadex
-  beta: 1.8660
-  decay_factor: 2.2884
-
-  # networkcentra
-  # beta: 1.8929
-  # decay_factor: 2.1588
-
-  # networkaragon
-  # beta: 1.9114
-  # decay_factor: 2.2486
-
-  # networkcoindash
-  # beta: 1.8498
-  # decay_factor: 2.2329
   alpha: 0
 
 
-# dataset: networkaion  # Silently fails on 77 idk why
-# dataset: networkbancor
-# dataset: CollegeMsg
-# dataset: networkaeternity
-dataset: networkadex
-# dataset: networkaragon
-# dataset: networkcoindash
-# dataset: networkcentra  # Silently fails
+dataset: tgbl-wiki
 seed: 1024
 days_back: 5  # Use 10000 as meaning 'all'
 directed_flag: False
-use_predicted_vals: False
+use_predicted_vals: true
 starting_graph_idx: 2 
-# data/output/constructed_graphs/networkadex_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_binary_lr0.001_predictednodesTrue_allback/GCN_constructed_graphs_networkadex.pkl
 use_moving_average: True
+ablation: True
+sensitivity_analysis: False
+num_toper_buckets: 10

@@ -1,6 +1,7 @@
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np 
 import seaborn as sns
 import networkx as nx
@@ -418,40 +419,49 @@ class Visualizer:
 
 
     def plot_scatter(true, predicted, save_path, mode="nodes", xlabel="", ylabel=""):
-        predicted = np.array(predicted, dtype=np.float32).flatten()
-        true = np.array(true, dtype=np.float32).flatten()
+        import numpy as np
+        import os
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as ticker
 
-        plt.figure(figsize=(6, 6))
-        plt.scatter(predicted, true, alpha=0.6)
+        predicted = np.asarray(predicted, dtype=np.float32).ravel()
+        true = np.asarray(true, dtype=np.float32).ravel()
 
-        # Axis labels depending on mode
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.scatter(predicted, true, alpha=0.6)
+
+        max_val = max(np.max(predicted), np.max(true))
+        max_limit = max(1.0, 1.05 * max_val)
+
+        fs = 14
         if mode == "nodes":
-            plt.xlabel(r'$|\hat{v}|$')
-            plt.ylabel(r'$|v|$')
+            ax.set_xlabel(r'$|\hat{\mathcal{V}}|$', fontsize=fs)
+            ax.set_ylabel(r'$|\mathcal{V}|$', fontsize=fs)
         elif mode == "edges":
-            plt.xlabel(r'$|\hat{e}|$')
-            plt.ylabel(r'$|e|$')
+            ax.set_xlabel(r'$|\hat{\mathcal{E}}|$', fontsize=fs)
+            ax.set_ylabel(r'$|\mathcal{E}|$', fontsize=fs)
         else:
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
+            ax.set_xlabel(xlabel, fontsize=fs)
+            ax.set_ylabel(ylabel, fontsize=fs)
 
-        # Remove top and right borders
-        ax = plt.gca()
+        locator = ticker.MaxNLocator(nbins='auto', integer=True)
+        ax.xaxis.set_major_locator(locator)
+        ax.yaxis.set_major_locator(locator)
+
+        ax.set_xlim(0, max_limit)
+        ax.set_ylim(0, max_limit)
+        ax.set_aspect('equal', adjustable='datalim')
+
+        ax.tick_params(labelsize=12)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
+        ax.grid(False)
 
-        # Always start at (0,0)
-        ax.set_xlim(left=0)
-        ax.set_ylim(bottom=0)
-
-        # No grid, no title, no legend
-        plt.grid(False)
-
-        # Make sure the directory exists
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, bbox_inches='tight')
-        plt.close()
-        
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close(fig)
+            
     
     def plot_line_graph(true_vals, pred_vals, prob_type, xlabel="Time Index", ylabel="Probability", title="True vs Real: ", save_path="plot.png"):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
