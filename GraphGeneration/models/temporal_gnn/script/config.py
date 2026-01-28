@@ -17,12 +17,10 @@ parser.add_argument('--num_snapshots', type=int, default=100, help='num of snaps
 parser.add_argument('--max_epoch', type=int, default=500, help='number of epochs to train.')
 parser.add_argument('--testlength', type=int, default=3, help='length for test, default:3')
 parser.add_argument('--targetsnapshot', type=int, default=3, help='target snapshot we wish to predict, default:3')
-parser.add_argument('--device', type=str, default='cpu', help='training device')
-parser.add_argument('--device_id', type=str, default='0', help='device id for gpu')
 parser.add_argument('--seed', type=int, default=1024, help='random seed')
 parser.add_argument('--repeat', type=int, default=1, help='running times')
 parser.add_argument('--patience', type=int, default=50, help='patience for early stop')
-parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=5e-7, help='weight for L2 loss on basic models.')
 parser.add_argument('--output_folder', type=str, default='', help='need to be modified')
 parser.add_argument('--use_htc', type=int, default=1, help='use htc or not, default: 1')
@@ -52,23 +50,11 @@ parser.add_argument('--curvature', type=float, default=1.0, help='curvature valu
 parser.add_argument('--fixed_curvature', type=int, default=1, help='fixed (1) curvature or not (0)')
 parser.add_argument('--aggregation', type=str, default='deg', help='aggregation method: [deg, att]')
 
-parser.add_argument("--strategy", type=str, required=False, default='MultiheadedMLP', choices=['MultiheadedMLP', 'SingleMLP'], help="The type of MLP NN to use")
-parser.add_argument("--embedding", type=str, required=False, default='Position', choices=['Position', 'NodeType', 'Position+NodeType', 'None'], help="Allows appending positional encodings or an integer node type onto the end of the embeddings")
-parser.add_argument("--mlpEncoding", type=str, required=False, default='Concat', choices=['Concat', 'Product', 'Addition', 'Subtraction'], help="How you want to input node embeddings to the MLP")  # Product and addition lead to potential noise as we use directed graphs
-parser.add_argument("--embedOld", type=str, required=False, default='True', choices=['True', 'False'], help="If you want to let the MLP predict edge type \'o-o-bank\', otherwise these edges are randomly added")
-parser.add_argument("--oldDegree", type=str, required=False, default='False' ,choices=['True', 'False'], help="If you want reappearing nodes to reuse their most recent degree")
-parser.add_argument("--trainingStyle", type=str, required=False, default='TrueGraphs', choices=['TrueGraphs', 'PredGraphs', 'MixedGraphs'], help="When training the MLP, decides if you use real graphs, predicted graphs (with first real as starter), or real then pred for MLP training")
-parser.add_argument("--embeddingType", type=str, required=False, default='Node2Vec', choices=['Linear', 'Node2Vec', 'LSTM', 'GCLSTM', 'HTGN'], help="How nodes should be embedded. Either with Node2Vec or with a Linear mutliplication of adjacency matrix by node feature matrix")
+# TopoGED mode
+parser.add_argument('--use_predict_probs', action='store_true', help='Use prediction probabilities to predict the next snapshot')
+parser.add_argument('--use_predict_graph_prediction', action='store_true', help='Use prediction graph description to predict the next snapshot')
 
 args = parser.parse_args()
-
-# set the running device
-if int(args.device_id) >= 0 and torch.cuda.is_available():
-    args.device = torch.device("cuda".format(args.device_id))
-    print('INFO: using gpu:{} to train the model'.format(args.device_id))
-else:
-    args.device = torch.device("cpu")
-    print('INFO: using cpu to train the model')
 
 args.output_folder = '../data/output/log/{}/{}/'.format(args.dataset, args.model)
 args.result_txt = '../data/output/results/{}_{}_result.txt'.format(args.dataset, args.model)
@@ -118,50 +104,50 @@ if args.dataset in ['LegisEdgelist']:
 if args.dataset in ['UNtrade']:
     args.testlength = 2
 
-if args.dataset in ['aion']:
+if args.dataset in ['networkaion']:
     args.testlength = 38  # train-test split: 80-20; Total number of snapshots = 190
     args.trainable_feat = 1
 
-if args.dataset in ['dgd']:
+if args.dataset in ['networkdgd']:
     args.testlength = 144  # train-test split: 80-20; Total number of snapshots = 720
     args.trainable_feat = 1
 
-if args.dataset in ['adex']:
+if args.dataset in ['networkadex']:
     args.testlength = 59  # train-test split: 80-20; Total number of snapshots = 293
     args.trainable_feat = 1
 
-if args.dataset in ['aragon']:
+if args.dataset in ['networkaragon']:
     args.testlength = 67  # train-test split: 80-20; Total number of snapshots = 337
     args.trainable_feat = 1
 
-if args.dataset in ['coindash']:
+if args.dataset in ['networkcoindash']:
     args.testlength = 54  # train-test split: 80-20; Total number of snapshots = 268
     args.trainable_feat = 1
 
-if args.dataset in ['iconomi']:
+if args.dataset in ['networkiconomi']:
     args.testlength = 108  # train-test split: 80-20; Total number of snapshots = 542
     args.trainable_feat = 1
 
-if args.dataset in ['aeternity']:
+if args.dataset in ['networkaeternity']:
     args.testlength = 46  # Total number of snapshots = 229
     args.trainable_feat = 1
 
-if args.dataset in ['bancor']:
+if args.dataset in ['networkbancor']:
     args.testlength = 66  # Total number of snapshots = 331
     args.trainable_feat = 1
 
-if args.dataset in ['centra']:
+if args.dataset in ['networkcentra']:
     args.testlength = 52  # Total number of snapshots = 261
     args.trainable_feat = 1
 
-if args.dataset in ['cindicator']:
+if args.dataset in ['networkcindicator']:
     args.testlength = 44  # Total number of snapshots = 221
     args.trainable_feat = 1
 
-# if args.dataset in ['CollegeMsg']:
-#     args.testlength = 35  # Total number of snapshots = 177
-#     args.trainable_feat = 1
+if args.dataset in ['CollegeMsg']:
+    args.testlength = 35  # Total number of snapshots = 177
+    args.trainable_feat = 1
 
-# if args.dataset in ['mathoverflow']:
-#     args.testlength = 37  # Total number of snapshots = 183
-#     args.trainable_feat = 1
+if args.dataset in ['mathoverflow']:
+    args.testlength = 37  # Total number of snapshots = 183
+    args.trainable_feat = 1

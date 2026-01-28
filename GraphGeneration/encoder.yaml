@@ -1,0 +1,96 @@
+encoder_model:
+  name: topoGED
+  node2vec_setup:
+    node2vec_dimensions: 64 # We add features onto the end since Node2Vec doesn't embed features
+    node2vec_walk_length: 80 # Number of nodes visited per walk (Higher is more global, smaller is local)
+    node2vec_num_walks: 30 # Number of walks to start per node (Higher is more detailed and stable)
+    node2vec_p: 0.5 # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
+    node2vec_q: 2.0 # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
+    node2vec_window: 10 # The context size (Higher is broader learning)
+    node2vec_min_count: 1 # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
+    node2vec_batch_words: 4 # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
+    node2vec_workers: 1 # Number of workers (threads)
+  lstm_setup:
+    num_layers: 2
+  tgcn_setup:
+    feature_type: 'zeros'
+    binary_dim: 64
+    improved: False
+    cached: False
+    add_self_loops: True
+  other_models:
+    feature_type: 'binary'
+    feature_dim: 32
+    embedding_dim: 64
+    num_layers: 1
+    model_type: 'GCN'
+    n_neighbors: 10
+  hidden_dim: 128
+  nodeEmbeddingType: "GCN"
+  addOnFeature: "Degree"
+
+benchmarking:
+  roland:
+    nfeat: 64
+    nhid: 64
+    dropout: 0.1
+  tgcn:
+    nfeat: 64
+    nhid: 64
+  wingnn:
+    nfeat: 64
+    nhid: 64
+  gclstm:
+    nfeat: 64
+    nhid: 64
+    chebyshev_filter: 2
+  evolve_gcn:
+    nfeat: 64
+    nhid: 64
+  vgae:
+    input_dim: 64
+    hidden1_dim: 32
+    hidden2_dim: 64
+
+learnable_embedder:
+  setup:
+    init_type: "zeros"
+    hks_num_scales: 64
+
+decoder_model:
+  encode_links: "Concat"
+
+training:
+  batch_size: 32 # play around
+  lr: 0.001
+  epochs: 100
+  day: 10000
+  weight_decay: 0.0
+
+sampling:
+  # aion
+  # beta: 1.6405
+  # decay_factor: 2.5743
+
+  # Bancor
+  # beta: 1.9292
+  # decay_factor: 3.0540
+
+  # aion
+  beta: 0.8789
+  decay_factor: 3.6224
+
+
+  alpha: 0
+
+
+dataset: tgbl-wiki
+seed: 1024
+days_back: 5  # Use 10000 as meaning 'all'
+directed_flag: False
+use_predicted_vals: true
+starting_graph_idx: 2 
+use_moving_average: True
+ablation: True
+sensitivity_analysis: False
+num_toper_buckets: 10

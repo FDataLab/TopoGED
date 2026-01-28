@@ -1,0 +1,675 @@
+nohup: ignoring input
+The StatsForecast module could not be imported. To enable support for the AutoARIMA, AutoETS and Croston models, please consider installing it.
+The `XGBoost` module could not be imported. To enable XGBoost support in Darts, follow the detailed instructions in the installation guide: https://github.com/unit8co/darts/blob/master/INSTALL.md
+The `XGBoost` module could not be imported. To enable XGBoost support in Darts, follow the detailed instructions in the installation guide: https://github.com/unit8co/darts/blob/master/INSTALL.md
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+You are using a CUDA device ('NVIDIA H200 NVL') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+RESULTS | Baseline | networkaion
+Train RMSE: 0.1617190476198268
+Valid RMSE: 0.14498306869237368
+Test RMSE: 0.08200038601767
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  8.25it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  8.13it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 63.62it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 49.68it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 74.61it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 49.81it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkaion
+Train RMSE: 0.09598265909930581
+Valid RMSE: 0.0890907525123969
+Test RMSE: 0.05805696338149975
+RESULTS | VAR | networkaion
+Train RMSE: 0.06531138407170516
+Valid RMSE: 0.09533345937332496
+Test RMSE: 0.05532642474036795
+RESULTS | Baseline | networkbancor
+Train RMSE: 0.10951152863408611
+Valid RMSE: 0.11083814224752098
+Test RMSE: 0.11431056622490636
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  3.91it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  3.81it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 32.44it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 21.67it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 32.91it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 22.19it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkbancor
+Train RMSE: 0.06878729128574565
+Valid RMSE: 0.07021742260246583
+Test RMSE: 0.06672057274934966
+RESULTS | VAR | networkbancor
+Train RMSE: 0.05018368212417622
+Valid RMSE: 0.06515293542407057
+Test RMSE: 0.06754120319727709
+RESULTS | Baseline | networkadex
+Train RMSE: 0.1294556311535707
+Valid RMSE: 0.12248697506013236
+Test RMSE: 0.1602819926065641
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  3.26it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  3.14it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 24.74it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 19.49it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 24.35it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 19.25it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkadex
+Train RMSE: 0.07764781116920394
+Valid RMSE: 0.08540859891813772
+Test RMSE: 0.09609089843271679
+RESULTS | VAR | networkadex
+Train RMSE: 0.056410083644201296
+Valid RMSE: 0.0761595290800551
+Test RMSE: 0.09644102102346637
+RESULTS | Baseline | networkcentra
+Train RMSE: 0.16454972286619762
+Valid RMSE: 0.1361422304264338
+Test RMSE: 0.19841724803037786
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  3.71it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  3.47it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 33.97it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 20.31it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 24.97it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 19.50it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkcentra
+Train RMSE: 0.11385697372980458
+Valid RMSE: 0.0998126601601273
+Test RMSE: 0.13307675550812506
+RESULTS | VAR | networkcentra
+Train RMSE: 0.0777488512106202
+Valid RMSE: 0.08884749444122268
+Test RMSE: 0.12196659233628629
+RESULTS | Baseline | networkcoindash
+Train RMSE: 0.14678644823376305
+Valid RMSE: 0.19679483567862552
+Test RMSE: 0.1897039129990045
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.48it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.33it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 17.22it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 13.53it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 17.33it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 13.65it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkcoindash
+Train RMSE: 0.09103754172629935
+Valid RMSE: 0.10508157164299199
+Test RMSE: 0.1234127840817587
+RESULTS | VAR | networkcoindash
+Train RMSE: 0.06972412581246204
+Valid RMSE: 0.10626088490511944
+Test RMSE: 0.12407649665841858
+RESULTS | Baseline | mathoverflow
+Train RMSE: 0.1164569294780345
+Valid RMSE: 0.09718801301256547
+Test RMSE: 0.11070049870322914
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  6.96it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  6.38it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 44.58it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 33.05it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 44.34it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 34.05it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | mathoverflow
+Train RMSE: 0.07031280133394732
+Valid RMSE: 0.06860634265111315
+Test RMSE: 0.07170938986012032
+RESULTS | VAR | mathoverflow
+Train RMSE: 0.041564875094570866
+Valid RMSE: 0.06416669067603781
+Test RMSE: 0.06940932473433777
+RESULTS | Baseline | Reddit_B
+Train RMSE: 0.07950618067743545
+Valid RMSE: 0.11243886809924185
+Test RMSE: 0.07737405296537253
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.99it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.89it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 24.65it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 18.51it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 24.25it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 17.86it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | Reddit_B
+Train RMSE: 0.04647756765111961
+Valid RMSE: 0.06410923160515558
+Test RMSE: 0.04906332352047327
+RESULTS | VAR | Reddit_B
+Train RMSE: 0.03244282824439951
+Valid RMSE: 0.06252786934586872
+Test RMSE: 0.04743895844491085
+RESULTS | Baseline | networkaragon
+Train RMSE: 0.0973121254236317
+Valid RMSE: 0.1005596895136337
+Test RMSE: 0.09864844302220237
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.30it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.24it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 16.69it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 13.60it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 16.05it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 13.36it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkaragon
+Train RMSE: 0.05693135584298339
+Valid RMSE: 0.05838474309272116
+Test RMSE: 0.0570981766305857
+RESULTS | VAR | networkaragon
+Train RMSE: 0.04146249840720484
+Valid RMSE: 0.05791293117962114
+Test RMSE: 0.05703879972410907
+RESULTS | Baseline | networkaeternity
+Train RMSE: 0.11775409498530195
+Valid RMSE: 0.11136672956813404
+Test RMSE: 0.08335001475543422
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  5.30it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  4.88it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 44.15it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 31.90it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 43.59it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 25.27it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkaeternity
+Train RMSE: 0.07079275677687175
+Valid RMSE: 0.07093605732711149
+Test RMSE: 0.0481732996322561
+RESULTS | VAR | networkaeternity
+Train RMSE: 0.05013564341300992
+Valid RMSE: 0.0686739485276295
+Test RMSE: 0.05063054259861438
+RESULTS | Baseline | networkiconomi
+Train RMSE: 0.13254300993896556
+Valid RMSE: 0.1110896182465559
+Test RMSE: 0.15443808094017283
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.20it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.16it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 18.10it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 14.25it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 17.72it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 14.09it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkiconomi
+Train RMSE: 0.07844409448042575
+Valid RMSE: 0.06778386912467302
+Test RMSE: 0.08865448890506064
+RESULTS | VAR | networkiconomi
+Train RMSE: 0.058473192364454446
+Valid RMSE: 0.06626880302028976
+Test RMSE: 0.09059332879363201
+RESULTS | Baseline | CollegeMsg
+Train RMSE: 0.20865001848212975
+Valid RMSE: 0.2557136324394091
+Test RMSE: 0.2592904613790115
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  4.31it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  3.86it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 26.87it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 14.84it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 23.51it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 17.81it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/nn/modules/conv.py:306: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return F.conv1d(input, weight, bias, self.stride,
+/home/ronan/miniconda3/envs/temporal_env/lib/python3.12/site-packages/torch/autograd/graph.py:744: UserWarning: Plan failed with a cudnnException: CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at /opt/conda/conda-bld/pytorch_1712608847532/work/aten/src/ATen/native/cudnn/Conv_v8.cpp:919.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | CollegeMsg
+Train RMSE: 0.12379846668965502
+Valid RMSE: 0.14472875117244177
+Test RMSE: 0.1569639286995911
+RESULTS | VAR | CollegeMsg
+Train RMSE: 0.08203349997573166
+Valid RMSE: 0.1520664723343894
+Test RMSE: 0.17712551080263708
+RESULTS | Baseline | networkcindicator
+Train RMSE: 0.17738671937566042
+Valid RMSE: 0.14555862998690663
+Test RMSE: 0.0719522984412699
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  8.30it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  7.90it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 58.29it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 43.04it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 59.81it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 48.28it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name            | Type             | Params | Mode 
+-------------------------------------------------------------
+0 | criterion       | MSELoss          | 0      | train
+1 | train_criterion | MSELoss          | 0      | train
+2 | val_criterion   | MSELoss          | 0      | train
+3 | train_metrics   | MetricCollection | 0      | train
+4 | val_metrics     | MetricCollection | 0      | train
+5 | res_blocks      | ModuleList       | 27.9 K | train
+-------------------------------------------------------------
+27.9 K    Trainable params
+0         Non-trainable params
+27.9 K    Total params
+0.112     Total estimated model params size (MB)
+18        Modules in train mode
+0         Modules in eval mode
+`Trainer.fit` stopped: `max_epochs=250` reached.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+RESULTS | TCN | networkcindicator
+Train RMSE: 0.10655187819560566
+Valid RMSE: 0.08811998375437433
+Test RMSE: 0.052776108228756384
+RESULTS | VAR | networkcindicator
+Train RMSE: 0.07604036352646748
+Valid RMSE: 0.09342138703768538
+Test RMSE: 0.052140955849300834
+RESULTS | Baseline | networkdgd
+Train RMSE: 0.2381328996464371
+Valid RMSE: 0.143541562524886
+Test RMSE: 0.14786078072840816
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.32it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00,  2.28it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 18.63it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 16.56it/s]GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 18.24it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:00<00:00, 16.36it/s]
+RESULTS | TCN | networkdgd
+Train RMSE: 0.14003146934406968
+Valid RMSE: 0.08996208835351
+Test RMSE: 0.09296186285394299
+RESULTS | VAR | networkdgd
+Train RMSE: 0.10269773981821749
+Valid RMSE: 0.08685138788462006
+Test RMSE: 0.08807607114894232

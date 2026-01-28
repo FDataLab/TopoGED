@@ -1,0 +1,8 @@
+Epoch: 01 | Edge Type: o-o-bank | Train Loss: 0.4998 | Train AUCROC: 0.4273 | GPU: 81.1MiB
+Epoch: 01 | Edge Type: o-o-nobank | Train Loss: 0.6343 | Train AUCROC: 0.2885 | GPU: 81.1MiB
+Epoch: 01 | Edge Type: o-n | Train Loss: 0.6197 | Train AUCROC: 0.6225 | GPU: 81.1MiB
+Epoch: 01 | Edge Type: n-n | Train Loss: 0.6368 | Train AUCROC: 0.4754 | GPU: 81.1MiB
+Epoch: 02 | Edge Type: o-o-bank | Train Loss: 0.4896 | Train AUCROC: 0.4033 | GPU: 164.2MiB
+Epoch: 02 | Edge Type: o-o-nobank | Train Loss: 0.6340 | Train AUCROC: 0.3114 | GPU: 164.2MiB
+Epoch: 02 | Edge Type: o-n | Train Loss: 0.6088 | Train AUCROC: 0.6602 | GPU: 164.2MiB
+Epoch: 02 | Edge Type: n-n | Train Loss: 0.6355 | Train AUCROC: 0.4789 | GPU: 164.2MiB

@@ -28,12 +28,13 @@ class GCLSTMCell(nn.Module):
         return h, c
 
 class GCLSTM(nn.Module):
-    def __init__(self, in_channels, hidden_channels, num_layers=1):
+    def __init__(self, input_dim, hidden_dim, num_layers=1, device='cpu'):
         super(GCLSTM, self).__init__()
-        self.hidden_channels = hidden_channels
+        self.hidden_channels = hidden_dim
         self.num_layers = num_layers
+        self.device = device
         self.cells = nn.ModuleList([
-            GCLSTMCell(in_channels if i == 0 else hidden_channels, hidden_channels)
+            GCLSTMCell(input_dim if i == 0 else hidden_dim, hidden_dim)
             for i in range(num_layers)
         ])
 

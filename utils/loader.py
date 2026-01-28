@@ -11,20 +11,19 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.probabilities import Probs
+from utils.utils import Utils
 from utils.embedding_methods.betweenness import EmbedBetweenness
-from utils.embedding_methods.closeness import EmbedCloseness
 from utils.embedding_methods.incremental_closeness import EmbedIncrementalCloseness
 from utils.embedding_methods.degree import EmbedDegree
 from utils.embedding_methods.forman_ricci import EmbedForman
 from utils.embedding_methods.weight import EmbedWeight
-
-from multiprocessing import Pool
 
 class Loader():
     # File paths
     output_dir = os.path.abspath('data/input/cached')
     edgelist_dir = os.path.abspath('data/input/raw/edgelist')
     label_dir = os.path.abspath('data/input/raw/labels')
+    my_utils = Utils()
 
     def verify_embeddings(self, embeddings, activation, dataset, norm=False, include_weights=True):
         print(f'Verifying {activation} on dataset {dataset}')
@@ -90,7 +89,7 @@ class Loader():
         return all_data
 
 
-    def load_data(self, dataset, activation, type='features', include_weights=True):
+    def load_data(self, dataset, activation, type='features', include_weights=True, normalized=True, use_predicted=False, num_back='all', num_buckets=10):
         """
         Load a single, specified dataset that exists
         
@@ -101,29 +100,52 @@ class Loader():
             graphs (list): A list of networkx graphs to process
             labels (list): The associated labels for each graph
         """
-        # self.to_cached()
+        self.to_cached()
+        
         if type == 'subgraphs':
-            seek_file = dataset + '_' + activation + '_subgraphs.pkl'
+            seek_file = dataset + '_' + activation + f'_subgraphs_{str(num_buckets)}.pkl'
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
             dataset_folder = os.path.join(dataset_folder, 'subgraphs')  # Target folder path
         elif type == 'thresholds':
-            seek_file = dataset + '_' + activation + '_thresholds.pkl'
+            seek_file = dataset + '_' + activation + f'_thresholds_{str(num_buckets)}.pkl'
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
             dataset_folder = os.path.join(dataset_folder, 'thresholds')  # Target folder path
         elif type == 'features' and include_weights == True:
-            seek_file = dataset + '_' + activation + '.pkl'  # Based on dataset and activation combination
-            dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+            if use_predicted:
+                # Due to later logic, we just return here
+                seek_file = f'{dataset}_toper_noweight_{str(num_buckets)}.pkl'  # Based on dataset and activation combination
+                dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
+                dataset_folder = os.path.join(dataset_folder, 'predValues')
+                seek_file_path = os.path.join(dataset_folder, f'{dataset}_toper_noweight_{str(num_buckets)}.pkl')
+                with open(seek_file_path, "rb") as f:
+                    data = pickle.load(f)
+                return data, None  # I didn't return g/s labels making these pred values
+            else:
+                seek_file = dataset + '_' + activation + f'_{str(num_buckets)}.pkl'  # Based on dataset and activation combination
+                dataset_folder = os.path.join(self.output_dir, dataset, 'toper_embeddings')  # Target folder path
         elif type == 'probabilities':
             seek_file = dataset + '_' + 'probabilities'
             dataset_folder = os.path.join(self.output_dir, dataset)
-            dataset_folder = os.path.join(dataset_folder, 'probabilities')
-            df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities.csv')
+            
+            if use_predicted:
+                # We only have one possible path for this, so just return this
+                dataset_folder = os.path.join(dataset_folder, 'predValues')
+                seek_file_path = os.path.join(dataset_folder, f'{dataset}_probs_all_back.pkl')
+                with open(seek_file_path, "rb") as f:
+                    data = pickle.load(f)
+                return data
+            else:
+                dataset_folder = os.path.join(dataset_folder, 'probabilities')
+            if normalized:
+                df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities_{num_back}_back_norm.csv')
+            else:
+                df = pd.read_csv(dataset_folder + f'/{dataset}_probabilities_{num_back}_back.csv')
             df = df.drop(columns=["Unnamed: 0"], errors="ignore")
             return df  # We just return the dataframe directly
         else:
-            seek_file = dataset + '_' + activation + '_no_weight' + '.pkl'  # Based on dataset and activation combination
+            seek_file = dataset + '_' + activation + f'_no_weight_{str(num_buckets)}.pkl'  # Based on dataset and activation combination
             dataset_folder = os.path.join(self.output_dir, dataset)  # Target folder path
-            dataset_folder = os.path.join(dataset_folder, 'no_weight')  # Target folder path
+            dataset_folder = os.path.join(dataset_folder, 'toper_embeddings', 'no_weight')  # Target folder path
         
         data_files = os.listdir(dataset_folder)
         
@@ -150,10 +172,6 @@ class Loader():
         else:
             print(f'Dataset {dataset} not found in files, please check available datasets and try again')
             print(f'Available data: \t{data_files}')
-
-    
-    def clean_data(self):
-        pass
 
 
     # Read labels from file
@@ -200,12 +218,20 @@ class Loader():
         data = []
         edgelist_rawfile = self.edgelist_dir + '/{}.txt'.format(dataset)
         edgelist_df = pd.read_csv(edgelist_rawfile)
-        uniq_ts_list = np.unique(edgelist_df['Snapshot'])
+        edgelist_df = edgelist_df.drop_duplicates(subset=["from", "to", "date", "value"])
+        
+        if "Snapshot" in edgelist_df.columns:
+            edgelist_df = edgelist_df.drop(columns=["Snapshot"])
+        
+        edgelist_df.to_csv(edgelist_rawfile, index=False)
+        
+        uniq_ts_list = np.unique(edgelist_df['date'])
 
         # Loop over snapshot ids
         for ts in uniq_ts_list:
             # NOTE: this code does not use any node or edge features
-            ts_edges = edgelist_df.loc[edgelist_df['Snapshot'] == ts, ['from', 'to']]
+            ts_edges = edgelist_df.loc[edgelist_df['date'] == ts, ['from', 'to']]
+            ts_edges = ts_edges.drop_duplicates()
             ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to')
             data.append(ts_G)
         
@@ -226,23 +252,39 @@ class Loader():
         data = []
         edgelist_rawfile = self.edgelist_dir + '/{}.txt'.format(dataset)
         edgelist_df = pd.read_csv(edgelist_rawfile)
+        edgelist_df = edgelist_df.drop_duplicates(subset=["from", "to", "date", "value"])
+        
+        if "Snapshot" in edgelist_df.columns:
+            edgelist_df = edgelist_df.drop(columns=["Snapshot"])
+        
+        edgelist_df.to_csv(edgelist_rawfile, index=False)
+        
+        if dataset == 'tgbl-review':  # We use week long snapshots here
+            edgelist_df['date_dt'] = pd.to_datetime(edgelist_df['date'])
+            edgelist_df['group_ts'] = edgelist_df['date_dt'].dt.to_period('W').dt.start_time
+        else:
+            # For other datasets, keep the daily string as the group key
+            edgelist_df['group_ts'] = edgelist_df['date']
+            
+        # Get chronological list of snapshots
+        uniq_ts_list = sorted(edgelist_df['group_ts'].unique())
         
         if norm:
             edgelist_df = self.normalize_edge_weights(edgelist_df)
         
-        # Filter out edges where 'value' is greater than 10^20 (this is a hacking attempt in blockchain)
-        # edgelist_df = edgelist_df[edgelist_df['value'] <= 10**20]
-
-        
-                
-        uniq_ts_list = np.unique(edgelist_df['Snapshot'])
-
-        # Loop over snapshot ids
+        # Loop over snapshots (weeks for tgbl-review, days for others)
         for ts in uniq_ts_list:
-            ts_edges = edgelist_df.loc[edgelist_df['Snapshot'] == ts, ['from', 'to', 'value']]
+            # Select edges for this specific week/day
+            ts_edges = edgelist_df.loc[edgelist_df['group_ts'] == ts, ['from', 'to', 'value']]
+            
+            # AGGREGATION: If node A talked to node B twice in one week,
+            # we sum their 'value' to create a single weighted edge.
+            ts_edges = ts_edges.groupby(['from', 'to'])['value'].sum().reset_index()
+            
+            # Create the directed graph for this snapshot
             ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to', edge_attr=True, create_using=nx.DiGraph())
             
-            # Reddit requires special processing (apply sigmoid)
+            # Reddit specific processing
             if dataset == 'Reddit_B':
                 for u, v, graph_data in ts_G.edges(data=True):
                     graph_data['value'] = 1 / (1 + np.exp(-graph_data['value']))
@@ -275,9 +317,14 @@ class Loader():
             None
         """
         normalization_datasets = ['networkaeternity', 'networkiconomi', 'networkcindicator', 'networkdgd']  # Cuneyt recommended normalizing these datasets due to large edge weights messing up data
+        normalization_datasets = []  # None for now
         
         raw_data = [file for file in os.listdir(self.edgelist_dir)]
         raw_data = [file_name.replace('.txt', '') for file_name in raw_data]
+        # OGBL Datasets
+        # raw_data.append('ogbl-collab')
+        # raw_data.append('ogbl-citation2')
+        
         cached_data_folders = [file for file in os.listdir(self.output_dir)]
 
         # Betweenness takes too long to process and are deemed not feasible 
@@ -285,6 +332,7 @@ class Loader():
         activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
         activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedIncrementalCloseness]  # All activation functions to use
         activation_names = ['Degree', 'Forman', 'Weight', 'Closeness']
+
         # If you want to use Betweenness, just run it here
         # activations = [EmbedBetweenness] 
         # activation_names = ['Betweenness']
@@ -305,40 +353,50 @@ class Loader():
             if not os.path.exists(base_file):
                 missing_cached.append(dataset)
                 continue  # Skip to the next dataset if the base file is missing
-
-            # Check for activation-specific files
+                    
+                
+            # Check for embeddings 
             for activation_name in activation_names:
-                activation_file = os.path.join(dataset_folder, f'{dataset}_{activation_name}.pkl')
-                if not os.path.exists(activation_file):
-                    missing_cached.append(dataset)
-                    break  # Skip to the next dataset if any activation file is missing
+                for num_buckets in [5, 10, 15, 20]:
+                    activation_file = os.path.join(dataset_folder, f'toper_embeddings/{dataset}_{activation_name}_{str(num_buckets)}.pkl')
+                    if not os.path.exists(activation_file):
+                        missing_cached.append(dataset)
+                        break  # Skip to the next dataset if any activation file is missing
+                    activation_file = os.path.join(dataset_folder + '/toper_embeddings/no_weight', f'{dataset}_{activation_name}_no_weight_{str(num_buckets)}.pkl')
+                    if not os.path.exists(activation_file):
+                        missing_cached.append(dataset)
+                        break  # Skip to the next dataset if any activation file is missing
                 
-            # Check for no weight embeddings 
-            for activation_name in activation_names:
-                activation_file = os.path.join(dataset_folder + '/no_weight', f'{dataset}_{activation_name}_no_weight.pkl')
-                if not os.path.exists(activation_file):
-                    missing_cached.append(dataset)
-                    break  # Skip to the next dataset if any activation file is missing
+                    # Check for subgraphs
+                    activation_file = os.path.join(dataset_folder + '/subgraphs', f'{dataset}_{activation_name}_subgraphs_{str(num_buckets)}.pkl')
+                    if not os.path.exists(activation_file):
+                        missing_cached.append(dataset)
+                        break  # Skip to the next dataset if any activation file is missing
+                    
+                    # Check for thresholds
+                    activation_file = os.path.join(dataset_folder + '/thresholds', f'{dataset}_{activation_name}_thresholds_{str(num_buckets)}.pkl')
+                    if not os.path.exists(activation_file):
+                        missing_cached.append(dataset)
+                        break  # Skip to the next dataset if any activation file is missing
                 
-                # Check for subgraphs
-                activation_file = os.path.join(dataset_folder + '/subgraphs', f'{dataset}_{activation_name}_subgraphs.pkl')
-                if not os.path.exists(activation_file):
-                    missing_cached.append(dataset)
-                    break  # Skip to the next dataset if any activation file is missing
-                
-                # Check for thresholds
-                activation_file = os.path.join(dataset_folder + '/thresholds', f'{dataset}_{activation_name}_thresholds.pkl')
-                if not os.path.exists(activation_file):
-                    missing_cached.append(dataset)
-                    break  # Skip to the next dataset if any activation file is missing
-                
-            # Check the probabilities (we just do all_back)
-            probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities.csv')
+            # Check the probabilities
+            probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_all_back.csv')
             if not os.path.exists(probabilities_file):
                 missing_cached.append(dataset)
+                
+            # Check the normalized probabilities
+            probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_all_back_norm.csv')
+            if not os.path.exists(probabilities_file):
+                missing_cached.append(dataset)
+                
+            for num_back in [5, 7]:
+                probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_{num_back}_back.csv')
+                if not os.path.exists(probabilities_file):
+                    missing_cached.append(dataset)
         
                 
         # If we are missing files, generate them
+        missing_cached = list(set(missing_cached))
         if missing_cached:
             print(f'Generating pkl files for the following datasets: {missing_cached}')
 
@@ -349,9 +407,13 @@ class Loader():
                 else:
                     norm = False
                     
+                print('Reading graphs')
                 graphs = self.read_edges_directed(file, norm=norm)
                 
+                print(f'There are {len(graphs)} graphs in this dataset')
+                
                 labels = self.gen_labels(graphs)
+                print(f'There are {len(labels)} labels')
                 data = list(zip(graphs, labels))
 
                 data_dir = self.output_dir + '/' + file
@@ -364,64 +426,83 @@ class Loader():
                 # Generate data with embeddings, labels
                 for activation, activation_name in zip(activations, activation_names):
                     for weight_flag in [False, True]:  # Need to go back with only weight = True
-                        print(f'Generating for {file} with activation {activation_name} with include_weights={weight_flag}')
-                        my_activation = activation(num_buckets=10, include_weights=weight_flag)    
-            
-                        start_time = time.time()
-            
-                        # Since Forman Ricci requires directed edges
-                        if activation==EmbedForman:
-                            embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
-                        else:
-                            embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs)
-                            
-                        end_time = time.time()
-                        
-                        print(f'Activation {activation_name} on dataset {file} took time {end_time - start_time}')
-                            
-                        self.verify_embeddings(embeddings, activation, file, norm=norm, include_weights=weight_flag)    
-                            
-                        data = list(zip(embeddings, labels))
-
-                        # Different processing directory
-                        if weight_flag == True:
-                            data_dir = self.output_dir + '/' + file
-                            os.makedirs(data_dir, exist_ok=True)
-                            activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}.pkl')
-                            print(f'sending to {activation_file_path}')
-                            with open(activation_file_path, "wb") as f:
-                                pickle.dump(data, f)
+                        for num_buckets in [5, 10, 15, 20]:
+                            print(f'Generating for {file} with activation {activation_name} with include_weights={weight_flag} and num_buckets={str(num_buckets)}')
+                            my_activation = activation(num_buckets=num_buckets, include_weights=weight_flag)    
+                
+                            start_time = time.time()
+                
+                            # Since Forman Ricci requires directed edges
+                            if isinstance(activation, EmbedForman):
+                                embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs, is_directed=True)
+                            else:
+                                embeddings, subgraphs, thresholds = my_activation.process_graphs_for_embeddings(graphs)
                                 
-                        else:
-                            data_dir = self.output_dir + '/' + file + '/no_weight'
-                            os.makedirs(data_dir, exist_ok=True)
-                            activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_no_weight.pkl')
-                            print(f'sending to {activation_file_path}')
-                            with open(activation_file_path, "wb") as f:
-                                pickle.dump(data, f)
-                        
-                        data_dir = self.output_dir + '/' + file + '/subgraphs'
-                        os.makedirs(data_dir, exist_ok=True)
-                        activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_subgraphs.pkl')
-                        print(f'sending subgraphs to {activation_file_path}')
-                        with open(activation_file_path, "wb") as f:
-                            pickle.dump(subgraphs, f)
+                            end_time = time.time()
                             
-                        data_dir = self.output_dir + '/' + file + '/thresholds'
-                        os.makedirs(data_dir, exist_ok=True)
-                        activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_thresholds.pkl')
-                        print(f'sending thresholds to {activation_file_path}')
-                        with open(activation_file_path, "wb") as f:
-                            pickle.dump(thresholds, f)
+                            print(f'There were {len(embeddings)} embeddings generated')
+                            print(f'Activation {activation_name} on dataset {file} took time {end_time - start_time}')
+                                
+                            self.verify_embeddings(embeddings, activation, file, norm=norm, include_weights=weight_flag)    
+                                
+                            data = list(zip(embeddings, labels))
+
+                            # Different processing directory
+                            if weight_flag == True:
+                                data_dir = self.output_dir + '/' + file
+                                os.makedirs(data_dir, exist_ok=True)
+                                activation_file_path = os.path.join(data_dir, f'toper_embeddings/{file}_{activation_name}_{str(num_buckets)}.pkl')
+                                print(f'sending to {activation_file_path}')
+                                with open(activation_file_path, "wb") as f:
+                                    pickle.dump(data, f)
+                                    
+                            else:
+                                data_dir = self.output_dir + '/' + file + '/toper_embeddings/no_weight'
+                                os.makedirs(data_dir, exist_ok=True)
+                                activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_no_weight_{str(num_buckets)}.pkl')
+                                print(f'sending to {activation_file_path}')
+                                with open(activation_file_path, "wb") as f:
+                                    pickle.dump(data, f)
+                            
+                            data_dir = self.output_dir + '/' + file + '/subgraphs'
+                            os.makedirs(data_dir, exist_ok=True)
+                            activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_subgraphs_{str(num_buckets)}.pkl')
+                            print(f'sending subgraphs to {activation_file_path}')
+                            with open(activation_file_path, "wb") as f:
+                                pickle.dump(subgraphs, f)
+                                
+                            data_dir = self.output_dir + '/' + file + '/thresholds'
+                            os.makedirs(data_dir, exist_ok=True)
+                            activation_file_path = os.path.join(data_dir, f'{file}_{activation_name}_thresholds_{str(num_buckets)}.pkl')
+                            print(f'sending thresholds to {activation_file_path}')
+                            with open(activation_file_path, "wb") as f:
+                                pickle.dump(thresholds, f)
                             
                 # Add on the probabiliites
+                for num_back in [5, 7]:
+                    probs = my_probs_generator.gen_probs(num_graphs_back = num_back, graphs=graphs, from_start=False)
+                    print(f'There were {len(probs)} probabilities generated')
+                    data_dir = self.output_dir + '/' + file + '/probabilities'
+                    os.makedirs(data_dir, exist_ok=True)
+                    probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back.csv')
+                    df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                    df.to_csv(probabilities_file_path)
+                    norm_probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back_norm.csv')
+                    normalized_probs = np.vstack(df.apply( lambda row: self.my_utils.normalize_vector_by_groups(row.values), axis=1))
+                    df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                    df.to_csv(norm_probabilities_file_path)
+                    
                 probs = my_probs_generator.gen_probs(num_graphs_back = 1, graphs=graphs, from_start=True)
                 data_dir = self.output_dir + '/' + file + '/probabilities'
                 os.makedirs(data_dir, exist_ok=True)
-                probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities.csv')
+                probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_all_back.csv')
                 df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
                 df.to_csv(probabilities_file_path)
                 print(f'Sending probabilities to {probabilities_file_path}')
+                norm_probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_all_back_norm.csv')
+                normalized_probs = np.vstack(df.apply( lambda row: self.my_utils.normalize_vector_by_groups(row.values), axis=1))
+                df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                df.to_csv(norm_probabilities_file_path)
 
 
     # Load from the pkl file

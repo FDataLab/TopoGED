@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 import os
+from sklearn.metrics import roc_auc_score, average_precision_score, precision_recall_fscore_support
 from grakel import GraphKernel
 from grakel import Graph
 from scipy.stats import wasserstein_distance
@@ -15,12 +16,14 @@ class Evaluator():
     def __init__(self):
         pass 
     
-    def evaluateSingleStructure(self, graph, graph_num=1):
+    def evaluateSingleStructure(self, graph: nx.Graph, graph_num=1):
         # print('Generating statistics for one graph')
-        
+        if graph.number_of_nodes() == 0:
+            print('GRAPH HAS NO NODES')
         # Compute the eigenvalues first
         eigenvals = self.__calculateEigenvalues(graph, num_values=5)
         eigen_dict = {f'Eigenvalue_{i + 1}': eigenvals[i] for i in range(len(eigenvals))}
+        
         
         res = {
             'Graph Number': graph_num,
@@ -36,6 +39,8 @@ class Evaluator():
             #'Number of 3-Motifs': self.__countMotifs(graph),
             #'Number of Cliques': self.__countCliques(graph),
             #'Number of Cycles': self.__countCycles(graph), 
+            'Number of Triangles': sum(nx.triangles(graph).values()) // 3,  # Since each node is counted 3 times per triangle, we divide by 3
+            'Number of Connected Components': nx.number_connected_components(graph),
             'Number of Weakly Connected Components': self.__countWeakComponents(graph),
             'Number of Strongly Connected Components': self.__countStrongComponents(graph),
             'Number of Nodes': graph.number_of_nodes(),
@@ -234,6 +239,130 @@ class Evaluator():
         return res
     
     
+    def evaluateEdgesNew(self, pred_graph, true_graph, old_true, old_pred):
+        """
+        pred_graph: NxN numpy or tensor of predicted probabilities
+        true_graph: NxN numpy or tensor of 0/1
+        old_true:   iterable of old node IDs in the *true* graph
+        old_pred:   iterable of old node IDs in the *predicted* graph
+
+        Returns dict of metrics, including:
+        - ROC (old-old only)
+        - AP for all 6 categories
+        - precision, recall, F1 for all 6 categories
+        - counts of invalid edges
+        """
+        old_true = set(old_true)
+        old_pred = set(old_pred)
+        old_nodes = sorted(list(old_true.intersection(old_pred)))
+
+        N = len(true_graph.nodes)
+        all_nodes = list(range(N))
+        new_nodes = sorted(list(set(all_nodes) - set(old_nodes)))
+
+        invalid_edge_count = 0
+
+        def collect_pairs(A, B):
+            y_true, y_pred = [], []
+            true_counts, false_counts = 0, 0
+            for i in A:
+                for j in B:
+                    if i == j:
+                        continue
+                    # If either node doesn't exist in TRUE graph → invalid edge
+                    if i not in true_graph.nodes or j not in true_graph.nodes:
+                        nonlocal invalid_edge_count
+                        invalid_edge_count += 1
+                        y_true.append(0)
+                        y_pred.append(int(pred_graph.has_edge(i, j)))
+                        continue
+
+                    label = int(true_graph.has_edge(i, j))
+                    pred = int(pred_graph.has_edge(i, j))
+
+                    y_true.append(label)
+                    y_pred.append(pred)
+
+                    if pred == 1:
+                        if label == 1:
+                            true_counts += 1
+                        else:
+                            false_counts += 1
+            return np.array(y_true), np.array(y_pred), true_counts, false_counts
+
+        # -------------------------- Groups --------------------------
+        y_true_oo, y_pred_oo, tp_oo, fp_oo = collect_pairs(old_nodes, old_nodes)
+        y_true_on, y_pred_on, tp_on, fp_on = collect_pairs(old_nodes, new_nodes)
+        y_true_nn, y_pred_nn, tp_nn, fp_nn = collect_pairs(new_nodes, new_nodes)
+
+        # Split old-old by true label
+        mask_bank = y_true_oo == 1
+        mask_nobank = y_true_oo == 0
+
+        y_true_oobank = y_true_oo[mask_bank]
+        y_pred_oobank = y_pred_oo[mask_bank]
+
+        y_true_oonobank = y_true_oo[mask_nobank]
+        y_pred_oonobank = y_pred_oo[mask_nobank]
+
+        # ------------------------ Metrics ---------------------------
+        def safe_roc(y, p):
+            return float("nan") if len(np.unique(y)) < 2 else roc_auc_score(y, p)
+
+        def safe_ap(y, p):
+            return float("nan") if len(y) == 0 else average_precision_score(y, p)
+
+        def pr_metrics(y, p):
+            if len(y) == 0 or np.sum(y) == 0:
+                return 0.0, 0.0, 0.0
+            preds = (p > 0.5).astype(int)
+            prec, rec, f1, _ = precision_recall_fscore_support(y, preds, average="binary", zero_division=0)
+            return prec, rec, f1
+
+        # ------------------------ Build Output -----------------------
+        results = {
+            # ROC (old-old only)
+            "roc_o-o_nobank": safe_roc(y_true_oonobank, y_pred_oonobank),
+            "roc_o-o_bank": safe_roc(y_true_oobank, y_pred_oobank),
+            "roc_o-o_overall": safe_roc(y_true_oo, y_pred_oo),
+
+            # AP
+            "ap_o-o_nobank": safe_ap(y_true_oonobank, y_pred_oonobank),
+            "ap_o-o_bank": safe_ap(y_true_oobank, y_pred_oobank),
+            "ap_o-n": safe_ap(y_true_on, y_pred_on),
+            "ap_n-n": safe_ap(y_true_nn, y_pred_nn),
+            "ap_o-o_overall": safe_ap(y_true_oo, y_pred_oo),
+            "ap_all": safe_ap(
+                np.concatenate([y_true_oo, y_true_on, y_true_nn]),
+                np.concatenate([y_pred_oo, y_pred_on, y_pred_nn])
+            ),
+
+            # Precision / Recall / F1
+            "prf_o-o_nobank": pr_metrics(y_true_oonobank, y_pred_oonobank),
+            "prf_o-o_bank": pr_metrics(y_true_oobank, y_pred_oobank),
+            "prf_o-n": pr_metrics(y_true_on, y_pred_on),
+            "prf_n-n": pr_metrics(y_true_nn, y_pred_nn),
+            "prf_o-o_overall": pr_metrics(y_true_oo, y_pred_oo),
+            "prf_all": pr_metrics(
+                np.concatenate([y_true_oo, y_true_on, y_true_nn]),
+                np.concatenate([y_pred_oo, y_pred_on, y_pred_nn])
+            ),
+
+            # Counts of invalid edges
+            "invalid_pred_edge_count": invalid_edge_count,
+
+            # True / False edges in pred
+            "tp_o-o": tp_oo,
+            "fp_o-o": fp_oo,
+            "tp_o-n": tp_on,
+            "fp_o-n": fp_on,
+            "tp_n-n": tp_nn,
+            "fp_n-n": fp_nn,
+        }
+
+        return results
+        
+    
     def evaluateGraphletKernel(self, pred_graph: nx.DiGraph, true_graph: nx.DiGraph):
         # Must be undirected
         pred_graph_undirected = pred_graph.to_undirected()
@@ -253,7 +382,7 @@ class Evaluator():
         return pred_kernel, true_kernel, wasserstein_distance(pred_kernel, true_kernel)
     
     
-    def evaluateOrca(self, pred_graph: nx.DiGraph, true_graph: nx.DiGraph):
+    def evaluateOrca(self, pred_graph, true_graph):
         # Graphs must be undirected for orca
         pred_graph_undirected = pred_graph.to_undirected()
         true_graph_undirected = true_graph.to_undirected()
@@ -265,7 +394,7 @@ class Evaluator():
         return pred_kernel, true_kernel, wasserstein_distance(pred_kernel, true_kernel)
         
     
-    def evaluateTopER(self, A, B, pred_label, true_label, graph_num=0):
+    def evaluateTopER(self, A, B, graph_num=0):
         A = np.array(A)
         B = np.array(B)
 
@@ -289,8 +418,6 @@ class Evaluator():
             'graph_num': graph_num,
             'l2_norm': l2_norm,
             'cosine_similarity': cosine_sim,
-            'g/s_pred_label': pred_label,
-            'g/s_true_label': true_label,
             **node_edge_diffs
         }
 
@@ -373,7 +500,8 @@ class Evaluator():
             avg_degree = sum(degrees.values()) / graph.number_of_nodes()
             return avg_degree 
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateAvgDegree: {e}")
             return float('inf')
         
         
@@ -383,7 +511,8 @@ class Evaluator():
             unique_degrees = set(degrees.values())
             return len(unique_degrees)
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateUniqueDegrees: {e}")
             return float('inf')
         
         
@@ -391,7 +520,8 @@ class Evaluator():
         try:
             return np.mean(list(nx.betweenness_centrality(graph).values()))
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateBetweenness: {e}")
             return float('inf')
         
         
@@ -399,7 +529,8 @@ class Evaluator():
         try:
             return np.mean(list(nx.closeness_centrality(graph).values()))
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateCloseness: {e}")
             return float('inf')
         
         
@@ -407,15 +538,17 @@ class Evaluator():
         try:
             return np.mean(list(nx.degree_centrality(graph).values()))
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateDegreeCentrality: {e}")
             return float('inf')
         
         
-    def __calculateAssortivity(self, graph: nx.DiGraph):
+    def __calculateAssortivity(self, graph: nx.Graph):
         try:
             return nx.degree_assortativity_coefficient(graph)
             
-        except:
+        except Exception as e:
+            print(f"Error in __calculateAssortivity: {e}")
             return float('inf')
         
         
@@ -423,18 +556,20 @@ class Evaluator():
         try:
             return nx.average_clustering(graph.to_undirected())
         
-        except:
-            return float('inf')
+        except Exception as e:
+            print(f"Error in __calculateClustering: {e}")
+            return -1.0
         
-        
+    
     def __calculateDensity(self, graph: nx.DiGraph):
         try:
             return nx.density(graph)
         
-        except:
+        except Exception as e:
+            print(f"Error in __calculateDensity: {e}")
             return float('inf')
-        
-        
+    
+
     def __calculateDiameter(self, graph: nx.DiGraph):
         try:
             # Since the graph must be strongly connected for this to work
@@ -483,13 +618,22 @@ class Evaluator():
         try:
             return len(list(nx.strongly_connected_components(graph)))
         
-        except:
+        except Exception as e:
+            # print(f"Error in __countStrongComponents: {e}")
             return float('inf')
         
     
     def __calculateEigenvalues(self, graph: nx.Graph, num_values=5):
+        if graph.number_of_nodes() == 0:
+            return np.zeros(num_values)
+        if graph.number_of_nodes() < num_values:
+            # Pad with zeros
+            return np.zeros(num_values)
         matrix = nx.to_numpy_array(graph)
-        eigenvals = np.linalg.eigvals(matrix).real
+        try:
+            eigenvals = np.linalg.eigvals(matrix).real
+        except:
+            return np.zeros(num_values)
         
         top_k_vals = sorted(eigenvals, key=lambda x: abs(x), reverse=True)[:num_values]
         
@@ -502,7 +646,8 @@ class Evaluator():
             elif mode == "out":
                 degrees = [deg for _, deg in graph.out_degree()]
             elif mode == "total":
-                degrees = [graph.in_degree(n) + graph.out_degree(n) for n in graph.nodes()]
+                # degrees = [graph.in_degree(n) + graph.out_degree(n) for n in graph.nodes()]
+                degrees = [graph.degree(n) for n in graph.nodes()]
             else:
                 raise ValueError("mode must be 'in', 'out', or 'total'")
 
@@ -525,13 +670,178 @@ class Evaluator():
         kl = np.sum(rel_entr(P, Q))
         return kl
     
-    def calculate_precision_picking_nodes(self, G_pred, G_true, old_nodes):
-        V_true = set(G_true.nodes()).intersection(set(old_nodes))
-        V_pred = set(G_pred.nodes()).intersection(set(old_nodes))
+    
+    def evaluate_node_selection(self, sorted_nodes_pred, sorted_nodes_true, graph_num=0):
+        
+        # Unpack for readability
+        pred_new_nodes = set(sorted_nodes_pred.get('new_nodes', set()))
+        pred_old_nodes = set(sorted_nodes_pred.get('old_nodes', set()))
+        true_new_nodes = set(sorted_nodes_true.get('new_nodes', set()))
+        true_old_nodes = set(sorted_nodes_true.get('old_nodes', set()))
 
-        tp = V_true & V_pred
-        precision = len(tp) / len(V_pred) if V_pred else 0.0
-        recall = len(tp) / len(V_true) if V_true else 0.0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+        # --- New nodes ---
+        new_correct = pred_new_nodes & true_new_nodes
+        new_precision = len(new_correct) / len(pred_new_nodes) if pred_new_nodes else 0
+        new_recall = len(new_correct) / len(true_new_nodes) if true_new_nodes else 0
+        new_f1 = (2 * new_precision * new_recall / (new_precision + new_recall)
+                if (new_precision + new_recall) > 0 else 0)
 
-        return precision, recall, f1
+        new_node_accuracy = len(new_correct) / len(true_new_nodes) if true_new_nodes else 0
+
+        # --- Old nodes ---
+        old_correct = pred_old_nodes & true_old_nodes
+        old_precision = len(old_correct) / len(pred_old_nodes) if pred_old_nodes else 0
+        old_recall = len(old_correct) / len(true_old_nodes) if true_old_nodes else 0
+        old_f1 = (2 * old_precision * old_recall / (old_precision + old_recall)
+                if (old_precision + old_recall) > 0 else 0)
+        
+        old_node_accuracy = len(old_correct) / len(true_old_nodes) if true_old_nodes else 0
+        
+        # --- Combined nodes ---
+        pred_all = pred_new_nodes | pred_old_nodes
+        true_all = true_new_nodes | true_old_nodes
+        all_correct = pred_all & true_all
+        all_precision = len(all_correct) / len(pred_all) if pred_all else 0
+        all_recall = len(all_correct) / len(true_all) if true_all else 0
+        all_f1 = (2 * all_precision * all_recall / (all_precision + all_recall)
+                if (all_precision + all_recall) > 0 else 0)
+
+        return {
+            'Graph_Num': graph_num,
+            'Precision_New': new_precision,
+            'Recall_New': new_recall,
+            'F1_New': new_f1,
+            'Accuracy_New': new_node_accuracy,
+            'Precision_Old': old_precision,
+            'Recall_Old': old_recall,
+            'F1_Old': old_f1,
+            'Accuracy_Old': old_node_accuracy,
+            'Precision_All': all_precision,
+            'Recall_All': all_recall,
+            'F1_All': all_f1,
+        }
+
+        
+    def evaluate_graph_edges(self, pred_graph, true_graph, is_directed=False, graph_num=0, edgebank=None):
+        # 1. Get the Node Universe (Union of both graphs)
+        pred_nodes = set(pred_graph.nodes())
+        true_nodes = set(true_graph.nodes())
+        all_nodes = list(pred_nodes | true_nodes)
+        num_total_nodes = len(all_nodes)
+        
+        # 2. Standardize Edge Sets
+        if is_directed:
+            pred_edges = set(pred_graph.edges())
+            true_edges = set(true_graph.edges())
+        else:
+            pred_edges = {tuple(sorted(e)) for e in pred_graph.edges()}
+            true_edges = {tuple(sorted(e)) for e in true_graph.edges()}
+
+        if edgebank is not None:
+            pred_bank = {e for e in pred_edges if e[1] in edgebank.get(e[0], [])}
+            pred_nobank = pred_edges - pred_bank
+
+            true_bank = {e for e in true_edges if e[1] in edgebank.get(e[0], [])}
+            true_nobank = true_edges - true_bank
+
+            # Bank Metrics
+            tp_bank = len(pred_bank & true_bank)
+            fp_bank = len(pred_bank - true_bank)
+            fn_bank = len(true_bank - pred_bank)
+
+            # No-Bank Metrics
+            tp_nobank = len(pred_nobank & true_nobank)
+            fp_nobank = len(pred_nobank - true_nobank)
+            fn_nobank = len(true_nobank - pred_nobank)
+
+            # Observation Spaces for TN calculation
+            if is_directed:
+                total_possible = num_total_nodes * (num_total_nodes - 1)
+            else:
+                total_possible = (num_total_nodes * (num_total_nodes - 1)) // 2
+
+            # Count potential bank edges (pairs existing in historical edgebank involving current nodes)
+            bank_possible_count = sum(len(neighbors) for node, neighbors in edgebank.items() if node in all_nodes)
+            if not is_directed:
+                bank_possible_count = bank_possible_count // 2
+            
+            nobank_possible_count = total_possible - bank_possible_count
+
+            # True Negatives
+            tn_bank = bank_possible_count - (tp_bank + fp_bank + fn_bank)
+            tn_nobank = nobank_possible_count - (tp_nobank + fp_nobank + fn_nobank)
+
+            # Ratios
+            precision_bank = tp_bank / (tp_bank + fp_bank) if (tp_bank + fp_bank) > 0 else 0
+            recall_bank = tp_bank / (tp_bank + fn_bank) if (tp_bank + fn_bank) > 0 else 0
+            accuracy_bank = (tp_bank + tn_bank) / bank_possible_count if bank_possible_count > 0 else 0
+            f1_bank = 2 * precision_bank * recall_bank / (precision_bank + recall_bank) if (precision_bank + recall_bank) > 0 else 0
+
+            precision_nobank = tp_nobank / (tp_nobank + fp_nobank) if (tp_nobank + fp_nobank) > 0 else 0
+            recall_nobank = tp_nobank / (tp_nobank + fn_nobank) if (tp_nobank + fn_nobank) > 0 else 0
+            accuracy_nobank = (tp_nobank + tn_nobank) / nobank_possible_count if nobank_possible_count > 0 else 0
+            f1_nobank = 2 * precision_nobank * recall_nobank / (precision_nobank + recall_nobank) if (precision_nobank + recall_nobank) > 0 else 0
+        else:
+            # 3. Intersection and Differences
+            tp = len(pred_edges & true_edges)  # True Positives
+            fp = len(pred_edges - true_edges)  # False Positives
+            fn = len(true_edges - pred_edges)  # False Negatives
+            
+            # 4. Accuracy Logic: The "Observation Space"
+            # To calculate Accuracy, we need TN (True Negatives).
+            # We define the space as all edges that COULD have been predicted between existing nodes.
+            if is_directed:
+                possible_edges_count = num_total_nodes * (num_total_nodes - 1)
+            else:
+                possible_edges_count = (num_total_nodes * (num_total_nodes - 1)) // 2
+            
+            # TN is every possible edge that was NOT predicted and DOES NOT exist
+            tn = possible_edges_count - (tp + fp + fn)
+
+            # 5. Metric Calculations
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            # Accuracy = (TP + TN) / (TP + TN + FP + FN)
+            accuracy = (tp + tn) / possible_edges_count if possible_edges_count > 0 else 0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+        if edgebank is not None:
+            results = {
+                "Graph_Num": graph_num,
+                "TP_bank": tp_bank,
+                "FP_bank": fp_bank,
+                "TN_bank": tn_bank,
+                "FN_bank": fn_bank,
+                "TP_nobank": tp_nobank,
+                "FP_nobank": fp_nobank,
+                "TN_nobank": tn_nobank,
+                "FN_nobank": fn_nobank,
+                "Precision_bank": precision_bank,
+                "Recall_bank": recall_bank,
+                "Accuracy_bank": accuracy_bank,                
+                "Precision_nobank": precision_nobank,
+                "Recall_nobank": recall_nobank,
+                "Accuracy_nobank": accuracy_nobank,
+                "F1_bank": f1_bank,
+                "F1_nobank": f1_nobank
+            }
+        else:
+            results = {
+                "Graph_Num": graph_num,
+                "TP": tp,
+                "FP": fp,
+                "TN": tn,
+                "FN": fn,
+                "Precision": precision,
+                "Recall": recall,
+                "Accuracy": accuracy,
+                "F1": f1
+            }
+
+        return results
+    
+    
+    def write_kl_results(self, path, value, graph_num):
+        with open(path, "a") as f:
+            f.write(f"{graph_num + 1}, {value:.6f}\n")
+            f.flush()

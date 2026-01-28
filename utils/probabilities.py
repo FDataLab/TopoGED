@@ -1,47 +1,39 @@
 class Probs():
-    def gen_probs(self, num_graphs_back: int, graphs: list, from_start=True):
+    def gen_probs(self, num_graphs_back: int, graphs: list, from_start=False):
         """
-        Generate the edge_counts for each graph snapshot, for a number of snapshots back
-        
-        inputs:
-            num_graphs_back (int): The number of graphs to look back when computing edge_counts
-            graphs (list(nx.DiGraph())): The graphs to generate edge_counts for
-        
-        returns:
-            edge_counts(list[list[float]]): A list of 4 (or 5) edge_counts for each graph
+        Generate counts for nodes/edges for each graph snapshot, looking back up to `num_graphs_back` previous graphs.
         """
         edge_counts = []
+        print(f'Generating probabilities for {len(graphs)} graphs')
 
-        # All new nodes and new edges
-        for i in range(num_graphs_back):
-            target_graph = graphs[i]
-            probs = [
-                0,
-                target_graph.number_of_nodes(),
-                0,
-                target_graph.number_of_edges(),
-                0,
-                0
-            ]
-            edge_counts.append(probs)
-            
+        for i, target_graph in enumerate(graphs):
+            # Look back up to num_graphs_back graphs, but only as many as exist
+            if not from_start:
+                prev_graphs = graphs[max(0, i - num_graphs_back): i]
+            else:
+                prev_graphs = graphs[0: i]
 
-        for i in range(num_graphs_back, len(graphs)):
-            if(from_start):
-                num_graphs_back = i
-            curr_graphs = graphs[i - num_graphs_back : i]  # Get groups of size num_graphs_back
-            target_graph = graphs[i]
+            if len(prev_graphs) == 0:
+                # No previous graphs: all nodes/edges are "new"
+                probs = [
+                    0,  # old nodes
+                    target_graph.number_of_nodes(),  # new nodes
+                    0,  # o-o edges
+                    target_graph.number_of_edges(),  # n-n edges (all edges are new)
+                    0,  # o-n edges
+                    0   # o-o-nobank edges
+                ]
+            else:
+                # Compute counts based on previous graphs
+                probs = [
+                    self.count_old_nodes(target_graph, prev_graphs),
+                    self.count_new_nodes(target_graph, prev_graphs),
+                    self.count_oo(target_graph, prev_graphs),
+                    self.count_nn(target_graph, prev_graphs),
+                    self.count_on(target_graph, prev_graphs),
+                    self.count_oon(target_graph, prev_graphs)
+                ]
 
-            # Generate our edge_counts
-            probs = [
-                self.count_old_nodes(target_graph, curr_graphs),
-                self.count_new_nodes(target_graph, curr_graphs),
-                self.count_oo(target_graph, curr_graphs),
-                self.count_nn(target_graph, curr_graphs),
-                self.count_on(target_graph, curr_graphs),
-                self.count_oon(target_graph, curr_graphs)
-            ]
-            
             edge_counts.append(probs)
 
         return edge_counts

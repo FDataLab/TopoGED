@@ -1,33 +1,17 @@
 from collections import defaultdict
+import math
 import numpy as np 
 import networkx as nx
 import torch
 from node2vec import Node2Vec
+from GraphGeneration.models.temporal_gnn.script.config import args
+import yaml
 
-# Set up device
-try:
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        print("Using CUDA (NVIDIA GPU)")
-    else:
-        device = torch.device("cpu")
-        print("Using CPU")
-except Exception:
-    device = torch.device("cpu")
-    print("Using CPU")
+# Load YAML config
+with open("GraphGeneration/encoder.yaml", "r") as file:
+    encoder_config = yaml.safe_load(file)
 
-# Node2Vec Parameters
-node2vec_dimensions = 60  # We add features onto the end since Node2Vec doesn't embed features 
-node2vec_walk_length = 50  # Number of nodes visited per walk (Higher is more global, smaller is local)
-node2vec_num_walks = 10  # Number of walks to start per node (Higher is more detailed and stable)
-node2vec_p = 1.0  # Return parameter, the likelihood of revisiting a node (Higher is less backtracking)
-node2vec_q = 1.0  # The walk bias for determining direction (Higher is more DFS-like; lower is BFS-like)
-node2vec_window = 10  # The context size (Higher is broader learning)
-node2vec_min_count = 1  # Minimum number of occurrences for a node to be considered (Higher will ignore more rare nodes)
-node2vec_batch_words = 4  # The batch size for when Word2Vec is used (Higher will train faster; but with more memory)
-node2vec_workers = 1  # Number of workers (threads)
-
-def compute_linear_gnn_embeddings(G: nx.DiGraph):
+def compute_linear_gnn_embeddings(G: nx.DiGraph, device):
     """
     An embedding method inspired by LinearGNNs from GraphAny where Z=AX given A is the adjacency matrix and X is the node feature matrix
     One of two available methods
@@ -59,7 +43,8 @@ def compute_linear_gnn_embeddings(G: nx.DiGraph):
     
     return embeddings
 
-def compute_node2vec_embeddings(G: nx.DiGraph):
+
+def compute_node2vec_embeddings(G, device, old_nodes_days=None, add_degree=True):
     """
     Use Node2Vec to embed nodes in the constructed graph. Appends node features onto the end since Node2Vec does not account for features
     One of two available methods
@@ -72,24 +57,25 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
     """
     node2vec = Node2Vec(
         G,
-        dimensions=node2vec_dimensions,
-        walk_length=node2vec_walk_length,
-        num_walks=node2vec_num_walks,
-        workers=node2vec_workers,
-        p=node2vec_p,
-        q=node2vec_q,
+        dimensions=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"],
+        walk_length=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_walk_length"],
+        num_walks=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_num_walks"],
+        workers=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_workers"],
+        p=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_p"],
+        q=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_q"],
         quiet=True
     )
     
     model = node2vec.fit(
-        window=node2vec_window, 
-        min_count=node2vec_min_count, 
-        batch_words=node2vec_batch_words
+        window=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_window"], 
+        min_count=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_min_count"], 
+        batch_words=encoder_config["encoder_model"]["node2vec_setup"]["node2vec_batch_words"],
+        workers=1 
     )  # Perform Node2Vec
 
     # Used to generate an embedding for isolated nodes
     all_vectors = [model.wv[key] for key in model.wv.index_to_key]
-    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32).to(device)
+    mean_vector = torch.tensor(np.mean(all_vectors, axis=0), dtype=torch.float32).to(device) 
 
     # Get embeddings and concatenate the node features
     embeddings = {}
@@ -97,20 +83,23 @@ def compute_node2vec_embeddings(G: nx.DiGraph):
         if node in model.wv:
             node2vec_emb = torch.tensor(model.wv[node], dtype=torch.float32).to(device)
         else:
-            node2vec_emb = mean_vector
+            if old_nodes_days:
+                node2vec_emb = mean_vector if node in old_nodes_days else torch.zeros_like(mean_vector)
+            else:
+                node2vec_emb = mean_vector
             
-        # Add on features since Node2Vec doesn't account for features
-        feat_dict = G.nodes[node]['feat']
-        sorted_keys = sorted(feat_dict.keys())  # Sort the keys for consistency
-        sorted_values = [feat_dict[k] for k in sorted_keys]
-        node_feat = torch.tensor(sorted_values, dtype=torch.float32).to(device)  # Shape of (4,)
-        combined = torch.cat([node2vec_emb, node_feat], dim=0)
-        embeddings[node] = combined
+        if add_degree:
+            degree = G.degree[node]  # or G.out_degree[node] / G.in_degree[node] for directed graphs
+            degree_tensor = torch.tensor([degree], dtype=torch.float32).to(device)
+            node2vec_emb = torch.cat([node2vec_emb, degree_tensor], dim=0)
+            
+        embeddings[node] = node2vec_emb
     
     return embeddings
 
+
 # LSTM embeddings  
-def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
+def compute_node_embeddings_LSTM(graph_snapshots, lstm_model, device):
     """
     Args:
         graph_snapshots (list of nx.DiGraph): temporal graphs with node['feat'] ready
@@ -118,12 +107,13 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
     Returns:
         dict of {node_id: final temporal embedding}
     """
-    # Step 1: Collect per-timestep node embeddings
+    # Collect per-timestep node embeddings
     node_history = defaultdict(list)
     old_nodes = set()
-    null_embed = torch.tensor([0]*(node2vec_dimensions + 4), dtype=torch.float32).to(device)
+    null_embed = torch.tensor([0]*(encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"]),
+                              dtype=torch.float32).to(device)
     for G in graph_snapshots:
-        snapshot_embeddings = compute_node2vec_embeddings(G)
+        snapshot_embeddings = compute_node2vec_embeddings(G, device)
         for node, emb in snapshot_embeddings.items():
             node_history[node].append(emb) # TODO: Check nodeId if the same for every snapshot
         
@@ -131,8 +121,10 @@ def compute_node_embeddings_LSTM(graph_snapshots, lstm_model):
             if node not in snapshot_embeddings:
                 node_history[node].append(null_embed)
         old_nodes = old_nodes | set(G.nodes())
-    # Step 2: Run LSTM on each node's time-series embedding
+    
+    # Run LSTM on each node's time-series embedding
     final_node_embeddings = lstm_model(node_history)
+
     return final_node_embeddings
 
 # GCN embeddings
@@ -160,7 +152,7 @@ def get_GCN_data(graph_snapshots):
     x_list = []
     edge_index_list = []
 
-    F = node2vec_dimensions + 4 # number of features per node (change this if you want more features)
+    F = encoder_config["encoder_model"]["node2vec_setup"]["node2vec_dimensions"] # number of features per node (change this if you want more features)
 
     for G in graph_snapshots:
         node2vec_embeddings = compute_node2vec_embeddings(G)
@@ -206,17 +198,167 @@ def compute_node_embeddings_HTGN(graph_snapshots, HTGN_model):
     final_node_embeddings = HTGN_model(edge_index=edge_index_list[-1], x=None, node_id_list=node_id_list, node_id_map=node_id_map)
     return final_node_embeddings
 
-def compute_embedding(embeddingType, graphs, encoder_model=None):
+def compute_embedding(embeddingType, graphs, device, encoder_model=None):
     if embeddingType == 'Node2Vec':
-        final_embeddings = compute_node2vec_embeddings(graphs[-1])
+        final_embeddings = compute_node2vec_embeddings(graphs[-1], device)
     elif embeddingType == 'Linear':
-        final_embeddings = compute_linear_gnn_embeddings(graphs[-1])
+        final_embeddings = compute_linear_gnn_embeddings(graphs[-1], device)
     elif embeddingType == 'LSTM':       
         # graph_snapshots = [G_0, G_1, ..., G_T]  # each G must have node['feat']
-        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model)
+        final_embeddings = compute_node_embeddings_LSTM(graphs, encoder_model, device)
+        cos_val = torch.tensor([[math.cos(len(graphs))]], dtype=torch.float32, device=device)
+        for node in final_embeddings:
+            if final_embeddings[node].dim() == 1:
+                final_embeddings[node] = final_embeddings[node].unsqueeze(0) 
+
+            final_embeddings[node] = torch.cat([final_embeddings[node], cos_val], dim=1) 
+            final_embeddings[node] = final_embeddings[node].squeeze(0)
+
+            
     elif embeddingType == 'GCLSTM':
         final_embeddings = compute_node_embeddings_GCLSTM(graphs, encoder_model)
     elif embeddingType == 'HTGN':
         final_embeddings = compute_node_embeddings_HTGN(graphs, encoder_model)
     
     return final_embeddings
+
+
+def compute_temporal_node_embeddings(embedding_history, days_back, device, model_type, model=None, graph_snapshots=None):
+    past_days = embedding_history[-days_back:]  # get the last days_back days
+    num_missing = days_back - len(past_days)    # how many days we are short
+
+    # Determine embedding size F from the first available snapshot
+    F = len(next(iter(past_days[0].values())))
+
+    null_embed = torch.zeros(F, device=device, dtype=torch.float32)
+
+    # Prepend zero dicts for missing days
+    if num_missing > 0:
+        all_nodes_in_past = set().union(*[d.keys() for d in past_days])
+        zero_dicts = [{node: null_embed.clone() for node in all_nodes_in_past} for _ in range(num_missing)]
+        past_days = zero_dicts + past_days
+
+    # Get all nodes across the full window
+    all_nodes = set()
+    for emb_dict in past_days:
+        all_nodes.update(emb_dict.keys())
+
+    # Build per-node sequences
+    node_history = {node: [] for node in all_nodes}
+    for emb_dict in past_days:
+        for node in all_nodes:
+            node_history[node].append(emb_dict.get(node, null_embed))
+
+    if model_type == 'LSTM':
+        if model is None:
+            raise ValueError("Provide lstm_model for model_type='LSTM'")
+        final_embeddings = model(node_history)
+
+    elif model_type == 'GCLSTM':
+        if model is None:
+            raise ValueError("Provide gclstm_model for model_type='GCLSTM'")
+        if graph_snapshots is None:
+            raise ValueError("Provide graph_snapshots for GCLSTM to construct edge_index_list")
+
+        if graph_snapshots is not None:
+            num_missing = len(past_days) - len(graph_snapshots)
+            if num_missing > 0:
+                graph_snapshots = [None]*num_missing + graph_snapshots
+
+        node_list = sorted(list(all_nodes))
+        node_id_map = {node: i for i, node in enumerate(node_list)}
+        x_list = []
+        edge_index_list = []
+
+        for i, emb_dict in enumerate(past_days):
+            N = len(node_list)
+            x_t = torch.zeros(N, F, device=device)
+            for node, emb in emb_dict.items():
+                idx = node_id_map[node]
+                x_t[idx] = emb
+            x_list.append(x_t)
+
+            # Build edge_index_list from graph_snapshots if available
+            G = graph_snapshots[i] if graph_snapshots is not None else None
+            if G is None:
+                edge_index = torch.empty((2,0), dtype=torch.long, device=device)
+            else:
+                edges = [[node_id_map[u], node_id_map[v]] for u,v in G.edges()]
+                edge_index = torch.tensor(edges, dtype=torch.long, device=device).t().contiguous()
+            edge_index_list.append(edge_index)
+
+        final_embeddings = model(x_list, edge_index_list, node_list, node_id_map)
+
+    else:
+        raise ValueError(f"Unsupported model_type: {model_type}")
+
+    return final_embeddings
+
+def compute_hks_embeddings(graph, t_values, device='cpu', add_degree=False, add_time=False):
+    """
+    Compute the Heat Kernel Signature (HKS) for each node in the graph.
+    :param graph: NetworkX graph (undirected, unweighted)
+    :param t_values: List of diffusion time values to compute HKS
+    :return: Dictionary with nodes as keys and HKS values as lists
+    """
+    L = nx.laplacian_matrix(graph).toarray()
+    eigvals, eigvecs = np.linalg.eigh(L)  
+
+    hks = {node: [] for node in graph.nodes()}
+    
+    for t in t_values:
+        heat_kernel = np.dot(eigvecs, np.dot(np.diag(np.exp(-t * eigvals)), eigvecs.T))
+        for i, node in enumerate(graph.nodes()):
+            hks[node].append(heat_kernel[i, i])  
+    hks = {node: torch.tensor(values, dtype=torch.float32, device=device) for node, values in hks.items()}
+    return hks
+
+# How to run and extract the 1D features:
+# HKS = compute_hks(G, [0.1]) # you can use other t_values here, more than one
+# HKS_rounded = {node: round(value[0], 6) for node, value in HKS.items()}
+
+
+def group_node2vec_embeddings(all_embeddings, old_nodes_days, days_back, use_ma):
+    """
+    Get the embeddings to use for constructing the current graph from the past days_back days
+    If using moving average, only consider days the node existed
+    
+    params:
+        all_embeddings (list[dict]): List of node2vec embeddings for all previous days
+        old_nodes_days (list): The nodes we will see in the current graph (or expect to see in the prediction case)
+        days_back (int): How many days back to consider
+        use_ma (bool): Whether to use moving average or the most recent embedding for a node
+        
+    returns:
+        node_embeddings (dict): The constructed dictionary of {node: [embedding]} pairs
+    """
+    if days_back > len(all_embeddings):
+        recent_embeddings = all_embeddings
+    else:
+        recent_embeddings = all_embeddings[-days_back:]
+
+    node_embeddings = {}
+
+    sample_emb = None
+    for emb_dict in reversed(recent_embeddings):
+        if len(emb_dict) > 0:
+            sample_emb = next(iter(emb_dict.values()))
+            break
+
+    emb_dim = sample_emb.shape[0] if sample_emb is not None else 0
+
+    for node in old_nodes_days:
+        node_embs = []
+
+        node_embs = [emb_dict[node] for emb_dict in recent_embeddings if node in emb_dict]
+        
+        if not node_embs:
+            node_embeddings[node] = torch.zeros(emb_dim, dtype=torch.float32)
+        elif use_ma:
+            # Moving average only over days where the node exists
+            node_embeddings[node] = torch.stack(node_embs, dim=0).mean(dim=0)
+        else:
+            # Just take the most recent embedding
+            node_embeddings[node] = node_embs[-1]
+
+    return node_embeddings
