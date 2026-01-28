@@ -66,6 +66,9 @@ ReinforcementLearning/output/
 data/output/
 output/
 data/output_old/
+GraphGeneration/scripts/results/
+GraphGeneration/scripts/Visualize/
+data/input/cached/
 
 # Input data
 data/input/cached/
