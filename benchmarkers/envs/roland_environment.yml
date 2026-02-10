@@ -1,0 +1,18 @@
+name: roland_env
+channels:
+  - pytorch
+  - nvidia
+  - pyg
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pytorch=2.1.0
+  - nvidia::cuda-toolkit=12.1
+  - pyg
+  - networkx
+  - scikit-learn
+  - numpy
+  - pip
+  - pip:
+      - torch-geometric-temporal
+      - tqdm  # Recommended for tracking incremental snapshots
