@@ -34,17 +34,18 @@ class ReconLoss(nn.Module):
         value = (z[edge_index[0]] * z[edge_index[1]]).sum(dim=1)
         return torch.sigmoid(value) if sigmoid else value
 
-    def hyperdeoder(self, z, edge_index):
-        def FermiDirac(dist):
-            probs = 1. / (torch.exp((dist - self.r) / self.t) + 1.0)
-            return probs
+    # Moved here for other functions to use
+    def FermiDirac(self, dist):
+        probs = 1. / (torch.exp((dist - self.r) / self.t) + 1.0)
+        return probs
 
+    def hyperdeoder(self, z, edge_index):
         edge_i = edge_index[0]
         edge_j = edge_index[1]
         z_i = torch.nn.functional.embedding(edge_i, z)
         z_j = torch.nn.functional.embedding(edge_j, z)
         dist = self.manifold.sqdist(z_i, z_j, c=1.0)
-        return FermiDirac(dist)
+        return self.FermiDirac(dist)
 
     def forward(self, z, pos_edge_index, neg_edge_index=None):
         decoder = self.hyperdeoder if self.use_hyperdecoder else self.decoder

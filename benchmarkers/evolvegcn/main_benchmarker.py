@@ -10,8 +10,10 @@ import sys
 import math
 from sklearn.metrics import roc_auc_score, f1_score
 import networkx as nx
+
+# Ensure local imports work
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from benchmarkers.utils.dataset_setup import load_data
+from benchmarkers.benchmarker_utils.dataset_setup import load_data
 
 seed = 42
 np.random.seed(seed)
@@ -24,13 +26,20 @@ import random
 random.seed(seed)
 print(f"Seed set to: {seed}")
 
-# --- 1. MOCK UTILS (To satisfy egcn_h/o imports) ---
+import time, psutil, gc
+
+def get_gpu_memory():
+    return torch.cuda.memory_reserved(0) / 1024**2 if torch.cuda.is_available() else 0
+
+def get_ram_usage():
+    return psutil.Process(os.getpid()).memory_info().rss / 1024**2
+
+# --- 1. MOCK UTILS ---
 class Namespace(object):
     def __init__(self, adict):
         self.__dict__.update(adict)
 
 def pad_with_last_val(vect, k):
-    """Needed for egcn_h.py TopK pooling"""
     device = vect.device
     pad_size = k - vect.size(0)
     if pad_size > 0:
@@ -40,11 +49,9 @@ def pad_with_last_val(vect, k):
     return vect
 
 def reset_param(t):
-    """Needed for models.py"""
     stdv = 1. / math.sqrt(t.size(1))
     t.data.uniform_(-stdv, stdv)
 
-# Inject mocks into sys.modules so imports works
 import types
 u = types.ModuleType("utils")
 u.Namespace = Namespace
@@ -52,225 +59,273 @@ u.pad_with_last_val = pad_with_last_val
 u.reset_param = reset_param
 sys.modules['utils'] = u
 
-# --- 2. IMPORT PROVIDED MODEL FILES ---
-# Ensure egcn_h.py, egcn_o.py, and models.py are in the same folder
 import egcn_h
 import egcn_o
 import models
 
-# --- 3. MAIN RUNNER (Modified main.py + trainer.py) ---
+# --- 3. MAIN RUNNER ---
 class EvolveGCNRunner:
     def __init__(self, args, data_dict):
         self.args = args
+        self.is_directed = not args.undirected
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Load Data
         self.A_list = [a.to(self.device) for a in data_dict['A_list']]
         self.Nodes_list = [n.to(self.device) for n in data_dict['Nodes_list']]
         self.node_count = data_dict['node_count']
         self.feature_dim = data_dict['feature_dim']
         
-        # 70/15/15 Split
         n = len(self.A_list)
-        self.train_idx = range(0, int(n * 0.7))
+        # Shifted indices for link prediction (T predicts T+1)
+        self.train_idx = range(1, int(n * 0.7))
         self.val_idx = range(int(n * 0.7), int(n * 0.85))
         self.test_idx = range(int(n * 0.85), n)
         
-        # Build Models
         self.build_model()
         
     def build_model(self):
-        # Parameters expected by EGCN classes
-        # - Embedding size set same to reduce tuning
         gcn_args = u.Namespace({
             'feats_per_node': self.feature_dim,
-            'layer_1_feats': 128,
-            'layer_2_feats': 64, 
-            'in_feats': self.feature_dim, # For GRCU
-            'out_feats': 64 # For GRCU
+            'layer_1_feats': self.args.layer_1_feats,
+            'layer_2_feats': self.args.layer_2_feats, 
+            'in_feats': self.feature_dim, 
+            'k_top_grcu': min(self.node_count, 200),
+            'k_top_gcn': min(self.node_count, 200) 
         })
         
         if self.args.model == 'egcn_h':
             self.encoder = egcn_h.EGCN(gcn_args, activation=nn.RReLU(), device=self.device)
-        elif self.args.model == 'egcn_o':
-            self.encoder = egcn_o.EGCN(gcn_args, activation=nn.RReLU(), device=self.device)
         else:
-            raise ValueError(f"Unknown model: {self.args.model}")
+            self.encoder = egcn_o.EGCN(gcn_args, activation=nn.RReLU(), device=self.device)
 
-        # Classifier from models.py
-        # EvolveGCN uses an MLP decoder on concatenated node embeddings
         cls_args = u.Namespace({
-            'gcn_parameters': {'layer_2_feats': 64, 'cls_feats': 32},
+            'gcn_parameters': {'layer_2_feats': self.args.layer_2_feats, 'cls_feats': self.args.cls_feats},
             'experiment_type': 'standard'
         })
-        # input dim = 64 (emb) * 2 (concat) = 128
-        self.classifier = models.Classifier(cls_args, out_features=1, in_features=128).to(self.device)
+        self.classifier = models.Classifier(cls_args, out_features=1, in_features=(self.args.layer_2_feats * 2)).to(self.device)
         
         self.optimizer = torch.optim.Adam(
             list(self.encoder.parameters()) + list(self.classifier.parameters()), 
-            lr=0.001
+            lr=self.args.lr,
+            weight_decay=self.args.l2_reg
         )
         self.bce_loss = nn.BCEWithLogitsLoss()
 
     def get_window_and_mask(self, t, window_size=5):
-        """Prepare input window and dummy mask for EGCN-H"""
-        start = max(0, t - window_size + 1)
-        A_window = self.A_list[start:t+1]
-        Nodes_window = self.Nodes_list[start:t+1]
+        # Predict snapshot T using data from snapshots [T-window_size : T-1]
+        start = max(0, t - window_size)
+        end = t # slice is exclusive, so this takes up to t-1
+        A_window = self.A_list[start:end]
+        Nodes_window = self.Nodes_list[start:end]
         
-        # Create zero mask (assuming all nodes are valid in the fixed-size adjacency)
-        # mask is used in egcn_h.py TopK to ignore nodes. 0 means include.
+        if len(A_window) == 0:
+            A_window, Nodes_window = [self.A_list[0]], [self.Nodes_list[0]]
+            
         mask_list = [torch.zeros(self.node_count, 1).to(self.device) for _ in range(len(A_window))]
-        
         return A_window, Nodes_window, mask_list
 
+    @torch.no_grad()
+    # Provided by Gemini, helps with CUDA OOM
+    def get_adj_scores_chunked(self, emb, chunk_size=512):
+        """Computes probabilities in chunks to avoid N x N expansion OOM."""
+        n = emb.size(0)
+        all_probs = []
+        for i in range(0, n, chunk_size):
+            end_i = min(i + chunk_size, n)
+            # (chunk_size, 1, dim)
+            u_chunk = emb[i:end_i].unsqueeze(1).expand(-1, n, -1)
+            # (1, n, dim) -> (chunk_size, n, dim)
+            v_all = emb.unsqueeze(0).expand(end_i - i, -1, -1)
+            
+            # Predict
+            logits = self.classifier(torch.cat([u_chunk, v_all], dim=2)).squeeze(-1)
+            all_probs.append(torch.sigmoid(logits).cpu()) # Move to RAM immediately
+            
+        probs = torch.cat(all_probs, dim=0)
+        if not self.is_directed:
+            probs = (probs + probs.T) / 2.0
+        return probs
+
     def train(self):
-        best_val_auc = 0
-        best_state = None
+        print(f"--- Training {self.args.model} | Task: Future Link Prediction ---")
+        start_train = time.time()
+        if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(self.device)
         
-        print(f"--- Training {self.args.model} ---")
+        best_train_loss = float('inf')
+        patience, no_improve = 15, 0
+        self.best_encoder, self.best_classifier = None, None
+
         for epoch in range(1, 201):
-            self.encoder.train()
-            self.classifier.train()
+            self.encoder.train(); self.classifier.train()
             epoch_loss = 0
+            all_epoch_preds, all_epoch_targets = [], []
             
             for t in self.train_idx:
                 self.optimizer.zero_grad()
-                
-                # 1. Forward Pass
+                # Use history BEFORE t to get embeddings
                 A_win, N_win, Masks = self.get_window_and_mask(t)
+                emb = self.encoder(A_win, N_win, Masks)
                 
-                # Note: EGCN-H signature is (A, Nodes, mask), EGCN-O is (A, Nodes, mask) (modified in file)
-                if self.args.model == 'egcn_h':
-                    emb = self.encoder(A_win, N_win, Masks)
+                # Target is the current snapshot t
+                if self.A_list[t].is_sparse:
+                    sparse_t = self.A_list[t].coalesce() 
+                    indices = sparse_t.indices()
+                    values = sparse_t.values()
+                    mask = values > 0
+                    pos_edges = indices[:, mask].t()
                 else:
-                    # egcn_o.py forward definition in snippet: forward(self, A_list, Nodes_list, nodes_mask_list)
-                    # even though logic might ignore mask, signature expects it based on provided file
-                    emb = self.encoder(A_win, N_win, Masks)
-                
-                # 2. Link Prediction Loss (Self-Supervised on Snapshot t)
-                # Sample edges from current snapshot adjacency
-                adj_t = self.A_list[t].to_dense()
-                pos_edges = adj_t.nonzero()
+                    pos_edges = self.A_list[t].nonzero()
                 if pos_edges.size(0) == 0: continue
                 
-                # Sample Negatives
-                neg_edges = torch.randint(0, self.node_count, (pos_edges.size(0), 2)).to(self.device)
+                num_pos = pos_edges.size(0)
+                MAX_NEG_EDGES = 20000  # should stop/limit OOM risk
+                if num_pos > MAX_NEG_EDGES:
+                    # Randomly shuffle and take the top K
+                    perm = torch.randperm(num_pos)[:MAX_NEG_EDGES]
+                    pos_edges = pos_edges[perm]
+                    num_pos = MAX_NEG_EDGES
+
+                neg_edges = torch.randint(0, self.node_count, (num_pos, 2)).to(self.device)
                 
-                # Decode
-                pos_src, pos_dst = emb[pos_edges[:,0]], emb[pos_edges[:,1]]
-                neg_src, neg_dst = emb[neg_edges[:,0]], emb[neg_edges[:,1]]
-                
-                pos_scores = self.classifier(torch.cat([pos_src, pos_dst], dim=1))
-                neg_scores = self.classifier(torch.cat([neg_src, neg_dst], dim=1))
+                pos_scores = self.classifier(torch.cat([emb[pos_edges[:,0]], emb[pos_edges[:,1]]], dim=1))
+                neg_scores = self.classifier(torch.cat([emb[neg_edges[:,0]], emb[neg_edges[:,1]]], dim=1))
                 
                 loss = self.bce_loss(pos_scores, torch.ones_like(pos_scores)) + \
                        self.bce_loss(neg_scores, torch.zeros_like(neg_scores))
                 
-                loss.backward()
-                self.optimizer.step()
-                epoch_loss += loss.item()
+                loss.backward(); self.optimizer.step(); epoch_loss += loss.item()
 
-            # Validation
-            val_auc = self.evaluate_auc(self.val_idx)
-            if val_auc > best_val_auc:
-                best_val_auc = val_auc
-                best_state = {
-                    'enc': copy.deepcopy(self.encoder.state_dict()),
-                    'cls': copy.deepcopy(self.classifier.state_dict())
-                }
+                if epoch % 10 == 0 or epoch == 1:
+                    with torch.no_grad():
+                        preds = torch.cat([torch.sigmoid(pos_scores), torch.sigmoid(neg_scores)]).cpu().numpy().flatten()
+                        targets = np.concatenate([np.ones(pos_scores.size(0)), np.zeros(neg_scores.size(0))])
+                        all_epoch_preds.append(preds)
+                        all_epoch_targets.append(targets)
+
+            avg_epoch_loss = epoch_loss / len(self.train_idx)
             
-            if epoch % 10 == 0:
-                print(f"Epoch {epoch} | Loss: {epoch_loss:.4f} | Val AUC: {val_auc:.4f}")
+            if avg_epoch_loss < best_train_loss:
+                best_train_loss = avg_epoch_loss
+                self.best_encoder = copy.deepcopy(self.encoder)
+                self.best_classifier = copy.deepcopy(self.classifier)
+                no_improve = 0
+            else: no_improve += 1
+            
+            if epoch % 10 == 0 or epoch == 1:
+                y_t = np.concatenate(all_epoch_targets)
+                y_p = np.concatenate(all_epoch_preds)
+                print(f"Epoch {epoch:03d} | Loss: {avg_epoch_loss:.6f} | Train AUC: {roc_auc_score(y_t, y_p):.4f}")
+            if no_improve >= patience: break
 
-        # Final Test
-        print("--- Testing ---")
-        self.encoder.load_state_dict(best_state['enc'])
-        self.classifier.load_state_dict(best_state['cls'])
-        
+        t1, g1, r1 = time.time() - start_train, get_gpu_memory(), get_ram_usage()
+        if self.best_encoder is not None:
+            self.encoder, self.classifier = self.best_encoder, self.best_classifier
+
+        # === PHASE 2 & 3 ===
+        start_opt = time.time()
         opt_thresh = self.optimize_threshold()
+        t2, g2, r2 = time.time() - start_opt, get_gpu_memory(), get_ram_usage()
+
+        start_cons = time.time()
         self.construct_graphs(opt_thresh)
+        t3, g3, r3 = time.time() - start_cons, get_gpu_memory(), get_ram_usage()
 
-    def get_adj_scores(self, emb):
-        """Reconstruct full N x N probability matrix using Classifier"""
-        # Efficient broadcasting for MLP: (N, 1, F) concat (1, N, F) -> (N, N, 2F)
-        n = emb.size(0)
-        u = emb.unsqueeze(1).repeat(1, n, 1)
-        v = emb.unsqueeze(0).repeat(n, 1, 1)
-        pair_emb = torch.cat([u, v], dim=2)
-        
-        # Pass through classifier
-        logits = self.classifier(pair_emb).squeeze()
-        return torch.sigmoid(logits)
+        print(f"\n--- DATASET: {self.args.dataset} (EvolveGCN) METRICS ---")
+        print(f"TRAIN:  Time={t1:.2f}s, GPU={g1:.2f}MB, RAM={r1:.2f}MB")
+        print(f"THRESH: Time={t2:.2f}s, GPU={g2:.2f}MB, RAM={r2:.2f}MB")
+        print(f"CONST:  Time={t3:.2f}s, GPU={g3:.2f}MB, RAM={r3:.2f}MB")
+        gc.collect(); torch.cuda.empty_cache()
 
-    def evaluate_auc(self, indices):
-        self.encoder.eval()
-        self.classifier.eval()
-        auc_scores = []
-        with torch.no_grad():
-            for t in indices:
-                A_win, N_win, Masks = self.get_window_and_mask(t)
-                emb = self.encoder(A_win, N_win, Masks)
-                
-                scores = self.get_adj_scores(emb).cpu().numpy().flatten()
-                targets = self.A_list[t].to_dense().cpu().numpy().flatten()
-                
-                auc_scores.append(roc_auc_score(targets, scores))
-        return np.mean(auc_scores)
-
+    @torch.no_grad()
     def optimize_threshold(self):
-        self.encoder.eval()
+        """Sample-based threshold optimization to replace N x N dense validation."""
+        self.encoder.eval(); self.classifier.eval()
         all_probs, all_targets = [], []
-        with torch.no_grad():
-            for t in self.val_idx:
-                A_win, N_win, Masks = self.get_window_and_mask(t)
-                emb = self.encoder(A_win, N_win, Masks)
-                
-                probs = self.get_adj_scores(emb).cpu().numpy().flatten()
-                targets = self.A_list[t].to_dense().cpu().numpy().flatten()
-                all_probs.append(probs)
-                all_targets.append(targets)
         
-        all_probs = np.concatenate(all_probs)
-        all_targets = np.concatenate(all_targets)
+        for t in self.val_idx:
+            A_win, N_win, Masks = self.get_window_and_mask(t)
+            emb = self.encoder(A_win, N_win, Masks)
+            
+            # Use positive edges from the actual snapshot
+            adj_t = self.A_list[t]
+            pos_edges = adj_t.indices().t() if adj_t.is_sparse else adj_t.nonzero()
+            
+            # Sample 1:1 negative edges
+            neg_edges = torch.randint(0, self.node_count, (pos_edges.size(0), 2)).to(self.device)
+            
+            # Get scores for samples only
+            pos_scores = torch.sigmoid(self.classifier(torch.cat([emb[pos_edges[:,0]], emb[pos_edges[:,1]]], dim=1)))
+            neg_scores = torch.sigmoid(self.classifier(torch.cat([emb[neg_edges[:,0]], emb[neg_edges[:,1]]], dim=1)))
+            
+            all_probs.append(torch.cat([pos_scores, neg_scores]).cpu().numpy().flatten())
+            all_targets.append(np.concatenate([np.ones(pos_scores.size(0)), np.zeros(neg_scores.size(0))]))
+        
+        y_scores = np.concatenate(all_probs)
+        y_true = np.concatenate(all_targets)
         
         best_f1, best_tau = 0, 0.5
-        for tau in np.arange(0.01, 1.0, 0.01):
-            preds = (all_probs > tau).astype(int)
-            f1 = f1_score(all_targets, preds, zero_division=0)
-            if f1 > best_f1:
-                best_f1 = f1
-                best_tau = tau
-        print(f"Optimal Threshold: {best_tau:.2f} (F1: {best_f1:.4f})")
+        for tau in np.arange(0.1, 0.9, 0.05):
+            preds = (y_scores > tau).astype(int)
+            # Manual F1 to avoid sklearn overhead on large arrays
+            tp = np.sum((preds == 1) & (y_true == 1))
+            fp = np.sum((preds == 1) & (y_true == 0))
+            fn = np.sum((preds == 0) & (y_true == 1))
+            f1 = 2 * tp / (2 * tp + fp + fn + 1e-6)
+            if f1 > best_f1: best_f1, best_tau = f1, tau
         return best_tau
 
     def construct_graphs(self, threshold):
-        self.encoder.eval()
-        graphs = []
+        """Use the chunked score function for final output."""
+        from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
+        self.encoder.eval(); self.classifier.eval()
+        all_probs = []
         with torch.no_grad():
             for t in self.test_idx:
                 A_win, N_win, Masks = self.get_window_and_mask(t)
                 emb = self.encoder(A_win, N_win, Masks)
+                # Use the chunked helper
+                probs = self.get_adj_scores_chunked(emb).numpy()
+                np.fill_diagonal(probs, 0)
+                all_probs.append(probs)
                 
-                probs = self.get_adj_scores(emb)
-                adj = (probs > threshold).cpu().numpy().astype(int)
-                # Remove self loops for final graph
-                np.fill_diagonal(adj, 0)
-                graphs.append(nx.from_numpy_array(adj))
-        
-        save_path = f"data/output/predicted/{self.args.dataset}_evolvegcn_predicted.pkl"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'wb') as f:
-            pickle.dump({'graphs': graphs, 'node_count': self.node_count}, f)
-        print(f"Saved {len(graphs)} graphs to {save_path}")
+        try:
+            top_k_values = get_topk(self.args.dataset, use_true=False)
+            test_top_k = top_k_values[-len(self.test_idx):]
+            strategies = [True, False]
+        except: strategies = [False]
+
+        for using_topk in strategies:
+            predicted_networks = []
+            for t, probs in enumerate(all_probs):
+                if using_topk:
+                    k = min(int(test_top_k[t]), probs.size)
+                    adj_matrix = np.zeros_like(probs, dtype=int)
+                    if k > 0:
+                        flat_indices = np.argsort(probs, axis=None)[-k:]
+                        r_idx, c_idx = np.unravel_index(flat_indices, probs.shape)
+                        adj_matrix[r_idx, c_idx] = 1
+                else:
+                    adj_matrix = (probs > threshold).astype(int)
+                if not self.is_directed: adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+                predicted_networks.append(nx.from_numpy_array(adj_matrix, create_using=(nx.DiGraph() if self.is_directed else nx.Graph())))
+
+            strategy = 'topk' if using_topk else 'threshold'
+            file_path = f"{self.args.dataset}_{self.args.model}_{self.args.layer_1_feats}_{self.args.layer_2_feats}_{self.args.cls_feats}_{self.args.lr}_{self.args.l2_reg}_{'directed' if self.is_directed else 'undirected'}"
+            save_path = f"data/output/predicted/EvolveGCN/{file_path}_{strategy}.pkl"
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, 'wb') as f:
+                pickle.dump({'graphs': predicted_networks, 'node_count': self.node_count}, f)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True)
-    parser.add_argument("--model", type=str, default="egcn_h", choices=['egcn_h', 'egcn_o'])
+    parser.add_argument("--model", type=str, default="egcn_h")
+    parser.add_argument("--undirected", action="store_true")
+    parser.add_argument("--layer_1_feats", type=int, default=64)
+    parser.add_argument("--layer_2_feats", type=int, default=32)
+    parser.add_argument("--cls_feats", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--l2_reg", type=float, default=1e-4)
     args = parser.parse_args()
-    
     data_dict = load_data('evolvegcn', args.dataset)
-        
-    runner = EvolveGCNRunner(args, data_dict)
-    runner.train()
+    EvolveGCNRunner(args, data_dict).train()

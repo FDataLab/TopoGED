@@ -7,12 +7,13 @@ import networkx as nx
 import numpy as np
 import pickle
 import argparse
-from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score
+import copy
+from sklearn.metrics import roc_auc_score, f1_score
 from torch_geometric.utils import to_dense_adj
 
 # Ensure model path is accessible
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from benchmarkers.utils.dataset_setup import load_data
+from benchmarkers.benchmarker_utils.dataset_setup import load_data
 from benchmarkers.gclstm.model import GCLSTMModel
 
 seed = 42
@@ -26,135 +27,242 @@ import random
 random.seed(seed)
 print(f"Seed set to: {seed}")
 
-def optimize_threshold(model, val_snaps, train_snaps, node_count, device, window_size=10):
+import time, psutil, gc
+
+def get_gpu_memory(device_id=0):
+    if torch.cuda.is_available():
+        # Handle cases where 'device' (the torch.device object) is passed
+        if isinstance(device_id, torch.device):
+            index = device_id.index if device_id.index is not None else 0
+        else:
+            index = device_id
+        return torch.cuda.memory_reserved(index) / 1024**2
+    return 0
+
+def get_ram_usage():
+    return psutil.Process(os.getpid()).memory_info().rss / 1024**2
+
+@torch.no_grad()
+def optimize_threshold(model, val_snaps, train_snaps, node_count, device, is_directed=True, window_size=10):
     model.eval()
     all_probs, all_targets = [], []
     history = train_snaps[-window_size:] if train_snaps else []
     full_sequence = history + val_snaps
     
-    with torch.no_grad():
-        for i in range(window_size, len(full_sequence)):
-            h, c = None, None
-            for j in range(i - window_size, i):
-                snap = full_sequence[j].to(device)
-                _, h, c = model(snap.x, snap.edge_index, h, c)
-            
-            snap_to_predict = full_sequence[i].to(device)
-            output, _, _ = model(snap_to_predict.x, snap_to_predict.edge_index, h, c)
-            
-            target = to_dense_adj(snap_to_predict.edge_index, max_num_nodes=node_count).flatten().cpu().numpy()
-            probs = output.flatten().cpu().numpy()
-            all_targets.append(target)
-            all_probs.append(probs)
+    for i in range(window_size, len(full_sequence)):
+        h, c = None, None
+        for j in range(i - window_size, i - 1):
+            snap = full_sequence[j].to(device)
+            x = snap.x.to_dense() if snap.x.is_sparse else snap.x
+            _, h, c = model(x, snap.edge_index, h, c)
+        
+        prev_snap = full_sequence[i - 1].to(device)
+        x_prev = prev_snap.x.to_dense() if prev_snap.x.is_sparse else prev_snap.x
+        z, h, c = model(x_prev, prev_snap.edge_index, h, c)
+        
+        target_snap = full_sequence[i].to(device)
+        pos_idx = target_snap.edge_index
+        neg_idx = torch.randint(0, node_count, (2, pos_idx.size(1)), device=device)
+        
+        pos_scores = torch.sigmoid(torch.sum(z[pos_idx[0]] * z[pos_idx[1]], dim=1))
+        neg_scores = torch.sigmoid(torch.sum(z[neg_idx[0]] * z[neg_idx[1]], dim=1))
+        
+        all_probs.append(torch.cat([pos_scores, neg_scores]))
+        all_targets.append(torch.cat([torch.ones_like(pos_scores), torch.zeros_like(neg_scores)]))
 
-    all_targets = np.concatenate(all_targets)
-    all_probs = np.concatenate(all_probs)
-
-    best_threshold, best_f1 = 0.01, 0
-    thresholds = np.arange(0.01, 1.0, 0.01)
+    y_scores = torch.cat(all_probs).cpu().numpy()
+    y_true = torch.cat(all_targets).cpu().numpy()
+    thresholds = np.linspace(0.01, 0.99, 50)
+    best_f1, best_threshold = 0, 0.01
     
     for t in thresholds:
-        preds = (all_probs > t).astype(int)
-        score = f1_score(all_targets, preds, zero_division=0)
-        if score > best_f1:
+        preds = (y_scores > t).astype(int)
+        score = f1_score(y_true, preds, zero_division=0)
+        if score > best_f1: 
             best_f1, best_threshold = score, t
             
-    print(f"Optimal Threshold: {best_threshold:.2f} | Val F1: {best_f1:.4f}")
+    print(f"Optimal Threshold: {best_threshold:.2f} | Sampled Val F1: {best_f1:.4f}")
     return best_threshold
 
-def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count, device, window_size=10, threshold=0.5):
+@torch.no_grad()
+def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count, device, dataset, file_path, is_directed=True, window_size=10, threshold=0.5):
+    from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
     model.eval()
-    predicted_networks = []
     history = previous_snaps[-window_size:] if previous_snaps else []
     full_sequence = history + current_snaps
+    all_embeddings = []
     
-    with torch.no_grad():
-        for i in range(window_size, len(full_sequence)):
-            h, c = None, None 
-            for j in range(i - window_size, i):
-                snap = full_sequence[j].to(device)
-                _, h, c = model(snap.x, snap.edge_index, h, c)
-            
-            snap_to_predict = full_sequence[i].to(device)
-            output, _, _ = model(snap_to_predict.x, snap_to_predict.edge_index, h, c)
-            adj_matrix = (output.cpu().detach().numpy() > threshold).astype(int)
-            predicted_networks.append(nx.from_numpy_array(adj_matrix))
-            
-    return predicted_networks
+    for i in range(window_size, len(full_sequence)):
+        h, c = None, None 
+        for j in range(i - window_size, i - 1):
+            snap = full_sequence[j].to(device)
+            x = snap.x.to_dense() if snap.x.is_sparse else snap.x
+            _, h, c = model(x, snap.edge_index, h, c)
+        
+        prev_snap = full_sequence[i - 1].to(device)
+        x_prev = prev_snap.x.to_dense() if prev_snap.x.is_sparse else prev_snap.x
+        z, _, _ = model(x_prev, prev_snap.edge_index, h, c)
+        all_embeddings.append(z)
 
-def train_model(dataset_snaps, node_count, node_features, device='cuda'):
-    model = GCLSTMModel(node_count, node_features, hidden_dim=256).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    beta, window_size, patience = 0.001, 10, 10
-    best_train_auc, no_improve_epochs = 0, 0
+    try:
+        top_k_values = get_topk(dataset, use_true=False)
+        test_top_k = top_k_values[-len(current_snaps):]
+        strategies = [True, False]
+    except:
+        strategies = [False]
+
+    for using_topk in strategies:
+        predicted_networks = []
+        for t, z in enumerate(all_embeddings):
+            # CHUNKED RECONSTRUCTION to prevent N x N allocation crash
+            adj_matrix = np.zeros((node_count, node_count), dtype=np.int8)
+            chunk_size = 512
+            
+            if using_topk:
+                k = int(test_top_k[t])
+                all_vals, all_inds = [], []
+
+            for i in range(0, node_count, chunk_size):
+                end_i = min(i + chunk_size, node_count)
+                logits_chunk = torch.mm(z[i:end_i], z.t())
+                probs_chunk = torch.sigmoid(logits_chunk)
+                
+                # Zero out self-loops
+                diag_idx = torch.arange(i, end_i, device=device)
+                probs_chunk[torch.arange(end_i - i), diag_idx] = 0
+                
+                if using_topk:
+                    ck = min(k, probs_chunk.numel())
+                    v, l = torch.topk(probs_chunk.view(-1), ck)
+                    all_vals.append(v)
+                    all_inds.append(l + (i * node_count))
+                else:
+                    mask = (probs_chunk > threshold).cpu().numpy()
+                    adj_matrix[i:end_i] = mask.astype(np.int8)
+
+            if using_topk:
+                top_v = torch.cat(all_vals)
+                top_i = torch.cat(all_inds)
+                _, global_locs = torch.topk(top_v, min(k, top_v.numel()))
+                final_inds = top_i[global_locs]
+                rows = (final_inds // node_count).cpu().numpy()
+                cols = (final_inds % node_count).cpu().numpy()
+                adj_matrix[rows, cols] = 1
+
+            if not is_directed: adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+            predicted_networks.append(nx.from_numpy_array(adj_matrix, create_using=(nx.DiGraph() if is_directed else nx.Graph())))
+
+        strategy = 'topk' if using_topk else 'threshold'
+        save_path = f"data/output/predicted/GCLSTM/{file_path}_{strategy}.pkl"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, 'wb') as f:
+            pickle.dump({'graphs': predicted_networks, 'node_count': node_count}, f)
+        print(f"Saved GC-LSTM graphs ({strategy}) to {save_path}")
+
+
+def train_model(dataset_snaps, node_count, node_features, dataset, beta, hidden_dim, K, lr, is_directed=True, device='cuda'):
+    model = GCLSTMModel(node_count, node_features, hidden_dim=hidden_dim, K=K).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    window_size, patience = 5, 15
+    best_loss, no_improve, best_model_wts = float('inf'), 0, None
     
     n = len(dataset_snaps)
     train_snaps = dataset_snaps[:int(n*0.7)]
     val_snaps = dataset_snaps[int(n*0.7):int(n*0.85)]
     test_snaps = dataset_snaps[int(n*0.85):]
 
-    for epoch in range(100):
+    start_train = time.time()
+    if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(device)
+    
+    for epoch in range(200):
         model.train()
-        epoch_loss, y_true_train, y_pred_train = 0, [], []
+        epoch_loss = 0
+        all_preds, all_targets = [], []
         
         for i in range(window_size, len(train_snaps)):
             h, c = None, None
-            for j in range(i - window_size, i):
+            # History window unrolling
+            for j in range(i - window_size, i - 1):
                 snap = train_snaps[j].to(device)
-                _, h, c = model(snap.x, snap.edge_index, h, c)
+                x = snap.x.to_dense() if snap.x.is_sparse else snap.x
+                _, h, c = model(x, snap.edge_index, h, c)
             
+            # Prediction step
+            prev_snap = train_snaps[i - 1].to(device)
+            x_prev = prev_snap.x.to_dense() if prev_snap.x.is_sparse else prev_snap.x
+            z, h, c = model(x_prev, prev_snap.edge_index, h, c)
+            
+            # --- SAMPLED LOSS (Sparse) ---
             target_snap = train_snaps[i].to(device)
-            output, h, c = model(target_snap.x, target_snap.edge_index, h, c)
-            target_adj = to_dense_adj(target_snap.edge_index, max_num_nodes=node_count).squeeze().to(device)
+            pos_idx = target_snap.edge_index
+            neg_idx = torch.randint(0, node_count, (2, pos_idx.size(1)), device=device)
             
-            loss = torch.sum((output - target_adj) ** 2) + beta * sum(p.pow(2.0).sum() for p in model.parameters())
+            pos_logits = torch.sum(z[pos_idx[0]] * z[pos_idx[1]], dim=1)
+            neg_logits = torch.sum(z[neg_idx[0]] * z[neg_idx[1]], dim=1)
+            
+            loss = F.binary_cross_entropy_with_logits(pos_logits, torch.ones_like(pos_logits)) + \
+                   F.binary_cross_entropy_with_logits(neg_logits, torch.zeros_like(neg_logits))
+            
+            # Regularization
+            loss += beta * sum(p.pow(2.0).sum() for p in model.parameters())
             
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             epoch_loss += loss.item()
-            y_true_train.extend(target_adj.flatten().detach().cpu().numpy())
-            y_pred_train.extend(output.flatten().detach().cpu().numpy())
 
-        train_auc = roc_auc_score(y_true_train, y_pred_train)
-        if train_auc > best_train_auc:
-            best_train_auc, no_improve_epochs = train_auc, 0
+            if epoch % 10 == 0:
+                all_preds.append(torch.cat([pos_logits.sigmoid(), neg_logits.sigmoid()]).detach())
+                all_targets.append(torch.cat([torch.ones_like(pos_logits), torch.zeros_like(neg_logits)]).detach())
+
+        avg_loss = epoch_loss / (len(train_snaps) - window_size)
+        if epoch % 10 == 0: 
+            y_true = torch.cat(all_targets).cpu().numpy()
+            y_scores = torch.cat(all_preds).cpu().numpy()
+            print(f"Epoch {epoch:03d} | Avg Loss: {avg_loss:.6f} | Sampled Train AUC: {roc_auc_score(y_true, y_scores):.4f}")
+
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            best_model_wts = copy.deepcopy(model.state_dict())
+            no_improve = 0
         else:
-            no_improve_epochs += 1
-            
-        print(f"Epoch {epoch} | Loss: {epoch_loss:.4f} | Train AUC: {train_auc:.4f}")
-        if no_improve_epochs >= patience:
-            print("Early stopping on Train AUC plateau.")
-            break
+            no_improve += 1
+        if no_improve >= patience: break
 
-    opt_threshold = optimize_threshold(model, val_snaps, train_snaps, node_count, device, window_size)
-    pred_graphs = construct_predicted_graphs(model, test_snaps, val_snaps, node_count, device, window_size, threshold=opt_threshold)
-    
-    return model, pred_graphs
+    t1, g1, r1 = time.time() - start_train, get_gpu_memory(device), get_ram_usage()
+
+    # === PHASE 2: THRESHOLD OPTIMIZATION ===
+    start_opt = time.time()
+    model.load_state_dict(best_model_wts)
+    opt_threshold = optimize_threshold(model, val_snaps, train_snaps, node_count, device, is_directed, window_size)
+    t2, g2, r2 = time.time() - start_opt, get_gpu_memory(device), get_ram_usage()
+
+    # === PHASE 3: CONSTRUCTION ===
+    start_cons = time.time()
+    file_path = f"{dataset}_{beta}_{hidden_dim}_{K}_{lr}_{'directed' if is_directed else 'undirected'}"
+    construct_predicted_graphs(model, test_snaps, val_snaps, node_count, device, dataset, file_path, is_directed, window_size, threshold=opt_threshold)
+    t3, g3, r3 = time.time() - start_cons, get_gpu_memory(device), get_ram_usage()
+
+    print(f"\n--- DATASET: {dataset} (GC-LSTM) METRICS ---")
+    print(f"TRAIN:  Time={t1:.2f}s, GPU={g1:.2f}MB, RAM={r1:.2f}MB")
+    print(f"THRESH: Time={t2:.2f}s, GPU={g2:.2f}MB, RAM={r2:.2f}MB")
+    print(f"CONST:  Time={t3:.2f}s, GPU={g3:.2f}MB, RAM={r3:.2f}MB")
+    print(f"---------------------------------------------\n")
+    return model
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train GC-LSTM and generate predicted graphs.")
-    parser.add_argument("--dataset", type=str, required=True, help="Name of the dataset (e.g., Enron)")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument("--undirected", action="store_true")
+    parser.add_argument("--hidden_dim", type=int, default=32)
+    parser.add_argument("--beta", type=float, default=0.001)
+    parser.add_argument("--K", type=int, default=3)
+    parser.add_argument("--lr", type=float, default=0.001)
+
     args = parser.parse_args()
-
-    dataset_name = args.dataset
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
+    is_directed = not args.undirected 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data_dict = load_data('gclstm', args.dataset)
 
-    print(f"--- Processing: {dataset_name} ---")
-    model, test_graphs = train_model(
-        data_dict['snapshots'], 
-        data_dict['node_count'], 
-        data_dict['feature_dim'], 
-        device=device
-    )
-
-    save_path = f"data/output/predicted/{dataset_name}_predicted.pkl"
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, 'wb') as f:
-        pickle.dump({
-            'graphs': test_graphs,
-            'node_count': data_dict['node_count']
-        }, f)
-    print(f"Saved {len(test_graphs)} graphs to {save_path}")
+    train_model(data_dict['snapshots'], data_dict['node_count'], data_dict['feature_dim'], args.dataset, args.beta, args.hidden_dim, args.K, args.lr, is_directed, device)

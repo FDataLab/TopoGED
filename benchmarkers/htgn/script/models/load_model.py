@@ -1,8 +1,8 @@
-from script.utils.util import logger
-from script.models.EvolveGCN.EGCN import EvolveGCN
-from script.models.DynModels import DGCN
-from script.models.HTGN import HTGN
-from script.models.static_baselines import VGAENet, GCNNet
+from benchmarkers.htgn.script.utils.util import logger
+from benchmarkers.htgn.script.models.EvolveGCN.EGCN import EvolveGCN
+from benchmarkers.htgn.script.models.DynModels import DGCN
+from benchmarkers.htgn.script.models.HTGN import HTGN
+from benchmarkers.htgn.script.models.static_baselines import VGAENet, GCNNet
 
 
 def load_model(args):

@@ -2,9 +2,10 @@ import torch
 import math
 import torch.nn as nn
 from torch.nn.parameter import Parameter
-from script.models.EvolveGCN.GCNCONV import GCNConv
+# from script.models.EvolveGCN.GCNCONV import GCNConv
+from models.EvolveGCN.GCNCONV import GCNConv
 
-from script.models.BaseModel import BaseModel
+from models.BaseModel import BaseModel
 
 
 # EvolveGCN: Evolving Graph Convolutional Networks for Dynamic Graphs

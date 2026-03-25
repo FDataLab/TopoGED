@@ -69,6 +69,8 @@ data/output_old/
 GraphGeneration/scripts/results/
 GraphGeneration/scripts/Visualize/
 data/input/cached/
+GraphGeneration/scripts/results/
+GraphGeneration/scripts/Visualize/
 
 # Input data
 data/input/cached/

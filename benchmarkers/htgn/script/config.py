@@ -5,6 +5,7 @@ import os
 parser = argparse.ArgumentParser(description='HTGN')
 # 1.dataset
 parser.add_argument('--dataset', type=str, default='enron10', help='datasets')
+parser.add_argument('--undirected', action='store_true', help='Flag to process as undirected')
 parser.add_argument('--data_pt_path', type=str, default='', help='need to be modified')
 parser.add_argument('--num_nodes', type=int, default=-1, help='num of nodes')
 parser.add_argument('--nfeat', type=int, default=128, help='dim of input feature')
@@ -14,7 +15,7 @@ parser.add_argument('--nout', type=int, default=16, help='dim of output embeddin
 # 2.experiments
 parser.add_argument('--max_epoch', type=int, default=500, help='number of epochs to train.')
 parser.add_argument('--testlength', type=int, default=3, help='length for test, default:3')
-parser.add_argument('--device', type=str, default='cpu', help='training device')
+parser.add_argument('--device', type=str, default='cuda', help='training device')
 parser.add_argument('--device_id', type=str, default='0', help='device id for gpu')
 parser.add_argument('--seed', type=int, default=1024, help='random seed')
 parser.add_argument('--repeat', type=int, default=1, help='running times')
@@ -53,7 +54,7 @@ args = parser.parse_args()
 
 # set the running device
 if int(args.device_id) >= 0 and torch.cuda.is_available():
-    args.device = torch.device("cuda".format(args.device_id))
+    args.device = torch.device("cuda:{}".format(args.device_id))
     print('using gpu:{} to train the model'.format(args.device_id))
 else:
     args.device = torch.device("cpu")

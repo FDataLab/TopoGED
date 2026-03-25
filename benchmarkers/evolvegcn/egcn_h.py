@@ -150,7 +150,9 @@ class TopK(torch.nn.Module):
         scores = node_embs.matmul(self.scorer) / self.scorer.norm()
         scores = scores + mask
 
-        vals, topk_indices = scores.view(-1).topk(self.k)
+        # vals, topk_indices = scores.view(-1).topk(self.k)
+        actual_k = min(self.k, scores.view(-1).size(0))  # Edited
+        vals, topk_indices = scores.view(-1).topk(actual_k)  # Edited
         topk_indices = topk_indices[vals > -float("Inf")]
 
         if topk_indices.size(0) < self.k:

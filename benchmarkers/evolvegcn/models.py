@@ -191,3 +191,4 @@ class Classifier(torch.nn.Module):
 
     def forward(self,x):
         return self.mlp(x)
+        # Add sigmoid here if needed (double check)

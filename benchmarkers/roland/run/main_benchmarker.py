@@ -4,17 +4,18 @@ import torch.optim as optim
 import numpy as np
 import argparse
 import os
+import copy
 import networkx as nx
 from torch_geometric.utils import negative_sampling, to_dense_adj
 from sklearn.metrics import roc_auc_score, f1_score
 import pickle
 import sys
+import time, psutil, gc # FIX: Ensure time is imported
 
-
-# Import the model architecture we defined previously
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-from benchmarkers.utils.dataset_setup import load_data
+from benchmarkers.benchmarker_utils.dataset_setup import load_data
 from benchmarkers.roland.run.roland_model import ROLAND
+
 seed = 42
 np.random.seed(seed)
 torch.manual_seed(seed)
@@ -26,161 +27,215 @@ import random
 random.seed(seed)
 print(f"Seed set to: {seed}")
 
+def get_gpu_memory(device):
+    return torch.cuda.memory_reserved(device) / 1024**2 if torch.cuda.is_available() else 0
+
+def get_ram_usage():
+    return psutil.Process(os.getpid()).memory_info().rss / 1024**2
+
 class RolandRunner:
-    def __init__(self, data_dict, dataset_name, device):
+    def __init__(self, args, data_dict, dataset_name, device, is_directed=True):
+        self.args = args
         self.device = device
         self.dataset_name = dataset_name
+        self.is_directed = is_directed
         self.snapshots = data_dict['snapshots']
         self.node_count = data_dict['node_count']
         self.feat_dim = data_dict['feature_dim']
-        self.edge_dim = data_dict.get('edge_dim', 0)
         
-        # 1. 70/15/15 Split
+        # Model architecture requires at least 1 edge dim
+        self.edge_dim = data_dict.get('edge_dim', 0)
+        model_edge_dim = self.edge_dim if self.edge_dim > 0 else 1
+        
         n = len(self.snapshots)
         self.train_end = int(n * 0.7)
         self.val_end = int(n * 0.85)
         
-        # Hyperparameters (Paper default)
-        self.hidden_dim = 128
-        self.lr = 0.01 
-        
-        # Initialize Model
-        self.model = ROLAND(self.node_count, self.feat_dim, self.hidden_dim, 
-                            edge_dim=self.edge_dim, num_layers=2).to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        actual_feat_dim = self.node_count if self.feat_dim is None else self.feat_dim
+
+        self.model = ROLAND(self.node_count, actual_feat_dim, args.hidden_dim, 
+                    edge_dim=model_edge_dim, num_layers=args.num_layers).to(device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr)
         self.criterion = nn.BCEWithLogitsLoss()
+        self.best_model = None
 
     def get_snapshot(self, t):
-        """
-        Retrieves snapshot t. 
-        CRITICAL: Generates Identity features on-the-fly if x is None to save RAM.
-        """
         data = self.snapshots[t]
-        
-        # 1. Handle Structure
         edge_index = data.edge_index.to(self.device)
-        edge_attr = data.edge_attr.to(self.device) if data.edge_attr is not None else None
-        
-        # 2. Handle Features (Memory Optimization)
         if data.x is None:
-            # Generate local identity for this batch/snapshot
-            x = torch.eye(self.node_count).to(self.device)
+            x = torch.eye(self.node_count, device=self.device)
+        elif data.x.is_sparse:
+            x = data.x.to_dense().to(self.device)
         else:
             x = data.x.to(self.device)
-            
+        
+        if data.edge_attr is not None:
+            edge_attr = data.edge_attr.to(self.device)
+            if edge_attr.dim() == 1: edge_attr = edge_attr.unsqueeze(-1)
+        else:
+            edge_attr = torch.ones((edge_index.size(1), 1), device=self.device)
         return x, edge_index, edge_attr
 
-    def run(self):
-        # Initialize History H_0
-        current_states = self.model.init_states(self.node_count, self.device)
-        
-        print(f"--- Phase 1: Incremental Training (0 -> {self.train_end}) ---")
-        self.model.train()
-        
-        # Incremental Training Loop
-        for t in range(self.train_end):
-            x, edge_index, edge_attr = self.get_snapshot(t)
+    @torch.no_grad()
+    def get_probs_chunked(self, z, chunk_size=500):
+        """Row-wise chunking to prevent OOM on large datasets like networkadex"""
+        all_probs = []
+        for i in range(0, self.node_count, chunk_size):
+            end_idx = min(i + chunk_size, self.node_count)
+            z_src_chunk = z[i:end_idx].unsqueeze(1).expand(-1, self.node_count, -1)
+            z_dst_all = z.unsqueeze(0).expand(end_idx - i, -1, -1)
             
-            # Detach History (Truncated BPTT for Scalability)
-            detached_states = [s.detach() for s in current_states]
-            
-            # Fine-tune on current snapshot
-            # ROLAND paper suggests a few epochs per snapshot during live update
-            for _ in range(5): 
-                self.optimizer.zero_grad()
-                
-                # Forward to get H_t
-                new_states = self.model(x, edge_index, edge_attr, detached_states)
-                final_emb = new_states[-1]
-                
-                # Link Prediction Loss
-                neg_edge_index = negative_sampling(edge_index, num_nodes=self.node_count)
-                pos_score = self.model.predict_links(final_emb, edge_index)
-                neg_score = self.model.predict_links(final_emb, neg_edge_index)
-                
-                labels = torch.cat([torch.ones(pos_score.size(0)), torch.zeros(neg_score.size(0))]).to(self.device)
-                preds = torch.cat([pos_score, neg_score]).squeeze()
-                
-                loss = self.criterion(preds, labels)
-                loss.backward()
-                self.optimizer.step()
-            
-            # Update History for t+1
-            with torch.no_grad():
-                current_states = self.model(x, edge_index, edge_attr, detached_states)
-                
-            if t % 10 == 0: print(f"Snapshot {t}/{self.train_end} | Loss: {loss.item():.4f}")
+            logits = self.model.pred_head(torch.cat([z_src_chunk, z_dst_all], dim=2)).squeeze(-1)
+            all_probs.append(torch.sigmoid(logits).cpu()) # Move to RAM
+        return torch.cat(all_probs, dim=0)
 
-        # Save states for validation
-        train_states = [s.detach() for s in current_states]
-        
-        print("--- Phase 2: Optimizing Threshold ---")
+    @torch.no_grad()
+    def optimize_threshold(self):
         self.model.eval()
-        current_states = train_states
-        val_probs, val_labels = [], []
-        
-        for t in range(self.train_end, self.val_end):
+        # Warm up hidden states through train history
+        states = self.model.init_states(self.node_count, self.device)
+        for t in range(self.train_end - 1):
             x, edge_index, edge_attr = self.get_snapshot(t)
-            with torch.no_grad():
-                current_states = self.model(x, edge_index, edge_attr, current_states)
-                z = current_states[-1]
-                
-                # Generate probabilities for thresholding
-                # Optimization: We use sparse reconstruction or sampling if N is huge
-                # Here we simulate full N*N for standard benchmarks
-                z_src = z.unsqueeze(1).repeat(1, self.node_count, 1)
-                z_dst = z.unsqueeze(0).repeat(self.node_count, 1, 1)
-                logits = self.model.pred_head(torch.cat([z_src, z_dst], dim=2)).squeeze()
-                probs = torch.sigmoid(logits)
-                
-                # Ground Truth Dense Adjacency
-                true_adj = to_dense_adj(edge_index, max_num_nodes=self.node_count).squeeze()
-                
-                val_probs.append(probs.cpu().numpy().flatten())
-                val_labels.append(true_adj.cpu().numpy().flatten())
-
-        val_probs = np.concatenate(val_probs)
-        val_labels = np.concatenate(val_labels)
+            states = self.model(x, edge_index, edge_attr, states)
         
-        best_tau, best_f1 = 0.5, 0
-        for tau in np.arange(0.05, 0.95, 0.05):
-            f1 = f1_score(val_labels, (val_probs > tau).astype(int), zero_division=0)
-            if f1 > best_f1:
-                best_f1, best_tau = f1, tau
-        print(f"Optimal Threshold: {best_tau:.2f} (F1: {best_f1:.4f})")
-
-        print("--- Phase 3: Constructing Test Graphs ---")
-        predicted_graphs = []
-        
-        for t in range(self.val_end, len(self.snapshots)):
+        all_y_scores, all_y_true = [], []
+        # Predict validation snapshots using sampled negatives
+        for t in range(self.train_end - 1, self.val_end - 1):
             x, edge_index, edge_attr = self.get_snapshot(t)
-            with torch.no_grad():
-                current_states = self.model(x, edge_index, edge_attr, current_states)
-                z = current_states[-1]
-                
-                # Construct Graph
-                z_src = z.unsqueeze(1).repeat(1, self.node_count, 1)
-                z_dst = z.unsqueeze(0).repeat(self.node_count, 1, 1)
-                logits = self.model.pred_head(torch.cat([z_src, z_dst], dim=2)).squeeze()
-                adj_binary = (torch.sigmoid(logits) > best_tau).cpu().numpy().astype(int)
-                np.fill_diagonal(adj_binary, 0)
-                
-                predicted_graphs.append(nx.from_numpy_array(adj_binary))
+            states = self.model(x, edge_index, edge_attr, states)
+            z = states[-1]
+            
+            target_snap = self.snapshots[t+1]
+            pos_edges = target_snap.edge_index.to(self.device)
+            neg_edges = torch.randint(0, self.node_count, (2, pos_edges.size(1)), device=self.device)
+            
+            # Predict only for sampled pairs
+            pos_logits = self.model.predict_links(z, pos_edges)
+            neg_logits = self.model.predict_links(z, neg_edges)
+            
+            all_y_scores.append(torch.cat([pos_logits.sigmoid(), neg_logits.sigmoid()]).cpu())
+            all_y_true.append(torch.cat([torch.ones_like(pos_logits), torch.zeros_like(neg_logits)]).cpu())
 
-        save_path = f"data/output/predicted/{self.dataset_name}_roland_predicted.pkl"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'wb') as f:
-            pickle.dump({'graphs': predicted_graphs, 'node_count': self.node_count}, f)
-        print(f"Saved {len(predicted_graphs)} graphs to {save_path}")
+        y_scores = torch.cat(all_y_scores)
+        y_true = torch.cat(all_y_true)
+        thresholds = torch.linspace(0.01, 0.99, 50)
+        best_f1, best_tau = 0, 0.5
+        for tau in thresholds:
+            preds = (y_scores > tau).float()
+            tp, fp, fn = (preds * y_true).sum(), (preds * (1 - y_true)).sum(), ((1 - preds) * y_true).sum()
+            f1 = 2 * tp / (2 * tp + fp + fn + 1e-6)
+            if f1 > best_f1: best_f1, best_tau = f1.item(), tau.item()
+        return best_tau
+
+    def run(self):
+        from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
+        start_train = time.time()
+        if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(self.device)
+        best_train_loss = float('inf'); patience = 15; no_improve = 0
+        
+        for epoch in range(1, 201):
+            self.model.train(); epoch_loss = 0
+            all_preds, all_targets = [], []
+            states = self.model.init_states(self.node_count, self.device)
+            
+            for t in range(self.train_end - 1):
+                x, edge_index, edge_attr = self.get_snapshot(t)
+                next_data = self.snapshots[t+1]
+                next_edge_index = next_data.edge_index.to(self.device)
+                
+                detached_states = [s.detach() for s in states]
+                for _ in range(self.args.num_updates_per_snapshot): 
+                    self.optimizer.zero_grad()
+                    new_states = self.model(x, edge_index, edge_attr, detached_states)
+                    z = new_states[-1]
+                    
+                    neg_edge_index = negative_sampling(next_edge_index, num_nodes=self.node_count)
+                    pos_score = self.model.predict_links(z, next_edge_index)
+                    neg_score = self.model.predict_links(z, neg_edge_index)
+                    
+                    labels = torch.cat([torch.ones_like(pos_score), torch.zeros_like(neg_score)])
+                    preds = torch.cat([pos_score, neg_score])
+                    loss = self.criterion(preds, labels); loss.backward(); self.optimizer.step()
+                    epoch_loss += loss.item()
+
+                if epoch % 10 == 0 or epoch == 1:
+                    all_preds.append(preds.detach().sigmoid().cpu()); all_targets.append(labels.cpu())
+                states = [s.detach() for s in new_states]
+            
+            avg_loss = epoch_loss / ((self.train_end - 1) * self.args.num_updates_per_snapshot)
+            if epoch % 10 == 0 or epoch == 1:
+                train_auc = roc_auc_score(torch.cat(all_targets), torch.cat(all_preds))
+                print(f"Epoch {epoch:03d} | Loss: {avg_loss:.6f} | Train AUC: {train_auc:.4f}")
+
+            if avg_loss < best_train_loss:
+                best_train_loss = avg_loss; self.best_model = copy.deepcopy(self.model); no_improve = 0
+            else: no_improve += 1
+            if no_improve >= patience: break
+
+        t1, g1, r1 = time.time() - start_train, get_gpu_memory(self.device), get_ram_usage()
+        # torch.cuda.reset_peak_memory_stats(self.device)
+
+        start_opt = time.time()
+        best_tau = self.optimize_threshold()
+        t2, g2, r2 = time.time() - start_opt, get_gpu_memory(self.device), get_ram_usage()
+        # torch.cuda.reset_peak_memory_stats(self.device)
+        
+        start_cons = time.time()
+        all_test_probs = []
+        with torch.no_grad():
+            states = self.model.init_states(self.node_count, self.device)
+            for t in range(self.val_end - 1): # Re-bridge to start of test
+                x, edge_index, edge_attr = self.get_snapshot(t)
+                states = self.model(x, edge_index, edge_attr, states)
+            
+            for t in range(self.val_end - 1, len(self.snapshots) - 1):
+                x, edge_index, edge_attr = self.get_snapshot(t)
+                states = self.model(x, edge_index, edge_attr, states)
+                probs = self.get_probs_chunked(states[-1]).numpy() # Chunked to avoid OOM
+                if not self.is_directed: probs = (probs + probs.T) / 2.0
+                np.fill_diagonal(probs, 0); all_test_probs.append(probs)
+
+        try:
+            top_k_values = get_topk(self.dataset_name, use_true=False)
+            test_top_k = top_k_values[-(len(self.snapshots) - self.val_end):]
+            strategies = [True, False]
+        except Exception as e:
+            print(f"Top-K fetch failed, using threshold only. Error: {e}")
+            strategies = [False]
+
+        for using_topk in strategies:
+            predicted_networks = []
+            for t, probs in enumerate(all_test_probs):
+                if using_topk:
+                    k = int(test_top_k[t])
+                    adj = np.zeros_like(probs, dtype=int)
+                    if k > 0:
+                        flat = np.argsort(probs, axis=None)[-k:]
+                        r, c = np.unravel_index(flat, probs.shape)
+                        adj[r, c] = 1
+                else:
+                    adj = (probs > best_tau).astype(int)
+                
+                if not self.is_directed: adj = np.maximum(adj, adj.T)
+                predicted_networks.append(nx.from_numpy_array(adj, create_using=(nx.DiGraph() if self.is_directed else nx.Graph())))
+            
+            strategy_str = 'topk' if using_topk else 'threshold'
+            file_params = f"{self.dataset_name}_{self.args.hidden_dim}_{self.args.lr}_{self.args.num_layers}_{self.args.num_updates_per_snapshot}_{'directed' if self.is_directed else 'undirected'}"
+            save_path = f"data/output/predicted/ROLAND/{file_params}_{strategy_str}.pkl"
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, 'wb') as f:
+                pickle.dump({'graphs': predicted_networks, 'node_count': self.node_count}, f)
+            print(f"Saved ROLAND graphs ({strategy_str}) to {save_path}")
+            
+        t3, g3, r3 = time.time() - start_cons, get_gpu_memory(self.device), get_ram_usage()
+        print(f"\n--- DATASET: {self.dataset_name} (ROLAND) METRICS ---\nTRAIN: {t1:.2f}s, {g1:.2f}MB\nTHRESH: {t2:.2f}s, {g2:.2f}MB\nCONST: {t3:.2f}s, {g3:.2f}MB\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, required=True)
-    args = parser.parse_args()
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument("--dataset", type=str, required=True); parser.add_argument("--undirected", action="store_true")
+    parser.add_argument("--hidden_dim", type=int, default=128); parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--num_layers", type=int, default=2); parser.add_argument("--num_updates_per_snapshot", type=int, default=5)
     
-    # NEW: Load data on-the-fly (x=None inside snapshots to save RAM)
+    args = parser.parse_args(); device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data_dict = load_data('roland', args.dataset)
-    
-    RolandRunner(data_dict, args.dataset, device).run()
+    RolandRunner(args, data_dict, args.dataset, device, is_directed=not args.undirected).run()

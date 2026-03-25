@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 import math
 import numpy as np
 import torch
@@ -21,8 +18,12 @@ import argparse
 import os
 import sys
 import networkx as nx
+import gc
+import time
+import psutil
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from benchmarkers.utils.dataset_setup import load_data
+from benchmarkers.benchmarker_utils.dataset_setup import load_data
 
 # Set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -37,16 +38,28 @@ import random
 random.seed(seed)
 print(f"Seed set to: {seed}")
 
-# --- UTILITY FUNCTIONS (Kept Exact) ---
+def get_gpu_memory(device_id=0):
+    if torch.cuda.is_available():
+        # Handle if a torch.device object is passed instead of an int
+        if isinstance(device_id, torch.device):
+            idx = device_id.index if device_id.index is not None else 0
+        else:
+            idx = device_id
+        return torch.cuda.memory_reserved(idx) / 1024**2
+    return 0
 
+def get_ram_usage():
+    return psutil.Process(os.getpid()).memory_info().rss / 1024**2 # M
+
+# --- UTILITY FUNCTIONS (Kept Exact) ---
 def uniform(size, tensor):
     stdv = 1.0 / math.sqrt(size)
     if tensor is not None:
         tensor.data.uniform_(-stdv, stdv)
 
 def glorot(tensor):
-    stdv = math.sqrt(6.0 / (tensor.size(0) + tensor.size(1)))
     if tensor is not None:
+        stdv = math.sqrt(6.0 / (tensor.size(0) + tensor.size(1)))
         tensor.data.uniform_(-stdv, stdv)
 
 def zeros(tensor):
@@ -72,21 +85,21 @@ def reset(nn):
 def scatter_(name, src, index, dim_size=None):
     assert name in ['add', 'mean', 'max']
     op = getattr(torch_scatter, 'scatter_{}'.format(name))
-    fill_value = -1e38 if name is 'max' else 0
-    out = op(src, index, 0, None, dim_size, fill_value)
+    fill_value = -1e38 if name == 'max' else 0
+    out = op(src, index, dim=0, dim_size=dim_size)
     if isinstance(out, tuple):
         out = out[0]
-    if name is 'max':
+    if name == 'max':
         out[out == fill_value] = 0
     return out
 
-# --- LAYERS (Kept Exact) ---
-
+# --- LAYERS (Fixed for Inplace and Device Consistency) ---
 class MessagePassing(torch.nn.Module):
     def __init__(self, aggr='add'):
         super(MessagePassing, self).__init__()
-        self.message_args = inspect.getargspec(self.message)[0][1:]
-        self.update_args = inspect.getargspec(self.update)[0][2:]
+        # FIX: Modern Python compatibility
+        self.message_args = inspect.getfullargspec(self.message)[0][1:]
+        self.update_args = inspect.getfullargspec(self.update)[0][1:]
 
     def propagate(self, aggr, edge_index, **kwargs):
         assert aggr in ['add', 'mean', 'max']
@@ -104,7 +117,7 @@ class MessagePassing(torch.nn.Module):
                 message_args.append(tmp[edge_index[1]])
             else:
                 message_args.append(kwargs[arg])
-        update_args = [kwargs[arg] for arg in self.update_args]
+        update_args = [kwargs[arg] for arg in self.update_args if arg in kwargs]
         out = self.message(*message_args)
         out = scatter_(aggr, out, edge_index[0], dim_size=size)
         out = self.update(out, *update_args)
@@ -136,14 +149,10 @@ class GCNConv(MessagePassing):
 
     def forward(self, x, edge_index, edge_weight=None):
         if edge_weight is None:
+            # FIX: Explicit Device consistency
             edge_weight = torch.ones((edge_index.size(1), ), dtype=x.dtype, device=x.device)
         edge_weight = edge_weight.view(-1)
-        assert edge_weight.size(0) == edge_index.size(1)
-        edge_index, _ = torch.utils.data.dataloader.default_collate([edge_index]) if isinstance(edge_index, list) else (edge_index, None)
-        # Note: Original code used custom add_self_loops, assuming PyG utils here
-        # For compatibility with standard PyG edge_index (2, E)
         
-        # Self-loop logic simplified for standard PyG input
         row, col = edge_index
         deg = scatter_add(edge_weight, row, dim=0, dim_size=x.size(0))
         deg_inv = deg.pow(-0.5)
@@ -180,7 +189,8 @@ class SAGEConv(torch.nn.Module):
     def reset_parameters(self):
         size = self.weight.size(0)
         uniform(size, self.weight)
-        uniform(size, self.bias)
+        if self.bias is not None:
+            uniform(size, self.bias)
 
     def forward(self, x, edge_index):
         x = x.unsqueeze(-1) if x.dim() == 1 else x
@@ -198,11 +208,11 @@ class SAGEConv(torch.nn.Module):
             out = self.act(out)
             out, _ = scatter_max(out[col], row, dim=0, dim_size=out.size(0))
         elif self.pool == 'add':
-            x = torch.matmul(x, self.weight)
+            out = torch.matmul(x, self.weight)
             if self.bias is not None:
                 out = out + self.bias
             out = self.act(out)
-            out = scatter_add(x[col], row, dim=0, dim_size=x.size(0))
+            out = scatter_add(out[col], row, dim=0, dim_size=out.size(0))
         if self.normalize:
             out = F.normalize(out, p=2, dim=-1)
         return out
@@ -235,41 +245,23 @@ class graph_gru_sage(nn.Module):
         super(graph_gru_sage, self).__init__()
         self.hidden_size = hidden_size
         self.n_layer = n_layer
-        self.weight_xz = []
-        self.weight_hz = []
-        self.weight_xr = []
-        self.weight_hr = []
-        self.weight_xh = []
-        self.weight_hh = []
-        for i in range(self.n_layer):
-            if i==0:
-                self.weight_xz.append(SAGEConv(input_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hz.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xr.append(SAGEConv(input_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hr.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xh.append(SAGEConv(input_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hh.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-            else:
-                self.weight_xz.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hz.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xr.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hr.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xh.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hh.append(SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
+        # FIX: Use ModuleList for registration
+        self.weight_xz = nn.ModuleList([SAGEConv(input_size if i==0 else hidden_size, hidden_size, act=lambda x:x, bias=bias) for i in range(n_layer)])
+        self.weight_hz = nn.ModuleList([SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias) for _ in range(n_layer)])
+        self.weight_xr = nn.ModuleList([SAGEConv(input_size if i==0 else hidden_size, hidden_size, act=lambda x:x, bias=bias) for i in range(n_layer)])
+        self.weight_hr = nn.ModuleList([SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias) for _ in range(n_layer)])
+        self.weight_xh = nn.ModuleList([SAGEConv(input_size if i==0 else hidden_size, hidden_size, act=lambda x:x, bias=bias) for i in range(n_layer)])
+        self.weight_hh = nn.ModuleList([SAGEConv(hidden_size, hidden_size, act=lambda x:x, bias=bias) for _ in range(n_layer)])
     
     def forward(self, inp, edgidx, h):
         h_out = torch.zeros(h.size()).to(inp.device)
         for i in range(self.n_layer):
-            if i==0:
-                z_g = torch.sigmoid(self.weight_xz[i](inp, edgidx) + self.weight_hz[i](h[i], edgidx))
-                r_g = torch.sigmoid(self.weight_xr[i](inp, edgidx) + self.weight_hr[i](h[i], edgidx))
-                h_tilde_g = torch.tanh(self.weight_xh[i](inp, edgidx) + self.weight_hh[i](r_g * h[i], edgidx))
-                h_out[i] = z_g * h[i] + (1 - z_g) * h_tilde_g
-            else:
-                z_g = torch.sigmoid(self.weight_xz[i](h_out[i-1], edgidx) + self.weight_hz[i](h[i], edgidx))
-                r_g = torch.sigmoid(self.weight_xr[i](h_out[i-1], edgidx) + self.weight_hr[i](h[i], edgidx))
-                h_tilde_g = torch.tanh(self.weight_xh[i](h_out[i-1], edgidx) + self.weight_hh[i](r_g * h[i], edgidx))
-                h_out[i] = z_g * h[i] + (1 - z_g) * h_tilde_g
+            curr_inp = inp if i==0 else h_out[i-1]
+            z_g = torch.sigmoid(self.weight_xz[i](curr_inp, edgidx) + self.weight_hz[i](h[i], edgidx))
+            r_g = torch.sigmoid(self.weight_xr[i](curr_inp, edgidx) + self.weight_hr[i](h[i], edgidx))
+            # FIX: Avoid Inplace operation
+            h_tilde_g = torch.tanh(self.weight_xh[i](curr_inp, edgidx) + self.weight_hh[i](r_g * h[i], edgidx))
+            h_out[i] = z_g * h[i] + (1 - z_g) * h_tilde_g
         return h_out, h_out
 
 class graph_gru_gcn(nn.Module):
@@ -277,47 +269,22 @@ class graph_gru_gcn(nn.Module):
         super(graph_gru_gcn, self).__init__()
         self.hidden_size = hidden_size
         self.n_layer = n_layer
-        self.weight_xz = []
-        self.weight_hz = []
-        self.weight_xr = []
-        self.weight_hr = []
-        self.weight_xh = []
-        self.weight_hh = []
-        for i in range(self.n_layer):
-            if i==0:
-                self.weight_xz.append(GCNConv(input_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hz.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xr.append(GCNConv(input_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hr.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xh.append(GCNConv(input_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hh.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-            else:
-                self.weight_xz.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hz.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xr.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hr.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_xh.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-                self.weight_hh.append(GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias))
-        
-        # Register modules to ensure they are on the correct device
-        self.modules_list = nn.ModuleList()
-        for i in range(self.n_layer):
-            self.modules_list.extend([self.weight_xz[i], self.weight_hz[i], self.weight_xr[i],
-                                      self.weight_hr[i], self.weight_xh[i], self.weight_hh[i]])
+        self.weight_xz = nn.ModuleList([GCNConv(input_size if i==0 else hidden_size, hidden_size, act=lambda x:x, bias=bias) for i in range(n_layer)])
+        self.weight_hz = nn.ModuleList([GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias) for _ in range(n_layer)])
+        self.weight_xr = nn.ModuleList([GCNConv(input_size if i==0 else hidden_size, hidden_size, act=lambda x:x, bias=bias) for i in range(n_layer)])
+        self.weight_hr = nn.ModuleList([GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias) for _ in range(n_layer)])
+        self.weight_xh = nn.ModuleList([GCNConv(input_size if i==0 else hidden_size, hidden_size, act=lambda x:x, bias=bias) for i in range(n_layer)])
+        self.weight_hh = nn.ModuleList([GCNConv(hidden_size, hidden_size, act=lambda x:x, bias=bias) for _ in range(n_layer)])
 
     def forward(self, inp, edgidx, h):
         h_out = torch.zeros(h.size()).to(inp.device)
         for i in range(self.n_layer):
-            if i==0:
-                z_g = torch.sigmoid(self.weight_xz[i](inp, edgidx) + self.weight_hz[i](h[i], edgidx))
-                r_g = torch.sigmoid(self.weight_xr[i](inp, edgidx) + self.weight_hr[i](h[i], edgidx))
-                h_tilde_g = torch.tanh(self.weight_xh[i](inp, edgidx) + self.weight_hh[i](r_g * h[i], edgidx))
-                h_out[i] = z_g * h[i] + (1 - z_g) * h_tilde_g
-            else:
-                z_g = torch.sigmoid(self.weight_xz[i](h_out[i-1], edgidx) + self.weight_hz[i](h[i], edgidx))
-                r_g = torch.sigmoid(self.weight_xr[i](h_out[i-1], edgidx) + self.weight_hr[i](h[i], edgidx))
-                h_tilde_g = torch.tanh(self.weight_xh[i](h_out[i-1], edgidx) + self.weight_hh[i](r_g * h[i], edgidx))
-                h_out[i] = z_g * h[i] + (1 - z_g) * h_tilde_g
+            curr_inp = inp if i==0 else h_out[i-1]
+            z_g = torch.sigmoid(self.weight_xz[i](curr_inp, edgidx) + self.weight_hz[i](h[i], edgidx))
+            r_g = torch.sigmoid(self.weight_xr[i](curr_inp, edgidx) + self.weight_hr[i](h[i], edgidx))
+            # FIX: Avoid Inplace operation
+            h_tilde_g = torch.tanh(self.weight_xh[i](curr_inp, edgidx) + self.weight_hh[i](r_g * h[i], edgidx))
+            h_out[i] = z_g * h[i] + (1 - z_g) * h_tilde_g
         return h_out, h_out
 
 class InnerProductDecoder(nn.Module):
@@ -333,7 +300,6 @@ class InnerProductDecoder(nn.Module):
         return self.act(x)
 
 # --- VGRNN MODEL ---
-
 class VGRNN(nn.Module):
     def __init__(self, x_dim, h_dim, z_dim, n_layers, eps, conv='GCN', bias=False):
         super(VGRNN, self).__init__()
@@ -376,58 +342,52 @@ class VGRNN(nn.Module):
             self.prior_std = nn.Sequential(nn.Linear(h_dim, z_dim), nn.Softplus())
             self.rnn = graph_gru_gcn(h_dim + h_dim, h_dim, n_layers, bias)  
     
-    def forward(self, x, edge_idx_list, adj_orig_dense_list, hidden_in=None):
+    def forward(self, x, edge_idx_list, target_edge_indices, hidden_in=None):
+        """
+        target_edge_indices: List of edge_index tensors for G_t+1 (The Future)
+        """
         kld_loss = 0
         nll_loss = 0
-        all_enc_mean, all_enc_std = [], []
-        all_prior_mean, all_prior_std = [], []
-        all_dec_t, all_z_t = [], []
+        all_enc_mean, all_prior_mean = [], []
+        
+        dev = self.enc.weight.device
         
         if hidden_in is None:
-            h = Variable(torch.zeros(self.n_layers, x.size(1), self.h_dim)).to(x.device)
+            h = torch.zeros(self.n_layers, x[0].size(0), self.h_dim).to(dev)
         else:
-            h = Variable(hidden_in).to(x.device)
+            h = hidden_in.to(dev)
         
-        for t in range(x.size(0)):
-            phi_x_t = self.phi_x(x[t])
+        for t in range(len(x)):
+            x_t = x[t].to(dev)
+            e_t = edge_idx_list[t].to(dev)
             
-            #encoder
-            enc_t = self.enc(torch.cat([phi_x_t, h[-1]], 1), edge_idx_list[t])
-            enc_mean_t = self.enc_mean(enc_t, edge_idx_list[t])
-            enc_std_t = self.enc_std(enc_t, edge_idx_list[t])
+            target_e_t = target_edge_indices[t].to(dev)
             
-            #prior
+            phi_x_t = self.phi_x(x_t)
+            
+            enc_t = self.enc(torch.cat([phi_x_t, h[-1]], 1), e_t)
+            enc_mean_t = self.enc_mean(enc_t, e_t)
+            enc_std_t = self.enc_std(enc_t, e_t)
+            
             prior_t = self.prior(h[-1])
             prior_mean_t = self.prior_mean(prior_t)
             prior_std_t = self.prior_std(prior_t)
             
-            #sampling and reparameterization
             z_t = self._reparameterized_sample(enc_mean_t, enc_std_t)
             phi_z_t = self.phi_z(z_t)
             
-            #decoder
-            dec_t = self.dec(z_t)
+            _, h = self.rnn(torch.cat([phi_x_t, phi_z_t], 1), e_t, h)
             
-            #recurrence
-            _, h = self.rnn(torch.cat([phi_x_t, phi_z_t], 1), edge_idx_list[t], h)
+            num_pos = target_e_t.size(1)
+            neg_e_t = torch.randint(0, x_t.size(0), (2, num_pos), device=dev)
             
-            nnodes = adj_orig_dense_list[t].size()[0]
-            enc_mean_t_sl = enc_mean_t[0:nnodes, :]
-            enc_std_t_sl = enc_std_t[0:nnodes, :]
-            prior_mean_t_sl = prior_mean_t[0:nnodes, :]
-            prior_std_t_sl = prior_std_t[0:nnodes, :]
-            dec_t_sl = dec_t[0:nnodes, 0:nnodes]
+            kld_loss += self._kld_gauss(enc_mean_t, enc_std_t, 
+                                        prior_mean_t, prior_std_t)
             
-            #computing losses
-            kld_loss += self._kld_gauss(enc_mean_t_sl, enc_std_t_sl, prior_mean_t_sl, prior_std_t_sl)
-            nll_loss += self._nll_bernoulli(dec_t_sl, adj_orig_dense_list[t])
+            nll_loss += self._nll_bernoulli(z_t, target_e_t, neg_e_t)
             
-            all_enc_std.append(enc_std_t_sl)
-            all_enc_mean.append(enc_mean_t_sl)
-            all_prior_mean.append(prior_mean_t_sl)
-            all_prior_std.append(prior_std_t_sl)
-            all_dec_t.append(dec_t_sl)
-            all_z_t.append(z_t)
+            all_enc_mean.append(enc_mean_t)
+            all_prior_mean.append(prior_mean_t)
         
         return kld_loss, nll_loss, all_enc_mean, all_prior_mean, h
     
@@ -445,11 +405,12 @@ class VGRNN(nn.Module):
     def _reparameterized_sample(self, mean, std):
         eps1 = torch.FloatTensor(std.size()).normal_().to(mean.device)
         eps1 = Variable(eps1)
-        return eps1.mul(std).add_(mean)
+        # FIX: Avoid Inplace operation
+        return eps1.mul(std) + mean
     
     def _kld_gauss(self, mean_1, std_1, mean_2, std_2):
         num_nodes = mean_1.size()[0]
-        kld_element =  (2 * torch.log(std_2 + self.eps) - 2 * torch.log(std_1 + self.eps) +
+        kld_element = (2 * torch.log(std_2 + self.eps) - 2 * torch.log(std_1 + self.eps) +
                         (torch.pow(std_1 + self.eps ,2) + torch.pow(mean_1 - mean_2, 2)) / 
                         torch.pow(std_2 + self.eps ,2) - 1)
         return (0.5 / num_nodes) * torch.mean(torch.sum(kld_element, dim=1), dim=0)
@@ -457,122 +418,200 @@ class VGRNN(nn.Module):
     def _kld_gauss_zu(self, mean_in, std_in):
         num_nodes = mean_in.size()[0]
         std_log = torch.log(std_in + self.eps)
-        kld_element =  torch.mean(torch.sum(1 + 2 * std_log - mean_in.pow(2) -
+        kld_element = torch.mean(torch.sum(1 + 2 * std_log - mean_in.pow(2) -
                                             torch.pow(torch.exp(std_log), 2), 1))
         return (-0.5 / num_nodes) * kld_element
     
-    def _nll_bernoulli(self, logits, target_adj_dense):
-        temp_size = target_adj_dense.size()[0]
-        temp_sum = target_adj_dense.sum()
-        posw = float(temp_size * temp_size - temp_sum) / temp_sum
-        norm = temp_size * temp_size / float((temp_size * temp_size - temp_sum) * 2)
-        nll_loss_mat = F.binary_cross_entropy_with_logits(input=logits
-                                                          , target=target_adj_dense
-                                                          , pos_weight=torch.tensor(posw).to(logits.device)
-                                                          , reduction='none')
-        nll_loss = -1 * norm * torch.mean(nll_loss_mat, dim=[0,1])
-        return - nll_loss
+    def _nll_bernoulli(self, z, pos_edge_index, neg_edge_index):
+        # Modified to be sparse calculations
+        """
+        z: Latent embeddings (N x Z_dim)
+        pos_edge_index: The actual edges in the target snapshot (2 x E_pos)
+        neg_edge_index: Sampled non-edges for the target snapshot (2 x E_neg)
+        """
+        pos_u = z[pos_edge_index[0]]
+        pos_v = z[pos_edge_index[1]]
+        pos_logits = torch.sum(pos_u * pos_v, dim=1)
 
-# --- BENCHMARKING LOGIC ---
+        neg_u = z[neg_edge_index[0]]
+        neg_v = z[neg_edge_index[1]]
+        neg_logits = torch.sum(neg_u * neg_v, dim=1)
 
-def compute_vgrnn_probs(means):
-    """Replicates InnerProduct + Sigmoid logic from author evaluation."""
-    emb = means.detach().cpu().numpy()
-    adj_rec = np.dot(emb, emb.T)
-    return 1 / (1 + np.exp(-adj_rec))
+        pos_loss = F.binary_cross_entropy_with_logits(
+            pos_logits, torch.ones_like(pos_logits), reduction='mean'
+        )
+        neg_loss = F.binary_cross_entropy_with_logits(
+            neg_logits, torch.zeros_like(neg_logits), reduction='mean'
+        )
 
-def optimize_threshold(model, x_in, edge_list, adj_labels, h_in, val_idx):
+        return pos_loss + neg_loss
+
+@torch.no_grad()
+def compute_vgrnn_probs_gpu(means, is_directed=True):
+    # MM on H200 Tensor Cores
+    adj_rec = torch.mm(means, means.t())
+    probs = torch.sigmoid(adj_rec)
+    if not is_directed:
+        probs = (probs + probs.t()) / 2.0
+    return probs
+
+@torch.no_grad()
+def optimize_threshold(model, x_in, edge_idx_list, h_in, val_idx, is_directed=True):
     model.eval()
+    dev = next(model.parameters()).device
+    
+    # Logic: Forecast alignment
+    input_indices = [val_idx[0] - 1] + list(val_idx[:-1])
+    target_indices = list(val_idx)
+    
+    # Forward pass: note we pass edge_idx_list twice (once for input, once for target indices)
+    _, _, _, pri_means, _ = model(
+        [x_in[i].to(dev) for i in input_indices], 
+        [edge_idx_list[i].to(dev) for i in input_indices], 
+        [edge_idx_list[i].to(dev) for i in target_indices], 
+        h_in
+    )
+    
+    all_probs, all_targets = [], []
+    for i, t_idx in enumerate(target_indices):
+        z = pri_means[i]
+        pos_edges = edge_idx_list[t_idx].to(dev)
+        
+        # Sample 1:1 negatives for evaluation
+        neg_edges = torch.randint(0, z.size(0), (2, pos_edges.size(1)), device=dev)
+        
+        # Sparse Dot-Product scores
+        p_scores = torch.sigmoid(torch.sum(z[pos_edges[0]] * z[pos_edges[1]], dim=1))
+        n_scores = torch.sigmoid(torch.sum(z[neg_edges[0]] * z[neg_edges[1]], dim=1))
+        
+        all_probs.append(torch.cat([p_scores, n_scores]))
+        all_targets.append(torch.cat([torch.ones(p_scores.size(0), device=dev), 
+                                      torch.zeros(n_scores.size(0), device=dev)]))
+    
+    y_scores, y_true = torch.cat(all_probs), torch.cat(all_targets)
+    
+    # Grid search for best F1
+    thresholds = torch.linspace(0.01, 0.99, 50, device=dev)
+    best_f1, best_tau = 0, 0.5
+    for tau in thresholds:
+        preds = (y_scores > tau).float()
+        tp = (preds * y_true).sum()
+        fp = (preds * (1 - y_true)).sum()
+        fn = ((1 - preds) * y_true).sum()
+        f1 = 2 * tp / (2 * tp + fp + fn + 1e-6)
+        if f1 > best_f1: best_f1, best_tau = f1.item(), tau.item()
+        
+    print(f"Optimal Threshold: {best_tau:.2f} (Sampled Val F1: {best_f1:.4f})")
+    return best_tau
+
+
+def construct_graphs(model, x_in, edge_list, h_in, test_idx, threshold, dataset_name, node_count, file_path, is_directed=True):
+    from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
+    model.eval()
+    dev = next(model.parameters()).device
+    
+    input_indices = [test_idx[0] - 1] + list(test_idx[:-1])
+    target_indices = list(test_idx)
+
     with torch.no_grad():
         _, _, _, pri_means, _ = model(
-            x_in[val_idx], 
-            edge_list[val_idx], 
-            adj_labels[val_idx], 
+            [x_in[i].to(dev) for i in input_indices], 
+            [edge_list[i].to(dev) for i in input_indices], 
+            [edge_list[i].to(dev) for i in target_indices], 
             h_in
         )
-        
-        all_probs, all_targets = [], []
-        for i, t in enumerate(val_idx):
-            all_probs.append(compute_vgrnn_probs(pri_means[i]).flatten())
-            all_targets.append(adj_labels[t].cpu().numpy().flatten())
-        
-        all_probs = np.concatenate(all_probs)
-        all_targets = np.concatenate(all_targets)
-        
-        best_tau, best_f1 = 0.5, 0
-        for t in np.arange(0.01, 1.0, 0.01):
-            preds = (all_probs > t).astype(int)
-            score = f1_score(all_targets, preds, zero_division=0)
-            if score > best_f1:
-                best_f1, best_tau = score, t
-        
-        print(f"Optimal Threshold: {best_tau:.2f} (Val F1: {best_f1:.4f})")
-        return best_tau
 
-def construct_graphs(model, x_in, edge_list, adj_labels, h_in, test_idx, threshold, dataset_name, node_count):
-    model.eval()
-    predicted_graphs = []
-    with torch.no_grad():
-        _, _, _, pri_means, _ = model(
-            x_in[test_idx], 
-            edge_list[test_idx], 
-            adj_labels[test_idx], 
-            h_in
-        )
+    try:
+        top_k_values = get_topk(dataset_name, use_true=False)
+        test_top_k = top_k_values[-len(test_idx):]
+        strategies = [True, False]
+    except:
+        strategies = [False]
+
+    for using_topk in strategies:
+        predicted_networks = []
+        for t, z in enumerate(pri_means):
+            adj_matrix = np.zeros((node_count, node_count), dtype=np.int8)
+            chunk_size = 512
+            
+            if using_topk:
+                k = int(test_top_k[t])
+                all_chunk_top_indices = []
+                all_chunk_top_values = []
+            
+            for i in range(0, node_count, chunk_size):
+                end_i = min(i + chunk_size, node_count)
+                logits_chunk = torch.mm(z[i:end_i], z.t())
+                probs_chunk = torch.sigmoid(logits_chunk)
+                diag_idx = torch.arange(i, end_i, device=dev)
+                probs_chunk[torch.arange(end_i - i), diag_idx] = 0
+                
+                if using_topk:
+                    chunk_k = min(k, probs_chunk.numel())
+                    vals, locs = torch.topk(probs_chunk.view(-1), chunk_k)
+                    all_chunk_top_values.append(vals)
+                    all_chunk_top_indices.append(locs + (i * node_count))
+                else:
+                    mask = (probs_chunk > threshold).cpu().numpy()
+                    adj_matrix[i:end_i] = mask.astype(np.int8)
+
+            if using_topk:
+                top_vals = torch.cat(all_chunk_top_values)
+                top_inds = torch.cat(all_chunk_top_indices)
+                
+                final_k = min(k, top_vals.numel())
+                _, global_top_k_locs = torch.topk(top_vals, final_k)
+                final_indices = top_inds[global_top_k_locs]
+                
+                rows = (final_indices // node_count).cpu().numpy()
+                cols = (final_indices % node_count).cpu().numpy()
+                adj_matrix[rows, cols] = 1
+
+            np.fill_diagonal(adj_matrix, 0)
+            if not is_directed:
+                adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+            
+            G = nx.from_numpy_array(adj_matrix, create_using=(nx.DiGraph() if is_directed else nx.Graph()))
+            predicted_networks.append(G)
+        strategy = 'topk' if using_topk else 'threshold'
+        save_path = f"data/output/predicted/VGRNN/{file_path}_{strategy}.pkl"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, 'wb') as f:
+            pickle.dump({'graphs': predicted_networks, 'node_count': node_count}, f)
+        print(f"Saved VGRNN predicted graphs ({strategy}) to {save_path}")
         
-        for i in range(len(test_idx)):
-            probs = compute_vgrnn_probs(pri_means[i])
-            adj = (probs > threshold).astype(int)
-            predicted_graphs.append(nx.from_numpy_array(adj))
-
-    save_path = f"data/output/predicted/{dataset_name}_vgrnn_predicted.pkl"
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, 'wb') as f:
-        pickle.dump({'graphs': predicted_graphs, 'node_count': node_count}, f)
-    print(f"Saved {len(predicted_graphs)} prediction graphs to {save_path}")
-
-def run_benchmark(dataset, device):
-    data_dict = load_data('vgrnn', args.dataset)
-    
-    snapshots = data_dict['snapshots']
-    node_count = data_dict['node_count']
-    feat_dim = data_dict['feature_dim']
-    
-    # 1. 70/15/15 Split
+        
+def run_benchmark(dataset, device, h_dim, z_dim, n_layers, lr, conv, is_directed=True):
+    data_dict = load_data('vgrnn', dataset)
+    snapshots, node_count, feat_dim = data_dict['snapshots'], data_dict['node_count'], data_dict['feature_dim']
     n = len(snapshots)
-    train_idx = list(range(0, int(n * 0.7)))
-    val_idx = list(range(int(n * 0.7), int(n * 0.85)))
-    test_idx = list(range(int(n * 0.85), n))
+    train_idx, val_idx, test_idx = range(int(n*0.7)), range(int(n*0.7), int(n*0.85)), range(int(n*0.85), n)
     
-    # 2. Prepare Data
-    # Using snapshot features if available, otherwise identity is handled by creation below if feat_dim matches
-    # Consistent with original code which creates Identity if needed, but we use cached data
-    x_in = torch.stack([s.x for s in snapshots]).to(device)
-    edge_idx_list = [s.edge_index.to(device) for s in snapshots]
-    adj_label_list = [to_dense_adj(s.edge_index, max_num_nodes=node_count).squeeze().to(device) 
-                      for s in snapshots]
+    # Keep everything as sparse indices or sparse features
+    x_in = [s.x for s in snapshots]
+    edge_idx_list = [s.edge_index for s in snapshots] 
 
-    # 3. Model Setup
-    h_dim, z_dim, n_layers, eps = 32, 16, 1, 1e-10
-    model = VGRNN(feat_dim, h_dim, z_dim, n_layers, eps, conv='GCN', bias=True).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
+
+    model = VGRNN(feat_dim, h_dim, z_dim, n_layers, eps=1e-10, conv=conv, bias=True).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     
-    best_train_auc = 0
-    best_model_wts = None
-    patience = 0
+    # === PHASE 1: TRAINING ===
+    start_train = time.time()
+    torch.cuda.reset_peak_memory_stats(device)
     
-    # 4. Training Loop
-    for epoch in range(1000):
+    for epoch in range(1, 201):
         model.train()
         optimizer.zero_grad()
+        h_init = torch.zeros(n_layers, node_count, h_dim, device=device)
         
-        h = Variable(torch.zeros(n_layers, node_count, h_dim)).to(device)
+        input_idx_list = list(train_idx[:-1])
+        target_idx_list = list(train_idx[1:])
         
-        kld, nll, _, pri_means, hidden_st = model(
-            x_in[train_idx], 
-            edge_idx_list[train_idx], 
-            adj_label_list[train_idx], 
-            h
+        kld, nll, mu_list, _, _ = model(
+            [x_in[i] for i in input_idx_list], 
+            [edge_idx_list[i] for i in input_idx_list], 
+            [edge_idx_list[i] for i in target_idx_list], 
+            h_init
         )
         
         loss = kld + nll
@@ -580,47 +619,74 @@ def run_benchmark(dataset, device):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 10)
         optimizer.step()
         
-        # Monitor Train AUC for Early Stopping (Faithful to original methodology)
-        train_auc_scores = []
-        for i, t in enumerate(train_idx):
-            probs = compute_vgrnn_probs(pri_means[i])
-            true = adj_label_list[t].cpu().numpy().flatten()
-            train_auc_scores.append(roc_auc_score(true, probs.flatten()))
-        
-        curr_auc = np.mean(train_auc_scores)
-        if curr_auc > best_train_auc:
-            best_train_auc = curr_auc
-            best_model_wts = copy.deepcopy(model.state_dict())
-            patience = 0
-        else:
-            patience += 1
-            
-        if epoch % 20 == 0:
-            print(f"Epoch {epoch} | Loss: {loss.item():.4f} | Train AUC: {curr_auc:.4f}")
-        if patience > 20:
-            break
-            
-    # 5. Optimization & Construction
+        if epoch % 10 == 0 or epoch == 1:
+            with torch.no_grad():
+                # For large graphs, calculate AUC on a sample of edges to avoid N x N MM
+                all_p, all_t = [], []
+                for i in range(len(mu_list)):
+                    t_idx = target_idx_list[i]
+                    pos_edges = edge_idx_list[t_idx].to(device)
+                    # Sample negatives for AUC calculation
+                    neg_edges = torch.randint(0, node_count, (2, pos_edges.size(1)), device=device)
+                    
+                    # Compute dot-product scores for samples only
+                    z = mu_list[i]
+                    pos_scores = torch.sigmoid(torch.sum(z[pos_edges[0]] * z[pos_edges[1]], dim=1))
+                    neg_scores = torch.sigmoid(torch.sum(z[neg_edges[0]] * z[neg_edges[1]], dim=1))
+                    
+                    all_p.append(torch.cat([pos_scores, neg_scores]).cpu())
+                    all_t.append(torch.cat([torch.ones(pos_scores.size(0)), torch.zeros(neg_scores.size(0))]))
+                
+                train_auc = roc_auc_score(torch.cat(all_t), torch.cat(all_p))
+                print(f"Epoch {epoch:03d} | Loss: {loss.item():.4f} | Sampled AUC: {train_auc:.4f}")
+
+    t1, g1, r1 = time.time() - start_train, get_gpu_memory(device), get_ram_usage()
+    best_model_wts = copy.deepcopy(model.state_dict())
+
+    # === PHASE 2: THRESHOLD OPTIMIZATION ===
+    start_opt = time.time()
     model.load_state_dict(best_model_wts)
-    
-    # Bridge Hidden State
-    # We must re-run training sequence with best weights to get the exact hidden state for validation
     with torch.no_grad():
-        h_init = Variable(torch.zeros(n_layers, node_count, h_dim)).to(device)
-        _, _, _, _, hidden_st_train = model(x_in[train_idx], edge_idx_list[train_idx], adj_label_list[train_idx], h_init)
-        
-    opt_threshold = optimize_threshold(model, x_in, edge_idx_list, adj_label_list, hidden_st_train, val_idx)
+        h_init = torch.zeros(n_layers, node_count, h_dim, device=device)
+        _, _, _, _, hidden_st_train = model(
+            [x_in[i] for i in train_idx], 
+            [edge_idx_list[i] for i in train_idx], 
+            [edge_idx_list[i] for i in train_idx], 
+            h_init
+        )
+        opt_threshold = optimize_threshold(model, x_in, edge_idx_list, hidden_st_train.detach(), val_idx, is_directed)
     
-    # Bridge Hidden State for Test
-    # Run validation sequence to get hidden state for test
+    t2, g2, r2 = time.time() - start_opt, get_gpu_memory(device), get_ram_usage()
+
+    # === PHASE 3: CONSTRUCTION ===
+    start_cons = time.time()
     with torch.no_grad():
-        _, _, _, _, hidden_st_val = model(x_in[val_idx], edge_idx_list[val_idx], adj_label_list[val_idx], hidden_st_train)
-        
-    construct_graphs(model, x_in, edge_idx_list, adj_label_list, hidden_st_val, test_idx, opt_threshold, dataset, node_count)
+        _, _, _, _, hidden_st_val = model(
+            [x_in[i] for i in val_idx], 
+            [edge_idx_list[i] for i in val_idx], 
+            [edge_idx_list[i] for i in val_idx], 
+            hidden_st_train.detach()
+        )
+        file_path = f"{dataset}_{h_dim}_{z_dim}_{n_layers}_{lr}_{conv}_{'directed' if is_directed else 'undirected'}"
+        construct_graphs(model, x_in, edge_idx_list, hidden_st_val.detach(), test_idx, opt_threshold, dataset, node_count, file_path, is_directed)
+    
+    t3, g3, r3 = time.time() - start_cons, get_gpu_memory(device), get_ram_usage()
+
+    print(f"\n--- DATASET: {dataset} (VGRNN) METRICS ---")
+    print(f"TRAIN:  Time={t1:.2f}s, GPU={g1:.2f}MB, RAM={r1:.2f}MB")
+    print(f"THRESH: Time={t2:.2f}s, GPU={g2:.2f}MB, RAM={r2:.2f}MB")
+    print(f"CONST:  Time={t3:.2f}s, GPU={g3:.2f}MB, RAM={r3:.2f}MB\n")
+    gc.collect(); torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument("--undirected", action="store_true")
+    parser.add_argument("--conv", type=str, default='GCN', choices=['GCN', 'GIN', 'SAGE'])
+    parser.add_argument("--h_dim", type=int, default=32)
+    parser.add_argument("--z_dim", type=int, default=16)
+    parser.add_argument("--n_layers", type=int, default=1)
+    parser.add_argument("--lr", type=float, default=0.001)
+
     args = parser.parse_args()
-    
-    run_benchmark(args.dataset, device)
+    run_benchmark(args.dataset, device, h_dim=args.h_dim, z_dim=args.z_dim, n_layers=args.n_layers, lr=args.lr, conv=args.conv, is_directed=not args.undirected)
