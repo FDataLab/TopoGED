@@ -83,3 +83,4 @@ data/input/cached/
 !data/input/cached/*/thresholds/*
 !data/input/cached/*/*.pkl
 benchmarkers/data/input/*
+data/*
