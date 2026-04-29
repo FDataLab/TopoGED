@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, average_precision_score
-from script.config import args
-# from script.utils.util import negative_sampling
-from script.hgcn.manifolds import PoincareBall
+from benchmarkers.htgn.script.config import args
+# from benchmarkers.htgn.script.utils.util import negative_sampling
+from benchmarkers.htgn.script.hgcn.manifolds import PoincareBall
 from torch_geometric.utils import negative_sampling
-from script.utils.util import logger
+from benchmarkers.htgn.script.utils.util import logger
 
 device = args.device
 

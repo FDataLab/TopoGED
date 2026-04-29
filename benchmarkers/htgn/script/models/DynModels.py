@@ -1,6 +1,6 @@
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, GATConv
-from script.models.BaseModel import BaseModel
+from benchmarkers.htgn.script.models.BaseModel import BaseModel
 
 MAX_LOGSTD = 10
 

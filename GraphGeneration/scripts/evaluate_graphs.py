@@ -11,6 +11,8 @@ from torch.utils.data import DataLoader, TensorDataset
 import torch.nn as nn
 import pandas as pd
 import os
+import pathlib
+from pathlib import Path
 import re
 import sys
 import yaml
@@ -26,7 +28,6 @@ from load_data import load_data, generate_training_data_cached, generate_validat
 from create_sub_graphs import create_nn_graph, create_on_graph
 from GraphGeneration.utils.ablation_utils import ablationSetup
 
-# Import all node embedding methods
 from torch.utils.data import DataLoader
 
 # Import Loss fn
@@ -35,6 +36,8 @@ from torch.utils.data import DataLoader
 # TODO Rename these ^^^
 
 from utils.embedding_methods.degree import EmbedDegree
+from GraphGeneration.scripts.load_data import load_data
+from process_data import modifyGraphIds, build_edgebanks_from_start
 
 import warnings
 
@@ -59,120 +62,6 @@ num_test_graphs = {
     'tgbl-wiki': 5,
 }
 
-PARAMS = {
-    'ROLAND': {
-        'CollegeMsg': [0.01, 0.7], 
-        'mathoverflow': [0.01, 0.7], 
-        'networkadex': [0.01, 0.75], 
-        'networkaion': [0.01, 0.75],
-        'networkaeternity': [0.01, 0.75],
-        'networkaragon': [0.01, 0.75], 
-        'networkbancor': [0.01, 0.75], 
-        'networkcentra': [0.01, 0.75], 
-        'networkcoindash': [0.01, 0.75], 
-        'networkiconomi': [0.01, 0.8], 
-        'networkcindicator': [0.01, 0.75], 
-        'networkdgd': [0.01, 0.75], 
-        'Reddit_B': [0.01, 0.75], 
-        'tgbl-wiki': [0.01, 0.7],
-    },
-    'VGAE': {
-        'CollegeMsg': [0.01, 0.8], 
-        'mathoverflow': [0.01, 0.8], 
-        'networkadex': [0.01, 0.8], 
-        'networkaion': [0.01, 0.8],
-        'networkaeternity': [0.01, 0.8],
-        'networkaragon': [0.01, 0.75],  
-        'networkbancor': [0.01, 0.8], 
-        'networkcentra': [0.01, 0.8], 
-        'networkcoindash': [0.01, 0.60], 
-        'networkiconomi': [0.01, 0.8], 
-        'networkcindicator': [0.01, 0.8], 
-        'networkdgd': [0.01, 0.8], 
-        'Reddit_B': [0.01, 0.8], 
-        'tgbl-wiki': [0.01, 0.75],
-    },
-    'GCLSTM': {
-        'CollegeMsg': [0.01, 0.70], 
-        'mathoverflow': [0.01, 0.70], 
-        'networkadex': [0.01, 0.75], 
-        'networkaion': [0.01, 0.70],
-        'networkaeternity': [0.01, 0.75],
-        'networkaragon': [0.01, 0.75], 
-        'networkbancor': [0.01, 0.75], 
-        'networkcentra': [0.01, 0.75], 
-        'networkcoindash': [0.01, 0.75], 
-        'networkiconomi': [0.01, 0.60], 
-        'networkcindicator': [0.01, 0.75], 
-        'networkdgd': [0.01, 0.60], 
-        'Reddit_B': [0.01, 0.75], 
-        'tgbl-wiki': [0.01, 0.75],
-    },
-    'TGCN': {
-        'CollegeMsg': [0.01, 0.70], 
-        'mathoverflow': [0.01, 0.70], 
-        'networkadex': [0.01, 0.75], 
-        'networkaion': [0.01, 0.70],
-        'networkaeternity': [0.01, 0.75],
-        'networkaragon': [0.01, 0.75], 
-        'networkbancor': [0.01, 0.75], 
-        'networkcentra': [0.01, 0.70], 
-        'networkcoindash': [0.01, 0.70], 
-        'networkiconomi': [0.01, 0.70], 
-        'networkcindicator': [0.01, 0.70], 
-        'networkdgd': [0.01, 0.70], 
-        'Reddit_B': [0.01, 0.70], 
-        'tgbl-wiki': [0.01, 0.70],
-    },
-    'TOPOGED': {
-        'CollegeMsg': [0.001, 0], 
-        'mathoverflow': [0.001, 0], 
-        'networkadex': [0.001, 0], 
-        'networkaion': [0.001, 0],
-        'networkaeternity': [0.001, 0],
-        'networkaragon': [0.001, 0], 
-        'networkbancor': [0.001, 0], 
-        'networkcentra': [0.001, 0], 
-        'networkcoindash': [0.001, 0], 
-        'networkiconomi': [0.001, 0], 
-        'networkcindicator': [0.001, 0], 
-        'networkdgd': [0.001, 0], 
-        'Reddit_B': [0.001, 0], 
-        'tgbl-wiki': [0.001, 0],
-    },
-    'htgn': {
-        'CollegeMsg': [0.01, 0.6], 
-        'mathoverflow': [0.01, 0.70], 
-        'networkadex': [0.01, 0.85], 
-        'networkaion': [0.01, 0.8],
-        'networkaeternity': [0.01, 0.8],
-        'networkaragon': [0.01, 0.60], 
-        'networkbancor': [0.01, 0.60], 
-        'networkcentra': [0.01, 0.8], 
-        'networkcoindash': [0.01, 0.65], 
-        'networkiconomi': [0.01, 0.6], 
-        'networkcindicator': [0.01, 0.85], 
-        'networkdgd': [0.01, 0.6], 
-        'Reddit_B': [0.01, 0.65], 
-        'tgbl-wiki': [0.01, 0.75],
-    },
-    'EvolveGCN': {
-        'CollegeMsg': [0.01, 0.7], 
-        'mathoverflow': [0.01, 0.7], 
-        'networkadex': [0.01, 0.7], 
-        'networkaion': [0.01, 0.7],
-        'networkaeternity': [0.01, 0.7],
-        'networkaragon': [0.01, 0.7], 
-        'networkbancor': [0.01, 0.7], 
-        'networkcentra': [0.01, 0.7], 
-        'networkcoindash': [0.01, 0.7], 
-        'networkiconomi': [0.01, 0.7], 
-        'networkcindicator': [0.01, 0.7], 
-        'networkdgd': [0.01, 0.7], 
-        'Reddit_B': [0.01, 0.7], 
-        'tgbl-wiki': [0.01, 0.7],
-    }
-}
 
 import warnings
 from sklearn.exceptions import UndefinedMetricWarning
@@ -210,9 +99,9 @@ class EvaluateGraphs():
         if data_path:
             self.data_path = data_path
         elif self.embedding_method == "hks":
-            self.data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}_{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
+            self.data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}_{self.embedding_method}{f'_{self.use_ma}' if self.use_ma else ''}", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
         elif self.embedding_method == "Node2Vec":
-            self.data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f"_{self.use_ma}" if self.use_ma else ""}_lr001", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
+            self.data_path = os.path.join(f"data/output/constructed_graphs/{self.dataset}_topoGED_embedding_mlpEncodingConcat_embeddingType{self.embedding_method}{f'_{self.use_ma}' if self.use_ma else ''}_lr001", f"{self.embedding_method}_constructed_graphs_{self.dataset}.pkl")
         elif threshold and self.embedding_method != "htgn":
             self.data_path = f"data/output/constructed_graphs/benchmarking/{self.dataset}_topoGED_embeddingDegree_{self.embedding_method}_threshold{threshold}/GCN_constructed_graphs_{self.dataset}.pkl"
         elif threshold:
@@ -230,8 +119,102 @@ class EvaluateGraphs():
         print(self.data_path)
         try:
             with open(self.data_path, 'rb') as f:
-                # This is where the crash happens
-                raw_pred, raw_true, self.sorted_nodes_pred, self.sorted_nodes_true = pickle.load(f)
+                data = pickle.load(f)
+
+            # 1. Handle Unpacking based on actual data type
+            if isinstance(data, tuple):
+                # TopoGED style: tuple unpacking
+                pred_graphs, _, _, _ = data 
+                num_nodes = None 
+            elif isinstance(data, dict):
+                # Standard style: dictionary access
+                pred_graphs = data['graphs']
+                num_nodes = data.get('node_count')
+            else:
+                raise TypeError(f"Unknown data format: {type(data)}")
+
+            # 2. Shared Data Loading Logic
+            path_obj = pathlib.Path(self.data_path)
+            filename_no_ext = path_obj.stem
+
+            # If it's a TopoGED constructed file, dataset is at the end
+            if "constructed_graphs_" in filename_no_ext:
+                # This removes the specific prefix and gives you 'Reddit_B'
+                extracted_dataset = filename_no_ext.replace("GCN_constructed_graphs_", "")
+            else:
+                # For Benchmarkers or others, check if the parent folder is more reliable
+                # If the filename starts with a known generic word, use the parent's first chunk
+                first_chunk = filename_no_ext.split('_')[0]
+                if first_chunk.lower() in ['gcn', 'evolvegcn', 'constructed']:
+                    extracted_dataset = path_obj.parent.name.split('_')[0]
+                else:
+                    extracted_dataset = first_chunk
+
+            print(f"Detected Dataset: {extracted_dataset}")
+            
+            import scipy.sparse as sp
+            
+            # Check the first graph to determine the format of the whole list
+            if len(pred_graphs) > 0 and sp.issparse(pred_graphs[0]):
+                print(f"INFO: Scipy sparse matrices detected. Converting to NetworkX...")
+                new_nx_graphs = []
+                for s_mat in pred_graphs:
+                    # Convert to directed or undirected based on your flag
+                    if self.is_directed:
+                        G = nx.from_scipy_sparse_array(s_mat, create_using=nx.DiGraph)
+                    else:
+                        G = nx.from_scipy_sparse_array(s_mat, create_using=nx.Graph)
+                    G.remove_nodes_from(list(nx.isolates(G)))
+                    
+                    new_nx_graphs.append(G)
+                pred_graphs = new_nx_graphs
+            else:
+                print("INFO: NetworkX objects detected in pickle.")
+            
+            _, _, thresholds, target_graphs = load_data(
+                extracted_dataset, '', '', '', 'all', 
+                use_predicted=False, num_buckets=10, use_test_style=None
+            )
+            
+            if "topoGED" in self.data_path:
+                target_graphs, _ = modifyGraphIds(target_graphs, thresholds, 10000)
+            
+            target_graphs_last = [inner_list[-1] for inner_list in target_graphs if inner_list]
+            base_graphs = target_graphs_last[:len(target_graphs_last) - len(pred_graphs)]
+            target_graphs = target_graphs_last[-len(pred_graphs):]
+
+            # 3. Organize into old and new nodes
+            self.sorted_nodes_pred = []
+            self.sorted_nodes_true = []
+            old_nodes = set()
+            
+            for graph in base_graphs:
+                old_nodes.update(graph.nodes())
+
+            for g_true, g_pred in zip(target_graphs, pred_graphs):
+                curr_nodes_true = set(g_true.nodes())
+                curr_nodes_pred = set(g_pred.nodes())
+
+                # Logic for True Graphs
+                curr_old_nodes_true = old_nodes.intersection(curr_nodes_true)
+                curr_new_nodes_true = curr_nodes_true.difference(old_nodes)
+                
+                # Logic for Predicted Graphs
+                curr_old_nodes_pred = old_nodes.intersection(curr_nodes_pred)
+                curr_new_nodes_pred = curr_nodes_pred.difference(old_nodes)
+
+                self.sorted_nodes_pred.append({'old_nodes': curr_old_nodes_pred, 'new_nodes': curr_new_nodes_pred})
+                self.sorted_nodes_true.append({'old_nodes': curr_old_nodes_true, 'new_nodes': curr_new_nodes_true})
+
+                # Update running knowledge of nodes
+                old_nodes.update(curr_nodes_true)
+                    
+            print(f'Num pred graphs: {len(pred_graphs)}')
+            print(f'Num true graphs: {len(target_graphs)}')
+            print(f'Num sorted nodes pred: {len(self.sorted_nodes_pred)}')
+            print(f'Num sorted nodes true: {len(self.sorted_nodes_true)}')
+                    
+
         except Exception as e:
             print(f"ERROR: Failed to load pickle file at {self.data_path}. Skipping. Error: {e}")
             # Raise a custom flag or exception so the main loop knows to skip this instance
@@ -243,12 +226,12 @@ class EvaluateGraphs():
         
         # Safety for later eval if needed
         if not self.is_directed:
-            self.pred_graphs = [g.to_undirected() if g.is_directed() else g for g in raw_pred]
-            self.true_graphs = [g.to_undirected() if g.is_directed() else g for g in raw_true]
+            self.pred_graphs = [g.to_undirected() if g.is_directed() else g for g in pred_graphs]
+            self.true_graphs = [g.to_undirected() if g.is_directed() else g for g in target_graphs]
             print("INFO: Evaluation mode set to UNDIRECTED. Converted all DiGraphs.")
         else:
-            self.pred_graphs = [g.to_directed() if not g.is_directed() else g for g in raw_pred]
-            self.true_graphs = [g.to_directed() if not g.is_directed() else g for g in raw_true]
+            self.pred_graphs = [g.to_directed() if not g.is_directed() else g for g in pred_graphs]
+            self.true_graphs = [g.to_directed() if not g.is_directed() else g for g in target_graphs]
             print("INFO: Evaluation mode set to DIRECTED. Converted all Graphs.")
             
         
@@ -384,8 +367,15 @@ class EvaluateGraphs():
         embedder = EmbedDegree(include_weights=False)
 
         # Make the TopER embedding
-        pred_embedding, _, _ = embedder.process_graphs_for_embeddings([pred_graph])
-        pred_toper = pred_embedding[0]
+        if pred_graph.number_of_nodes() == 0:
+            # If the graph is empty, return a zero vector of size 20
+            pred_toper = np.zeros(20)
+            print(f"INFO: Pred graph {graph_num} is empty. Using zero vector for TopER.")
+        else:
+            # Existing logic
+            pred_embedding, _, _ = embedder.process_graphs_for_embeddings([pred_graph])
+            pred_toper = pred_embedding[0]
+            
         true_embedding, _, _ = embedder.process_graphs_for_embeddings([true_graph])
         true_toper = true_embedding[0]
 
@@ -435,57 +425,8 @@ class EvaluateGraphs():
             
         print(self.data_path)
         
-    
     def makeTable(self, df, path, caption, label):
-        # min_best_cols = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
-        # 'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges']
-        # fig, ax = plt.subplots(figsize=(28, 7), dpi=300)
-        # ax.axis('off')
-        
-        # # Use the rounded DF for both display and comparison
-        # # to ensure row_val == best_val works correctly
-        # df_display = df.copy()
-        
-        # tbl = ax.table(cellText=df_display.values, 
-        #             colLabels=df_display.columns, 
-        #             rowLabels=df_display.index, 
-        #             loc='center', 
-        #             cellLoc='center')
-        
-        # tbl.auto_set_font_size(False)
-        # tbl.set_fontsize(9)
-        # tbl.scale(1.0, 3.0)
-        
-        # for j, col_name in enumerate(df_display.columns):
-        #     column_data = df_display[col_name]
-        #     valid_data = column_data.replace([np.inf, -np.inf], np.nan).dropna()
-            
-        #     if valid_data.empty:
-        #         continue
-                
-        #     if col_name in min_best_cols:
-        #         best_val = valid_data.iloc[(valid_data.abs() - 0).argsort()[:1]].values[0]
-        #     else:
-        #         best_val = valid_data.max()
-                
-        #     for i, row_val in enumerate(column_data):
-        #         # Check for equality with a small epsilon or use rounded values
-        #         if np.isclose(row_val, best_val, atol=1e-5):
-        #             # i + 1 targets the data row (row 0 is header)
-        #             # j targets the data column
-        #             cell = tbl[i + 1, j]
-        #             cell.set_facecolor('#E0E0E0') 
-        #             cell.set_text_props(weight='bold') 
-
-        # # Bold the Header and Row Labels
-        # for (row, col), cell in tbl.get_celld().items():
-        #     if row == 0 or col == -1:
-        #         cell.set_text_props(weight='bold')
-        
-        # os.makedirs(os.path.dirname(path), exist_ok=True)
-        # plt.savefig(path, bbox_inches='tight')
-        # plt.close(fig)
-            
+        path = Path(path)
         min_best_cols = [
             'Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 
             'Clustering Coefficient', 'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 
@@ -493,31 +434,30 @@ class EvaluateGraphs():
             'Median Extra Edges', 'Missing Edges', 'Median Missing Edges',
         ]
 
-        # 1. Process Headers and Identify Groups
+        # 1. Process Headers and Identify TopoGED
         processed_methods = []
-        base_topo_idx = -1
+        bench_indices = []
+        edgebank_idx = -1
+        topo_idx = -1
+        
         for i, m in enumerate(df.index):
-            m_str = str(m)
-            if m_str.startswith("oobankchanges") and "ablation" not in m_str.lower():
+            m_str = str(m).lower()
+            
+            if "sampling" in m_str:
                 name = "TopoGED"
-                base_topo_idx = i
-            elif "ablation" in m_str.lower():
-                num_match = re.search(r'\d+', m_str)
-                ab_num = num_match.group(0) if num_match else "?"
-                # Stack the headers: TopoGED on top, Ablation X on bottom
-                name = r"\makecell{TopoGED \\ Ablation " + ab_num + "}"
+                topo_idx = i
+            elif "topoged" in m_str or "oobankchanges" in m_str:
+                name = "TopoGED Edgebank"
+                edgebank_idx = i
             else:
-                name = m_str.replace('_', r'\_')
+                name = str(m).replace('_', r'\_')
+                bench_indices.append(i)
             processed_methods.append(name)
 
-        # 2. Reorder: All columns except the last two, then the second-to-last, then the last (Base TopoGED)
-        ablation_indices = [i for i, name in enumerate(processed_methods) if "Ablation" in name]
-        other_indices = [i for i in range(len(processed_methods)) if i != base_topo_idx and i not in ablation_indices]
-        
-        # We ensure Base TopoGED is the absolute last index
-        # The list 'others' will contain everything that isn't the final TopoGED column
-        others = ablation_indices + other_indices
-        final_order = others + [base_topo_idx]
+        # 2. Final Order: [Benchmarks] + [Edgebank] + [TopoGED]
+        final_order = bench_indices[:]
+        if edgebank_idx != -1: final_order.append(edgebank_idx)
+        if topo_idx != -1: final_order.append(topo_idx)
         
         ordered_df = df.iloc[final_order]
         final_names = [processed_methods[i] for i in final_order]
@@ -527,39 +467,39 @@ class EvaluateGraphs():
         latex.append(r"\begin{table*}[t]")
         latex.append(r"\centering")
         latex.append(r"\small")
-        latex.append(r"\setlength{\tabcolsep}{0pt}") 
+        # latex.append(r"\setlength{\tabcolsep}{0pt}") 
 
-        # 4. Vertical Bar Logic (Center-Aligned)
+        # 4. Column Setup Logic
         # l: Metric Name
-        # c * (n-2): All columns except the last two
-        # c | c: The last two columns separated by a bar
-        num_total_data_cols = len(final_names) 
+        # c * (len - 1): All benchmarks
+        # | c: TopoGED (Isolated by separator)
+        num_benchmarks = len(bench_indices)
+        
+        # Count how many special columns we are adding after the bar
+        special_count = 0
+        if edgebank_idx != -1: special_count += 1
+        if topo_idx != -1: special_count += 1
+        
+        # Construct the column format string
+        # We use 'c' * (special_count) to ensure every model has a column definition
+        col_setup = "l " + "c " * (num_benchmarks - 1) + \
+                    r"c @{\extracolsep{\fill}\hspace{1.5em}}|@{\extracolsep{\fill}\hspace{1.5em}} " + \
+                    " ".join(["c"] * special_count)
 
-        # 2. Determine the number of columns BEFORE the vertical bar
-        # Metric Name (1) + All data columns except the last one (n-1)
-        # Total columns = l + (n-1) + |c = n + 1 columns total.
-        num_leading_data_cols = num_total_data_cols - 1
-
-        # 3. Construct the raw string with the fixed centering logic
-        # We use r"" to avoid the syntax warnings you saw earlier.
-        col_setup = "l " + "c " * (num_leading_data_cols - 1) + r"c @{\extracolsep{\fill}\hspace{1.5em}}|@{\extracolsep{\fill}\hspace{1.5em}} c"
-
-        # 4. Generate the tabular* line
         latex.append(r"\begin{tabular*}{0.85\textwidth}{@{\extracolsep{\fill}} " + col_setup + " @{}}")
 
         # Header Row
-        header_row = ["Metric"] + final_names
+        header_row = [r"\textbf{Metric}"] + [fr"\textbf{{{name}}}" for name in final_names]
         latex.append(" & ".join(header_row) + r" \\ \midrule")
 
         # 5. Data Rows
         for col_name in df.columns:
-            # Check if column is entirely empty/NaN strings
+            # Check if row is entirely empty
             if ordered_df[col_name].apply(lambda x: str(x).lower() in ['nan', 'none', '']).all():
                 continue
 
             row_cells = [col_name.replace('_', r'\_')]
             
-            # Helper to safely get numeric value for ranking from potential strings
             def get_num(x):
                 try:
                     return float(x)
@@ -568,7 +508,7 @@ class EvaluateGraphs():
 
             col_data = ordered_df[col_name].apply(get_num).replace([np.inf, -np.inf], np.nan).dropna()
             
-            # Ranking Logic
+            # Ranking Logic (across ALL columns in the row)
             if col_name in min_best_cols:
                 sorted_vals = np.sort(col_data.abs().unique())
                 get_check_val = lambda x: abs(x)
@@ -584,11 +524,10 @@ class EvaluateGraphs():
                 val_num = get_num(val_raw)
 
                 if np.isnan(val_num):
-                    row_cells.append("$nan$")
+                    row_cells.append("$N/A$") # Changed to N/A for clarity
                     continue
                 
                 check_val = get_check_val(val_num)
-                # Use val_raw because it already contains your 2-decimal or integer formatting
                 display_num = str(val_raw)
 
                 if best_val is not None and np.isclose(check_val, best_val, atol=1e-5):
@@ -602,18 +541,16 @@ class EvaluateGraphs():
 
         latex.append(r"\bottomrule")
         latex.append(r"\end{tabular*}")
-        
-        # Caption and Label at bottom
         latex.append(r"\caption{" + caption + "}")
         latex.append(r"\label{" + label + "}")
         latex.append(r"\end{table*}")
 
         # Save
-        txt_path = path.replace('.png', '.txt')
-        os.makedirs(os.path.dirname(txt_path), exist_ok=True)
+        txt_path = path.with_suffix('.txt')
+        os.makedirs(txt_path.parent, exist_ok=True)
         with open(txt_path, 'w') as f:
             f.write("\n".join(latex))
-    
+            
     def collect_data_for_heatmap(self, df, dataset, old_only, threshold=None, lr=None):      
         valid_metrics = [
             'Assortativity Coefficient', 'Clustering Coefficient', 'Degree Centrality', 'Density', 'Extra Edges', 
@@ -650,7 +587,7 @@ class EvaluateGraphs():
 
         # Primary methods to iterate through
         methods = ['oobankchanges']
-        benchmarks = ['htgn', 'ROLAND', 'VGAE', 'TGCN', 'GCLSTM', 'EvolveGCN']
+        benchmarks = ['HTGN', 'ROLAND', 'VGRNN', 'TGCN', 'GCLSTM', 'EvolveGCN']
         
         for method in methods:
             curr_file_path = os.path.join(file_path, f"{method.replace('.', '')}")
@@ -813,215 +750,6 @@ class EvaluateGraphs():
             #     plt.savefig(os.path.join(curr_file_path, f"{dataset}_zscore_heatmap_appendix_{suffix}.png"), bbox_inches='tight', dpi=150)
             #     plt.close('all')
     
-    
-    def formTables(self, data, file_path, dataset, old_only_status):
-        # rows = ['learnedParams_lr0.01', 'oobankchanges_lr0.01', 'learnedParams_lr0.001', 'oobankchanges_lr0.001', 'htgn', 'ROLAND', 'VGAE', 'TGCN', 'GCLSTM', 'EvolveGCN']
-        rows = ['oobankchanges', 'htgn', 'ROLAND', 'VGAE', 'TGCN', 'GCLSTM', 'EvolveGCN']
-        node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes']
-        structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
-                   'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges']
-        if not old_only_status:
-            edge_columns = ['o-o-bank Precision', "o-o-bank Recall", "o-o-bank F1", 
-                            "o-o-nobank Precision", "o-o-nobank Recall", "o-o-nobank F1",
-                            "Num o-n Predicted", "Num n-n Predicted",
-                            "Edge Precision", "Edge Recall", "Edge F1"]
-            edge_columns = ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1',
-                            'o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1',
-                            'Edge Precision', 'Edge Recall', 'Edge F1']
-        
-        node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
-        structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
-        edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
-        num_eval_graphs = num_test_graphs[dataset]
-        
-        # Compute Metrics for each dataset
-        for directory in data:
-            print(directory)
-            if not os.path.exists(directory):
-                print(f"Data from: {directory} does not exist")
-                structure_df.at[model, 'Avg Node Degree'] = np.nan
-                structure_df.at[model, 'Unique Degree Count'] = np.nan
-                structure_df.at[model, 'Degree Centrality'] = np.nan
-                structure_df.at[model, 'Assortativity Coefficient'] = np.nan
-                structure_df.at[model, 'Clustering Coefficient'] = np.nan
-                structure_df.at[model, 'Density'] = np.nan
-                structure_df.at[model, 'Num Triangles'] = np.nan
-                
-                structure_df.at[model, 'Extra Nodes Placed'] = np.nan
-                structure_df.at[model, 'Median Extra Nodes Placed'] = np.nan
-                
-                structure_df.at[model, 'Missing Nodes'] = np.nan
-                structure_df.at[model, 'Median Missing Nodes'] = np.nan
-                
-                structure_df.at[model, 'Extra Edges'] = np.nan
-                structure_df.at[model, 'Median Extra Edges'] = np.nan
-                
-                structure_df.at[model, 'Missing Edges'] = np.nan
-                structure_df.at[model, 'Median Missing Edges'] = np.nan
-                structure_df.at[model, 'TopER L2 Norm'] = np.nan
-                
-                node_df.at[model, 'Precision Old Nodes'] = np.nan
-                node_df.at[model, 'Recall Old Nodes'] = np.nan
-                node_df.at[model, 'F1 Old Nodes'] = np.nan      
-                
-                node_df.at[model, 'Precision Nodes'] = np.nan
-                node_df.at[model, 'Recall Nodes'] = np.nan
-                node_df.at[model, 'F1 Nodes'] = np.nan        
-                
-                
-                edge_df.at[model, 'Edge Precision'] = np.nan
-                edge_df.at[model, 'Edge Recall'] = np.nan
-                edge_df.at[model, 'Edge F1'] = np.nan
-                
-                node_df.at[model, 'Precision New Nodes'] = np.nan
-                node_df.at[model, 'Recall New Nodes'] = np.nan
-                node_df.at[model, 'F1 New Nodes'] = np.nan
-                
-                edge_df.at[model, 'o-o-bank Precision'] = np.nan
-                edge_df.at[model, 'o-o-bank Recall'] = np.nan
-                edge_df.at[model, 'o-o-bank F1'] = np.nan       
-                        
-                edge_df.at[model, 'o-o-nobank Precision'] = np.nan
-                # Handles typo
-                edge_df.at[model, 'o-o-nobank Recall'] = np.nan
-                edge_df.at[model, 'o-o-nobank F1'] = np.nan
-            
-                if not old_only_status:                    
-                    edge_df.at[model, 'Num o-n Predicted'] = np.nan
-                    edge_df.at[model, 'Num n-n Predicted'] = np.nan
-                    
-                continue    
-            # Get name of strategy
-            folder_name = directory.strip('/').split('/')[-1] 
-            model = folder_name.split('_')[0].strip()
-            
-            # CHANGE THIS:
-            if model == 'oobankchanges':
-                # Force it to match your 'rows' list exactly
-                model = 'oobankchanges' 
-            elif model == 'learnedParams':
-                model = 'learnedParams'
-            
-            
-            # Take the tail since we only eval test graphs here
-            files = {
-                'node_eval': directory + 'structure/node_evaluation.csv',
-                'true_structure': directory + 'structure/structure_true.csv',
-                'pred_structure': directory + 'structure/structure_pred.csv',
-                'toper_eval': directory + 'structure/toper_eval.csv',
-                'all_edges': directory + 'edge_evaluation/all_edges.csv',
-                'old_only': directory + 'edge_evaluation/old_nodes_only.csv',
-                'on_only': directory + 'edge_evaluation/on_edges_only.csv',
-                'new_only': directory + 'edge_evaluation/new_nodes_only.csv'
-            }
-
-            # Load each file and check length
-            dfs = {}
-            for key, path in files.items():
-                temp_df = pd.read_csv(path)
-                if len(temp_df) < num_eval_graphs:
-                    print(f"ERROR: {path} has {len(temp_df)} rows, expected {num_eval_graphs}")
-                dfs[key] = temp_df.tail(num_eval_graphs)
-
-            # Map back to your variables
-            node_eval = dfs['node_eval']
-            true_structure = dfs['true_structure']
-            pred_structure = dfs['pred_structure']
-            toper_eval = dfs['toper_eval']
-            all_edges = dfs['all_edges']
-            old_only = dfs['old_only']
-            on_only = dfs['on_only']
-            new_only = dfs['new_only']
-
-            # Add metrics
-            structure_df.at[model, 'Avg Node Degree'] = true_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Unique Degree Count'] = true_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Degree Centrality'] = true_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Assortativity Coefficient'] = true_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Clustering Coefficient'] = true_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Density'] = true_structure['Density'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Density'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Num Triangles'] = true_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean()
-            
-            extra_node_slice = toper_eval[toper_eval['node_diff_10'] > 0]['node_diff_10']
-            structure_df.at[model, 'Extra Nodes Placed'] = extra_node_slice.sum() if not extra_node_slice.empty else 0
-            structure_df.at[model, 'Median Extra Nodes Placed'] = extra_node_slice.median() if not extra_node_slice.empty else 0
-            
-            missing_node_slice = toper_eval[toper_eval['node_diff_10'] < 0]['node_diff_10']
-            structure_df.at[model, 'Missing Nodes'] = abs(missing_node_slice.sum()) if not missing_node_slice.empty else 0
-            structure_df.at[model, 'Median Missing Nodes'] = abs(missing_node_slice.median()) if not missing_node_slice.empty else 0
-            
-            extra_edge_slice = toper_eval[toper_eval['edge_diff_10'] > 0]['edge_diff_10']
-            structure_df.at[model, 'Extra Edges'] = extra_edge_slice.sum() if not extra_edge_slice.empty else 0
-            structure_df.at[model, 'Median Extra Edges'] = extra_edge_slice.median() if not extra_edge_slice.empty else 0
-            
-            missing_edge_slice = toper_eval[toper_eval['edge_diff_10'] < 0]['edge_diff_10']
-            structure_df.at[model, 'Missing Edges'] = abs(missing_edge_slice.sum()) if not missing_edge_slice.empty else 0
-            structure_df.at[model, 'Median Missing Edges'] = abs(missing_edge_slice.median()) if not missing_edge_slice.empty else 0
-            structure_df.at[model, 'TopER L2 Norm'] = toper_eval['l2_norm'].mean()
-            
-            node_df.at[model, 'Precision Old Nodes'] = node_eval['Precision_Old'].mean()
-            node_df.at[model, 'Recall Old Nodes'] = node_eval['Recall_Old'].mean()
-            node_df.at[model, 'F1 Old Nodes'] = node_eval['F1_Old'].mean()        
-            
-            node_df.at[model, 'Precision Nodes'] = node_eval['Precision_All'].mean()
-            node_df.at[model, 'Recall Nodes'] = node_eval['Recall_All'].mean()
-            node_df.at[model, 'F1 Nodes'] = node_eval['F1_All'].mean()          
-            
-            
-            edge_df.at[model, 'Edge Precision'] = all_edges['Precision'].mean()
-            edge_df.at[model, 'Edge Recall'] = all_edges['Recall'].mean()
-            edge_df.at[model, 'Edge F1'] = all_edges['F1'].mean() 
-            
-            node_df.at[model, 'Precision New Nodes'] = node_eval['Precision_New'].mean()
-            node_df.at[model, 'Recall New Nodes'] = node_eval['Recall_New'].mean()
-            node_df.at[model, 'F1 New Nodes'] = node_eval['F1_New'].mean()
-            
-            edge_df.at[model, 'o-o-bank Precision'] = old_only['Precision_bank'].mean()
-            edge_df.at[model, 'o-o-bank Recall'] = old_only['Recall_bank'].mean()
-            edge_df.at[model, 'o-o-bank F1'] = old_only['F1_bank'].mean()          
-                    
-            edge_df.at[model, 'o-o-nobank Precision'] = old_only['Precision_nobank'].mean()
-            # Handles typo
-            recall_col_nobank = 'Recall_nobank' if 'Recall_nobank' in old_only.columns else 'Recall_bank_nobank'
-            edge_df.at[model, 'o-o-nobank Recall'] = old_only[recall_col_nobank].mean()
-            edge_df.at[model, 'o-o-nobank F1'] = old_only['F1_nobank'].mean()
-        
-            if not old_only_status:                    
-                edge_df.at[model, 'Num o-n Predicted'] = on_only['TP'].sum() + on_only['FP'].sum() + on_only['FN'].sum() + on_only['TN'].sum()
-                edge_df.at[model, 'Num n-n Predicted'] = new_only['TP'].sum() + new_only['FP'].sum() + new_only['FN'].sum() + new_only['TN'].sum()
-
-        
-        int_cols = [
-            'Extra Nodes Placed', 
-            'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 
-            'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges',
-            'Num o-n Predicted', 'Num n-n Predicted'
-        ]
-
-        # 2. Apply formatting to each DataFrame
-        for df in [node_df, structure_df, edge_df]:
-            for col in df.columns:
-                if col in int_cols:
-                    # ONLY format if the value is actually a number, else keep as np.nan
-                    df[col] = df[col].apply(lambda x: f"{int(round(x))}" if pd.notnull(x) else np.nan)
-                else:
-                    # ONLY format if the value is actually a number, else keep as np.nan
-                    df[col] = df[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else np.nan)
-
-            
-        structure_output_path = os.path.join(file_path, f"{dataset}_structure_table.png")
-        edge_output_path = os.path.join(file_path, f"{dataset}_edge_table.png")
-        node_output_path = os.path.join(file_path, f"{dataset}_node_table.png")
-            
-        self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation")
-        self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation")
-        self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation")
-
-        # curr_threshold = float(file_path.split('Threshold')[-1].split('_')[0])
-        curr_threshold = 0
-        self.collect_data_for_heatmap(node_df, dataset, old_only_status, curr_threshold)
-        self.collect_data_for_heatmap(structure_df, dataset, old_only_status, curr_threshold)
-        self.collect_data_for_heatmap(edge_df, dataset, old_only_status, curr_threshold)
 
     def construct_ablation_tables(self):
         datasets = [
@@ -1043,12 +771,12 @@ class EvaluateGraphs():
                         data = []
                         # Base prefix
                         
-                        data.append(f'GraphGeneration/scripts/results/{dataset}/{setting}_lr{lr}_5back{'_oldonly' if old_only_status else ''}/')
+                        data.append(f"GraphGeneration/scripts/results/{dataset}/{setting}_lr{lr}_5back{'_oldonly' if old_only_status else ''}/")
                         
                         # Ablation prefixes
                         # for i in range(1, 7):
                         for i in range(7, 10):
-                            data.append(f'GraphGeneration/scripts/results/{dataset}/ablation/{setting}_lr{lr}_5back_ablation{i}{'_old_only' if old_only_status else ''}/')
+                            data.append(f"GraphGeneration/scripts/results/{dataset}/ablation/{setting}_lr{lr}_5back_ablation{i}{'_old_only' if old_only_status else ''}/")
                         
                         node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes']
                         structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient', 
@@ -1326,7 +1054,7 @@ class EvaluateGraphs():
         latex.append(r"\begin{table*}[t]")
         latex.append(r"\centering")
         latex.append(r"\small")
-        latex.append(r"\setlength{\tabcolsep}{0pt}") 
+        # latex.append(r"\setlength{\tabcolsep}{0pt}") 
 
         # Column setup: Metric name (l) + Method 1 (c) + Vertical Bar + Method 2 (c)
         # Result: l c | c
@@ -1454,6 +1182,348 @@ class EvaluateGraphs():
         with open(output_path, 'w') as f:
             f.write("\n".join(latex))    
             
+            
+    def formTables(self, data, file_path, dataset, old_only_status):
+        rows = ['TopoGED Edgebank', 'TopoGED', 'HTGN', 'ROLAND', 'VGRNN', 'TGCN', 'GCLSTM', 'EvolveGCN']
+        node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes']
+        structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
+                   'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges']
+        if not old_only_status:
+            edge_columns = ['o-o-bank Precision', "o-o-bank Recall", "o-o-bank F1", 
+                            "o-o-nobank Precision", "o-o-nobank Recall", "o-o-nobank F1",
+                            "Num o-n Predicted", "Num n-n Predicted",
+                            "Edge Precision", "Edge Recall", "Edge F1"]
+            edge_columns = ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1',
+                            'o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1',
+                            'Edge Precision', 'Edge Recall', 'Edge F1']
+        
+        node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
+        structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
+        edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
+        num_eval_graphs = num_test_graphs[dataset]
+        
+        # Compute Metrics for each dataset
+        for directory in data:
+            print(directory)
+            # Get name of strategy
+            model = directory.parent.name
+            if model == "results":
+                if "sampling" in str(directory):
+                    model = "TopoGED"
+                else:
+                    model = "TopoGED Edgebank"
+                
+            
+            if not os.path.exists(directory):
+                print(f"Data from: {directory} does not exist")
+                structure_df.at[model, 'Avg Node Degree'] = np.nan
+                structure_df.at[model, 'Unique Degree Count'] = np.nan
+                structure_df.at[model, 'Degree Centrality'] = np.nan
+                structure_df.at[model, 'Assortativity Coefficient'] = np.nan
+                structure_df.at[model, 'Clustering Coefficient'] = np.nan
+                structure_df.at[model, 'Density'] = np.nan
+                structure_df.at[model, 'Num Triangles'] = np.nan
+                
+                structure_df.at[model, 'Extra Nodes Placed'] = np.nan
+                structure_df.at[model, 'Median Extra Nodes Placed'] = np.nan
+                
+                structure_df.at[model, 'Missing Nodes'] = np.nan
+                structure_df.at[model, 'Median Missing Nodes'] = np.nan
+                
+                structure_df.at[model, 'Extra Edges'] = np.nan
+                structure_df.at[model, 'Median Extra Edges'] = np.nan
+                
+                structure_df.at[model, 'Missing Edges'] = np.nan
+                structure_df.at[model, 'Median Missing Edges'] = np.nan
+                structure_df.at[model, 'TopER L2 Norm'] = np.nan
+                
+                node_df.at[model, 'Precision Old Nodes'] = np.nan
+                node_df.at[model, 'Recall Old Nodes'] = np.nan
+                node_df.at[model, 'F1 Old Nodes'] = np.nan      
+                
+                node_df.at[model, 'Precision Nodes'] = np.nan
+                node_df.at[model, 'Recall Nodes'] = np.nan
+                node_df.at[model, 'F1 Nodes'] = np.nan        
+                
+                
+                edge_df.at[model, 'Edge Precision'] = np.nan
+                edge_df.at[model, 'Edge Recall'] = np.nan
+                edge_df.at[model, 'Edge F1'] = np.nan
+                
+                node_df.at[model, 'Precision New Nodes'] = np.nan
+                node_df.at[model, 'Recall New Nodes'] = np.nan
+                node_df.at[model, 'F1 New Nodes'] = np.nan
+                
+                edge_df.at[model, 'o-o-bank Precision'] = np.nan
+                edge_df.at[model, 'o-o-bank Recall'] = np.nan
+                edge_df.at[model, 'o-o-bank F1'] = np.nan       
+                        
+                edge_df.at[model, 'o-o-nobank Precision'] = np.nan
+                # Handles typo
+                edge_df.at[model, 'o-o-nobank Recall'] = np.nan
+                edge_df.at[model, 'o-o-nobank F1'] = np.nan
+            
+                if not old_only_status:                    
+                    edge_df.at[model, 'Num o-n Predicted'] = np.nan
+                    edge_df.at[model, 'Num n-n Predicted'] = np.nan
+                    
+                continue    
+            
+            
+            # Take the tail since we only eval test graphs here
+            files = {
+                'node_eval': str(directory / 'structure' / 'node_evaluation.csv'),
+                'true_structure': str(directory / 'structure' / 'structure_true.csv'),
+                'pred_structure': str(directory / 'structure' / 'structure_pred.csv'),
+                'toper_eval': str(directory / 'structure' / 'toper_eval.csv'),
+                'all_edges': str(directory / 'edge_evaluation' / 'all_edges.csv'),
+                'old_only': str(directory / 'edge_evaluation' / 'old_nodes_only.csv'),
+                'on_only': str(directory / 'edge_evaluation' / 'on_edges_only.csv'),
+                'new_only': str(directory / 'edge_evaluation' / 'new_nodes_only.csv')
+            }
+
+            # Load each file and check length
+            dfs = {}
+            for key, path in files.items():
+                temp_df = pd.read_csv(path)
+                if len(temp_df) < num_eval_graphs:
+                    print(f"ERROR: {path} has {len(temp_df)} rows, expected {num_eval_graphs}")
+                dfs[key] = temp_df.tail(num_eval_graphs)
+
+            # Map back to your variables
+            node_eval = dfs['node_eval']
+            true_structure = dfs['true_structure']
+            pred_structure = dfs['pred_structure']
+            toper_eval = dfs['toper_eval']
+            all_edges = dfs['all_edges']
+            old_only = dfs['old_only']
+            on_only = dfs['on_only']
+            new_only = dfs['new_only']
+
+            # Add metrics
+            structure_df.at[model, 'Avg Node Degree'] = true_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean()
+            structure_df.at[model, 'Unique Degree Count'] = true_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean()
+            structure_df.at[model, 'Degree Centrality'] = true_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean()
+            structure_df.at[model, 'Assortativity Coefficient'] = true_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
+            structure_df.at[model, 'Clustering Coefficient'] = true_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
+            structure_df.at[model, 'Density'] = true_structure['Density'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Density'].replace([np.inf, -np.inf], np.nan).mean()
+            structure_df.at[model, 'Num Triangles'] = true_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean()
+            
+            extra_node_slice = toper_eval[toper_eval['node_diff_10'] > 0]['node_diff_10']
+            structure_df.at[model, 'Extra Nodes Placed'] = extra_node_slice.sum() if not extra_node_slice.empty else 0
+            structure_df.at[model, 'Median Extra Nodes Placed'] = extra_node_slice.median() if not extra_node_slice.empty else 0
+            
+            missing_node_slice = toper_eval[toper_eval['node_diff_10'] < 0]['node_diff_10']
+            structure_df.at[model, 'Missing Nodes'] = abs(missing_node_slice.sum()) if not missing_node_slice.empty else 0
+            structure_df.at[model, 'Median Missing Nodes'] = abs(missing_node_slice.median()) if not missing_node_slice.empty else 0
+            
+            extra_edge_slice = toper_eval[toper_eval['edge_diff_10'] > 0]['edge_diff_10']
+            structure_df.at[model, 'Extra Edges'] = extra_edge_slice.sum() if not extra_edge_slice.empty else 0
+            structure_df.at[model, 'Median Extra Edges'] = extra_edge_slice.median() if not extra_edge_slice.empty else 0
+            
+            missing_edge_slice = toper_eval[toper_eval['edge_diff_10'] < 0]['edge_diff_10']
+            structure_df.at[model, 'Missing Edges'] = abs(missing_edge_slice.sum()) if not missing_edge_slice.empty else 0
+            structure_df.at[model, 'Median Missing Edges'] = abs(missing_edge_slice.median()) if not missing_edge_slice.empty else 0
+            structure_df.at[model, 'TopER L2 Norm'] = toper_eval['l2_norm'].mean()
+            
+            node_df.at[model, 'Precision Old Nodes'] = node_eval['Precision_Old'].mean()
+            node_df.at[model, 'Recall Old Nodes'] = node_eval['Recall_Old'].mean()
+            node_df.at[model, 'F1 Old Nodes'] = node_eval['F1_Old'].mean()        
+            
+            node_df.at[model, 'Precision Nodes'] = node_eval['Precision_All'].mean()
+            node_df.at[model, 'Recall Nodes'] = node_eval['Recall_All'].mean()
+            node_df.at[model, 'F1 Nodes'] = node_eval['F1_All'].mean()          
+            
+            
+            edge_df.at[model, 'Edge Precision'] = all_edges['Precision'].mean()
+            edge_df.at[model, 'Edge Recall'] = all_edges['Recall'].mean()
+            edge_df.at[model, 'Edge F1'] = all_edges['F1'].mean() 
+            
+            node_df.at[model, 'Precision New Nodes'] = node_eval['Precision_New'].mean()
+            node_df.at[model, 'Recall New Nodes'] = node_eval['Recall_New'].mean()
+            node_df.at[model, 'F1 New Nodes'] = node_eval['F1_New'].mean()
+            
+            edge_df.at[model, 'o-o-bank Precision'] = old_only['Precision_bank'].mean()
+            edge_df.at[model, 'o-o-bank Recall'] = old_only['Recall_bank'].mean()
+            edge_df.at[model, 'o-o-bank F1'] = old_only['F1_bank'].mean()          
+                    
+            edge_df.at[model, 'o-o-nobank Precision'] = old_only['Precision_nobank'].mean()
+            # Handles typo
+            recall_col_nobank = 'Recall_nobank' if 'Recall_nobank' in old_only.columns else 'Recall_bank_nobank'
+            edge_df.at[model, 'o-o-nobank Recall'] = old_only[recall_col_nobank].mean()
+            edge_df.at[model, 'o-o-nobank F1'] = old_only['F1_nobank'].mean()
+        
+            if not old_only_status:                    
+                edge_df.at[model, 'Num o-n Predicted'] = on_only['TP'].sum() + on_only['FP'].sum() + on_only['FN'].sum() + on_only['TN'].sum()
+                edge_df.at[model, 'Num n-n Predicted'] = new_only['TP'].sum() + new_only['FP'].sum() + new_only['FN'].sum() + new_only['TN'].sum()
+
+        
+        int_cols = [
+            'Extra Nodes Placed', 
+            'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 
+            'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges',
+            'Num o-n Predicted', 'Num n-n Predicted'
+        ]
+
+        # 2. Apply formatting to each DataFrame
+        for df in [node_df, structure_df, edge_df]:
+            for col in df.columns:
+                if col in int_cols:
+                    # ONLY format if the value is actually a number, else keep as np.nan
+                    df[col] = df[col].apply(lambda x: f"{int(round(x))}" if pd.notnull(x) else np.nan)
+                else:
+                    # ONLY format if the value is actually a number, else keep as np.nan
+                    df[col] = df[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else np.nan)
+
+            
+        structure_output_path = os.path.join(file_path, f"{dataset}_structure_table.png")
+        edge_output_path = os.path.join(file_path, f"{dataset}_edge_table.png")
+        node_output_path = os.path.join(file_path, f"{dataset}_node_table.png")
+            
+        self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation")
+        self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation")
+        self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation")
+
+        # curr_threshold = float(file_path.split('Threshold')[-1].split('_')[0])
+        curr_threshold = 0
+        self.collect_data_for_heatmap(node_df, dataset, old_only_status, curr_threshold)
+        self.collect_data_for_heatmap(structure_df, dataset, old_only_status, curr_threshold)
+        self.collect_data_for_heatmap(edge_df, dataset, old_only_status, curr_threshold)
+        
+    def evaluateTopoGED(self, file_path=Path('/mnt/d/Downloads/TopogedResults/LatexTables/TopogedComparisons/'), old_only_status=False):
+        topoged_output_base = Path('/mnt/d/Downloads/TopogedResults/Topoged/results/')
+        datasets = [
+            'CollegeMsg', 'mathoverflow', 'networkadex', 'networkaion', 'networkaeternity', 
+            'networkaragon', 'networkbancor', 'networkcentra', 'networkcoindash', 
+            'networkiconomi', 'networkcindicator', 'networkdgd', 'Reddit_B', 'tgbl-wiki'
+        ]
+        
+        for dataset in datasets:
+            rows, combo_names, data = [], [], []
+            
+            # 1. Path Construction (Ensure this matches your actual folder naming convention)
+            for edgebank_style in ['default', 'frequency', 'shuffle']:
+                for node_embedding_type in ['zeros', 'random', 'degree_average']:
+                    for lr in [0.001, 0.01]:
+                        for toper_type in ['VECM', 'VAR', 'AES']:
+                            folder_name = f"TopoGED_{dataset}_{node_embedding_type}_{lr}_{edgebank_style}_{toper_type}"
+                            rows.append(folder_name)
+                            combo_names.append(folder_name)
+                            data.append(topoged_output_base / folder_name)
+
+            # 2. Column Definitions
+            node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes']
+            structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
+                                'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges']
+            
+            edge_columns = ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1', 
+                            'o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1',
+                            'Edge Precision', 'Edge Recall', 'Edge F1']
+            
+            if not old_only_status:
+                edge_columns += ["Num o-n Predicted", "Num n-n Predicted"]
+
+            # Initialize DataFrames
+            node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
+            structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
+            edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
+            
+            num_eval_graphs = num_test_graphs[dataset]
+
+            # 3. Processing Loop
+            for directory, combo_name in zip(data, combo_names):
+                if not directory.exists():
+                    print(f"Skipping: {directory} (Not Found)")
+                    continue
+
+                # File Map
+                files = {
+                    'node_eval': directory / 'structure' / 'node_evaluation.csv',
+                    'true_struct': directory / 'structure' / 'structure_true.csv',
+                    'pred_struct': directory / 'structure' / 'structure_pred.csv',
+                    'toper_eval': directory / 'structure' / 'toper_eval.csv',
+                    'all_edges': directory / 'edge_evaluation' / 'all_edges.csv',
+                    'old_only': directory / 'edge_evaluation' / 'old_nodes_only.csv',
+                    'on_only': directory / 'edge_evaluation' / 'on_edges_only.csv',
+                    'new_only': directory / 'edge_evaluation' / 'new_nodes_only.csv'
+                }
+
+                try:
+                    dfs = {k: pd.read_csv(v).tail(num_eval_graphs) for k, v in files.items() if v.exists()}
+                    
+                    # Structural Metrics (Differences)
+                    s_true, s_pred = dfs['true_struct'], dfs['pred_struct']
+                    mapping = {
+                        'Avg Node Degree': ('Average Node Degree', 'Average Node Degree'),
+                        'Unique Degree Count': ('Unique Degree Count', 'Unique Degree Count'),
+                        'Degree Centrality': ('Degree Centrality', 'Degree Centrality'),
+                        'Assortativity Coefficient': ('Assortivity Coefficient', 'Assortivity Coefficient'),
+                        'Clustering Coefficient': ('Clustering Coefficient', 'Clustering Coefficient'),
+                        'Density': ('Density', 'Density'),
+                        'Num Triangles': ('Number of Triangles', 'Number of Triangles')
+                    }
+                    for col, (t_col, p_col) in mapping.items():
+                        structure_df.at[combo_name, col] = s_true[t_col].mean() - s_pred[p_col].mean()
+
+                    # TopER specific metrics
+                    te = dfs['toper_eval']
+                    structure_df.at[combo_name, 'Extra Nodes Placed'] = te[te['node_diff_10'] > 0]['node_diff_10'].sum()
+                    structure_df.at[combo_name, 'Missing Nodes'] = abs(te[te['node_diff_10'] < 0]['node_diff_10'].sum())
+                    structure_df.at[combo_name, 'Extra Edges'] = te[te['edge_diff_10'] > 0]['edge_diff_10'].sum()
+                    structure_df.at[combo_name, 'Missing Edges'] = abs(te[te['edge_diff_10'] < 0]['edge_diff_10'].sum())
+                    structure_df.at[combo_name, 'TopER L2 Norm'] = te['l2_norm'].mean()
+
+                    # Node & Edge Metrics
+                    ne, ae, oo = dfs['node_eval'], dfs['all_edges'], dfs['old_only']
+                    node_df.loc[combo_name, ['Precision Nodes', 'Recall Nodes', 'F1 Nodes']] = [ne['Precision_All'].mean(), ne['Recall_All'].mean(), ne['F1_All'].mean()]
+                    edge_df.loc[combo_name, ['Edge Precision', 'Edge Recall', 'Edge F1']] = [ae['Precision'].mean(), ae['Recall'].mean(), ae['F1'].mean()]
+                    
+                    # Handle typos in your CSV column names
+                    recall_nobank = 'Recall_nobank' if 'Recall_nobank' in oo.columns else 'Recall_bank_nobank'
+                    edge_df.loc[combo_name, ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1']] = [oo['Precision_bank'].mean(), oo['Recall_bank'].mean(), oo['F1_bank'].mean()]
+                    edge_df.loc[combo_name, ['o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1']] = [oo['Precision_nobank'].mean(), oo[recall_nobank].mean(), oo['F1_nobank'].mean()]
+
+                    if not old_only_status:
+                        edge_df.at[combo_name, 'Num o-n Predicted'] = dfs['on_only'][['TP','FP','FN','TN']].sum().sum()
+                        edge_df.at[combo_name, 'Num n-n Predicted'] = dfs['new_only'][['TP','FP','FN','TN']].sum().sum()
+
+                except Exception as e:
+                    print(f"Error processing {combo_name}: {e}")
+
+            # 4. Collect Heatmap Data BEFORE String Formatting
+            self.collect_data_for_heatmap(node_df, dataset, old_only_status, 0)
+            self.collect_data_for_heatmap(structure_df, dataset, old_only_status, 0)
+            self.collect_data_for_heatmap(edge_df, dataset, old_only_status, 0)
+
+            # 5. Final Formatting & Table Generation
+            int_cols = ['Extra Nodes Placed', 'Missing Nodes', 'Extra Edges', 'Missing Edges', 'Num o-n Predicted', 'Num n-n Predicted']
+            for df, p in [(node_df, 'node'), (structure_df, 'structure'), (edge_df, 'edge')]:
+                formatted_df = df.copy()
+                for col in formatted_df.columns:
+                    if col in int_cols:
+                        formatted_df[col] = formatted_df[col].apply(lambda x: f"{int(round(x))}" if pd.notnull(x) else "N/A")
+                    else:
+                        formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "N/A")
+                
+                file_path = Path(file_path) 
+
+                # Now when you do this, out_path is guaranteed to be a Path object
+                out_path = file_path / f"{dataset}_{p}_table.png"
+
+                # The function call remains the same, but the object passed is now correct
+                self.makeTable(formatted_df, out_path, 
+                            caption=f"{p.capitalize()} Metrics: {dataset}", 
+                            label=f"tab:{dataset}_{p}")
+            # curr_threshold = float(file_path.split('Threshold')[-1].split('_')[0])
+            # curr_threshold = 0
+            # self.collect_data_for_heatmap(node_df, dataset, old_only_status, curr_threshold)
+            # self.collect_data_for_heatmap(structure_df, dataset, old_only_status, curr_threshold)
+            # self.collect_data_for_heatmap(edge_df, dataset, old_only_status, curr_threshold)        
+    
+
+
+    
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Graph Evaluation Script")
 
@@ -1465,137 +1535,217 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = parser.parse_args()
-    # benchmarkers = ['htgn', 'VGAE', 'EvolveGCN', 'ROLAND', 'GCLSTM', 'TGCN']
-    # #for threshold in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85]:
-    # if args.embedding_method in benchmarkers:
-    #     for threshold in [0.6, 0.7, 0.8, 0.85]:
-    #         evaluator = EvaluateGraphs(args, threshold=threshold)
-    #         print("Starting evaluation...")
-    #         evaluator.run()
-    # else:
-    #     evaluator = EvaluateGraphs(args)
-    #     print("Starting evaluation...")
-    #     evaluator.run()
         
     # Form the list of input graph files
-    all_prefixes = []
-    all_inputs = []
-    
+
     datasets = [
-        'CollegeMsg', 'mathoverflow', 'networkadex', 'networkaion', 'networkaeternity', 'networkaragon', 'networkbancor', 'networkcentra', 
-        'networkcoindash', 'networkiconomi', 'networkcindicator', 'networkdgd', 'Reddit_B', 'tgbl-wiki',
-    ]  
-    # for dataset in datasets:
-    #     lr = 0.01
-    #     for threshold in [0.6, 0.65]:
-    #         for model in ['VGAE', 'EvolveGCN', 'TGCN', 'GCLSTM']:
-    #             if threshold == 0.7 and model == 'ROLAND' and dataset != 'tgbl-wiki':
-    #                 continue
-    #             all_prefixes.append(f'GraphGeneration/scripts/results/{dataset}/{model}_lr{lr}_5back_threshold{threshold}/')
-    #             all_inputs.append(f'data/output/constructed_graphs/benchmarking/{dataset}_topoGED_embeddingDegree_{model}_lr{lr}_threshold{threshold}/GCN_constructed_graphs_{dataset}.pkl')
-            
-    #         # Now add htgn
-    #         all_prefixes.append(f'GraphGeneration/scripts/results/{dataset}/htgn_lr{lr}_5back_threshold{threshold}/')
-    #         all_inputs.append(f'data/output/constructed_graphs/{dataset}_topoGED_embeddingDegree_htgn_lr{lr}_threshold{threshold}/GCN_constructed_graphs_{dataset}.pkl')
+        'CollegeMsg', 
+        'mathoverflow', 
+        'networkadex', 
+        'networkaion', 
+        'networkaeternity', 
+        'networkaragon', 
+        'networkbancor', 
+        'networkcentra', 
+        'networkcoindash', 
+        'networkiconomi', 
+        'networkcindicator', 
+        'networkdgd', 
+        'Reddit_B', 
+        'tgbl-wiki'
+    ]
+    models = ['EvolveGCN', 'GCLSTM', 'HTGN', 'ROLAND', 'SFDyG', 'TGCN', 'VGRNN']
+    all_inputs = []
+    all_prefixes = []
+
     
-    # for dataset in datasets:
-    #     lr = 0.001
-    #     # Now o-o-bank changes
-    #     # lr, threshold = PARAMS['TOPOGED']
-    #     # all_prefixes.append(f'GraphGeneration/scripts/results/{dataset}/oobankchanges_lr{lr}_5back/')
-    #     # all_inputs.append(f'data/output/constructed_graphs/{dataset}_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_lr{lr}_5back_oobankchanges_predvalsTrue/GCN_constructed_graphs_{dataset}.pkl')
-        
-    #     # Now learnedParams
-    #     all_prefixes.append(f'GraphGeneration/scripts/results/{dataset}/learnedParams_lr{lr}_5back/')
-    #     all_inputs.append(f'data/output/constructed_graphs/{dataset}_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_binary_lr{lr}_5back_learnedparams_predvalsTrue/GCN_constructed_graphs_{dataset}.pkl')
-
+    output_base = Path('data/output/results/')
     for dataset in datasets:
-        for lr in [0.001]:
-            for setting in ['oobankchanges']:
-               # Ablation prefixes
-                for i in range(7, 10):
-                    all_prefixes.append(f'GraphGeneration/scripts/results/{dataset}/ablation/{setting}_lr{lr}_5back_ablation{i}/')
-                    all_inputs.append(f'data/output/ablation/constructed_graphs/{dataset}_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_lr{lr}_5back_{setting}_predvalsTrue_ablation{i}/GCN_constructed_graphs_{dataset}.pkl')
+        paths = [
+            f"data/output/predicted/ROLAND/{dataset}_128_0.001_3_5_undirected_threshold_5xCap.pkl",
+            f"data/output/predicted/VGRNN/{dataset}_64_32_2_0.001_GIN_undirected_threshold_5xCap.pkl",
+            f"data/output/predicted/TGCN/{dataset}_128_0.01_0.001_undirected_threshold_5xCap.pkl",
+            f"data/output/predicted/SFDyG/{dataset}_hgcn_7_4_0.0001_1024_100_0_threshold_5xCap.pkl",
+            f"data/output/predicted/HTGN/{dataset}_0.001_256_128_0.5_undirected_threshold_5xCap.pkl",
+            f"data/output/predicted/EvolveGCN/{dataset}_egcn_o_128_64_32_0.01_0.0001_undirected_threshold_5xCap.pkl",
+            f"data/output/predicted/GCLSTM/{dataset}_0.0001_128_2_0.001_undirected_threshold_5xCap.pkl"
+        ]
+        
+        for path_str in paths:
+            search_file = pathlib.Path(path_str)
+            
+            model_name = search_file.parts[3] if len(search_file.parts) > 3 else "UnknownModel"
+            
+            if search_file.exists():
+                all_inputs.append(str(search_file))
+                
+                prefix_path = output_base / model_name / search_file.stem
+                
+                all_prefixes.append(str(prefix_path))
+            else:
+                print(f"Skipping: Could not find pkl for {dataset} in {model_name}")
+    
+    # Add topoged paths to the evaluation
+    topoged_base = Path('data/output/constructed_graphs/')
+    topoged_output_base = Path('data/output/results/')
+    
+    for edgebank_style in ['default']:
+        for node_embedding_type in ['zeros', 'random', 'degree_average']:
+            for lr in [0.001]:
+                for toper_type in ['False', 'True']:
+                    for dataset in datasets:
+                        # Constructing as a Path object is cleaner
+                        pred_val_logic = "False" if toper_type == 'True' else "True"
+                        vector_type_logic = "TrueVals" if toper_type == 'True' else "VECM"
 
+                        relative_path = Path(
+                            f"{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_"
+                            f"lr{lr}_5back_oobankchanges_{node_embedding_type}_sampling_"
+                            f"predvals{pred_val_logic}_edgebank_{edgebank_style}_"
+                            f"VectorType{vector_type_logic}"
+                        ) / f"GCN_constructed_graphs_{dataset}.pkl"
+                        
+                        target_file = topoged_base / relative_path
+                        
+                        if target_file.exists():
+                            all_inputs.append(str(target_file))
+                            prefix_path = topoged_output_base / f"TopoGED_{dataset}_{node_embedding_type}_{lr}_{edgebank_style}_{toper_type}_sampling"
+                            all_prefixes.append(str(prefix_path))
+                        else:
+                            print(f"Skipping: File not found at {target_file}")
+                        
     # Now, evaluate each            
     import gc
     for prefix, data_path in zip(all_prefixes, all_inputs):
-        print(prefix)
         # if os.path.exists(prefix):
-        #     print('Already processed')
+        #     print(f'Skipping evaluation for {data_path} since output already exists at {prefix}')
         #     continue
+        
+        print(f"Processing: {prefix}")
+        
         evaluator = EvaluateGraphs(args=None, prefix=prefix, data_path=data_path)
-        # Check if the pickle load inside __init__ actually worked
+    
         if hasattr(evaluator, 'loaded_successfully') and not evaluator.loaded_successfully:
             print(f"Skipping evaluation for {data_path} due to load error.")
             continue
         
-        print("Starting evaluation...")
         evaluator.run()
         del evaluator
-    
-        # Manually trigger garbage collection
         gc.collect()
+    
+        
+        # if not os.path.exists(prefix):
+        #     evaluator = EvaluateGraphs(args=None, prefix=prefix, data_path=data_path)
+        
+        #     if hasattr(evaluator, 'loaded_successfully') and not evaluator.loaded_successfully:
+        #         print(f"Skipping evaluation for {data_path} due to load error.")
+        #         continue
+            
+        #     evaluator.run()
+        #     del evaluator
+        #     gc.collect()
+    
+        # else:
+        #     print(f'Already processed data for path: {prefix}')
+        # # Manually trigger garbage collection
+        # gc.collect()
 
     evaluator = EvaluateGraphs(args=None, prefix='', data_path='')
-    evaluator.construct_ablation_tables()
-    evaluator.construct_nn_on_tables()
-    # for dataset in datasets:
-    #     evaluator.learned_vs_oobank(dataset) 
-    # evaluator.sensitivity_analysis()
-    # datasets = [
-    #     'CollegeMsg', 'mathoverflow', 'networkadex', 'networkaion', 'networkaeternity', 'networkaragon', 'networkbancor', 'networkcentra', 
-    #     'networkcoindash', 'networkiconomi', 'networkcindicator', 'networkdgd', 'Reddit_B', 'tgbl-wiki',
-    # ]    
-    # for dataset in datasets:
-    #     lr = 0.01
-    #     for threshold in [0.7, 0.75, 0.8, 0.85]:
-    #         curr_dataset_data_all = []
-    #         curr_dataset_data_all.append(f'GraphGeneration/scripts/results/{dataset}/oobankchanges_lr0.001_5back/')
-            
-        
-    #         for model in ['VGAE', 'EvolveGCN', 'TGCN', 'GCLSTM', 'ROLAND']:
-    #             curr_dataset_data_all.append(f'GraphGeneration/scripts/results/{dataset}/{model}_lr{lr}_5back_threshold{threshold}/')
-    #         curr_dataset_data_all.append(f'GraphGeneration/scripts/results/{dataset}/htgn_lr{lr}_5back_threshold{threshold}/')
-            
-    #         # Make a table of all nodes
-    #         table_path = f'data/output/figures/Tables_threshold{threshold}_lr{lr}/'
-            
-    #         evaluator.formTables(curr_dataset_data_all, table_path, dataset, old_only_status=False)
+    table_path = Path('data/output/latex_tables/')
+    table_path.mkdir(parents=True, exist_ok=True) # Ensure directory exists
 
-    for dataset in datasets:
-        curr_dataset_data_all = []
-        lr, threshold = PARAMS['TOPOGED'][dataset]
-        curr_dataset_data_all.append(f'GraphGeneration/scripts/results/{dataset}/oobankchanges_lr{lr}_5back/')
-        
     
-        for model in ['VGAE', 'EvolveGCN', 'TGCN', 'GCLSTM', 'ROLAND']:
-            lr, threshold = PARAMS[model][dataset]
-            curr_dataset_data_all.append(f'GraphGeneration/scripts/results/{dataset}/{model}_lr{lr}_5back_threshold{threshold}/')
-        lr, threshold = PARAMS['htgn'][dataset]
-        curr_dataset_data_all.append(f'GraphGeneration/scripts/results/{dataset}/htgn_lr{lr}_5back_threshold{threshold}/')
+    # Run evaluations in the morning
+    # Assemble table code while they run
+    # Need to compare topoged models against each other
+
+    # for dataset in datasets:
+    #     curr_dataset_data_all = []
         
-        # Make a table of all nodes
-        table_path = f'data/output/figures/BestTables/'
+    #     for model in models:
+    #         full_name_with_ext = f"{model}_{dataset}{model_template_part[model]}"
+    #         folder_name = Path(full_name_with_ext).stem
+    #         prefix_path = output_base / folder_name
+    #         curr_dataset_data_all.append(prefix_path)
         
-        evaluator.formTables(curr_dataset_data_all, table_path, dataset, old_only_status=False)
-                
+        
+        
+    #     # best_topoged = topoged_output_base / f"{model}_{dataset}_{node_embedding_type}_{lr}_{edgebank_style}"  # Find which one we are using
+        
+    #     # Now that the list is full of this dataset's model results, make the table
+    #     if curr_dataset_data_all:
+    #         print(f"Generating tables for {dataset}...")
+    #         evaluator.formTables(curr_dataset_data_all, table_path, dataset, old_only_status=False)
             
+            
+    for edgebank_style in ['default']:
+        for node_embedding_type in ['zeros', 'random', 'degree_average']:
+            for lr_topo in [0.001]: # Renamed to avoid conflict with model lr
+                for toper_type in ['False', 'True']:
+                    for dataset in datasets:
+                            # 1. Check for the specific TopoGED variant
+                        if toper_type == 'True':
+                            pred_val_str = "False"
+                            vector_type_str = "TrueVals"
+                        else:
+                            pred_val_str = "True"
+                            vector_type_str = "VECM"
+
+                        topo_folder = (
+                            f"{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_"
+                            f"lr{lr_topo}_5back_oobankchanges_{node_embedding_type}_sampling_"
+                            f"predvals{pred_val_str}_edgebank_{edgebank_style}_VectorType{vector_type_str}"
+                        )
+                        relative_path = Path(topo_folder) / f"GCN_constructed_graphs_{dataset}.pkl"
+                        target_file = topoged_base / relative_path
+                        
+                        if target_file.exists():
+                            # Define the prefix for THIS specific TopoGED metrics folder
+                            current_topoged_prefix = topoged_output_base / f"TopoGED_{dataset}_{node_embedding_type}_{lr_topo}_{edgebank_style}_{'VECM' if toper_type == 'False' else 'TrueVals'}_sampling"
+                            current_topoged_prefix.mkdir(parents=True, exist_ok=True)
+                            
+                            # 2. Collect Benchmarker Baselines for this Dataset
+                            # We use the exact prefix logic you provided
+                            curr_dataset_baselines = []
+                            
+                            benchmarker_paths = [
+                                f"data/output/predicted/ROLAND/{dataset}_128_0.001_3_5_undirected_threshold_5xCap.pkl",
+                                f"data/output/predicted/VGRNN/{dataset}_64_32_2_0.001_GIN_undirected_threshold_5xCap.pkl",
+                                f"data/output/predicted/TGCN/{dataset}_128_0.01_0.001_undirected_threshold_5xCap.pkl",
+                                f"data/output/predicted/SFDyG/{dataset}_hgcn_7_4_0.0001_1024_100_0_threshold_5xCap.pkl",
+                                f"data/output/predicted/HTGN/{dataset}_0.001_256_128_0.5_undirected_threshold_5xCap.pkl",
+                                f"data/output/predicted/EvolveGCN/{dataset}_egcn_o_128_64_32_0.01_0.0001_undirected_threshold_5xCap.pkl",
+                                f"data/output/predicted/GCLSTM/{dataset}_0.0001_128_2_0.001_undirected_threshold_5xCap.pkl"
+                            ]
+
+                            for b_path in benchmarker_paths:
+                                b_file = pathlib.Path(b_path)
+                                if b_file.exists():
+                                    b_model_name = b_file.parts[3]
+                                    b_prefix = output_base / b_model_name / b_file.stem
+                                    curr_dataset_baselines.append(b_prefix)
+                            
+                            # 3. Combine Baselines + the current TopoGED variant
+                            curr_table_inputs = curr_dataset_baselines + [current_topoged_prefix]
+
+                            # 4. Generate the unique table
+                            table_filename = f"Table_{dataset}_TopoGED_{node_embedding_type}_lr{lr_topo}_{edgebank_style}_{'VECM' if toper_type == 'False' else 'TrueVals'}_sampling"
+                            final_table_path = table_path / table_filename
+                            
+                            print(f"Generating Table: {table_filename}")
+                            evaluator.formTables(
+                                curr_table_inputs, 
+                                final_table_path, 
+                                dataset, 
+                                old_only_status=False
+                            )
+                        else:
+                            print(f"Skipping variant: {target_file.name} not found.")
+            
+    # evaluator.evaluateTopoGED()
+
+    # Finally, run heatmaps
+# The code is calling a function `make_heatmaps()` on an object named `evaluator` to generate
+# heatmaps.
     evaluator.make_heatmaps()
 
-
-"""
-EvolveGCN  
-GCLSTM 
-TGCN 
-VGAE 
-ROLAND 
-HTGN 
-"""
-
-
-""" 
-DGD ROLAND FAIL
-ICONOMI ROLAND FAIL
-DGD HTGN FAIL
-"""

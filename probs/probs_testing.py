@@ -19,6 +19,14 @@ def reconstruct_from_delta(last_raw, predicted_delta):
     return last_raw + predicted_delta
 
 class VectorPredictors:
+    def __init__(self, data):
+        """
+        data: np.array of shape (T, D) where T is time and D is dimensions
+        """
+        self.data = data.astype(np.float32)
+        # Handle the t=0 case where history is empty
+        self.T, self.D = self.data.shape if len(self.data.shape) == 2 else (0, 0)
+
     def _normalize_probabilities(self, pred):
         # 1. Force values into [0, inf) to prevent negative probabilities
         pred = np.maximum(pred, 0)
@@ -42,15 +50,11 @@ class VectorPredictors:
     def predict_sma(self, window=5):
         return np.mean(self.data[-window:], axis=0)
 
-    def predict_var(self):
-        model = VAR(self.data)
-        results = model.fit(maxlags=1)
-        return results.forecast(self.data, steps=1)[0]
-
     # 2. Vectorized Exponentially Weighted Moving Average (V-EWMA)
     def predict_vewma(self, alpha=0.8):
         # High alpha (0.8) reduces lag; low alpha (0.2) increases smoothing
         # Result is weighted average: alpha * current + (1-alpha) * last_average
+        if self.T == 0: return 0
         result = self.data[0]
         for i in range(1, self.T):
             result = alpha * self.data[i] + (1 - alpha) * result
@@ -60,6 +64,7 @@ class VectorPredictors:
     def predict_aes(self):
         # Self-adjusting alpha based on error to eliminate lag during spikes
         # Formula: alpha_t = |error_t| / |absolute_error_t|
+        if self.T == 0: return 0
         res = self.data[0]
         alpha = 0.5
         error_sum = 0.01
@@ -75,13 +80,13 @@ class VectorPredictors:
             res = alpha * self.data[i] + (1 - alpha) * res
         return res
 
-    # # 4. Vector Autoregression (VAR)
-    # def predict_var(self):
-    #     # Requires statsmodels. Captures cross-dimension correlations.
-    #     # Fits a linear model: V(t) = A*V(t-1) + B
-    #     model = VAR(self.data)
-    #     results = model.fit(maxlags=1) # Lag 1 for speed and reduced complexity
-    #     return results.forecast(self.data, steps=1)[0]
+    # 4. Vector Autoregression (VAR)
+    def predict_var(self):
+        # Requires statsmodels. Captures cross-dimension correlations.
+        # Fits a linear model: V(t) = A*V(t-1) + B
+        model = VAR(self.data)
+        results = model.fit(maxlags=1) # Lag 1 for speed and reduced complexity
+        return results.forecast(self.data, steps=1)[0]
 
     # 5. Vector Error Correction Model (VECM)
     def predict_vecm(self):
@@ -96,6 +101,7 @@ class VectorPredictors:
     def predict_ssm(self):
         # Predict-Correct cycle. Great for 'weird patterns' without lag.
         # Simplied steady-state Kalman Filter
+        if self.T == 0: return 0
         state_est = self.data[0]
         error_cov = np.ones(self.D)
         process_var = 1e-4 # How much we trust the 'model'
@@ -117,20 +123,21 @@ class VectorPredictors:
 if __name__ == "__main__":
     np.random.seed(1024)  # Matches other files 
     
-    datasets = ['Reddit_B']
+    datasets = ["CollegeMsg", "mathoverflow", "networkadex", "networkaeternity", "networkaion", "networkaragon", "networkbancor", "networkcentra", "networkcindicator", "networkcoindash", "networkdgd", "networkiconomi", "Reddit_B", "tgbl-wiki"]
+
 
     num_buckets = 10
     using_weight = False
     activation = 'Degree'
-    sma_windows = [3, 5, 6]
+    sma_windows = [5]
     train_split, val_split = 0.7, 0.15
-    methods = [f"SMA_{w}" for w in sma_windows] + ["VAR"]
-    methods = ["VAR"]
+    methods = [f"SMA_{w}" for w in sma_windows] + ["VAR", "V-EWMA", "AES", "SSM", "VECM"]
+    methods = ["AES", "VECM", "VAR"]
     
     my_loader = Loader()
     
     # We run the whole thing twice: once for Raw, once for Delta
-    for mode in ["Raw", "Delta"]:
+    for mode in ["Raw"]:
         print(f"\n{'='*30}\nRUNNING MODE: {mode}\n{'='*30}")
         all_final_results = []
         use_predicted = False
@@ -172,50 +179,54 @@ if __name__ == "__main__":
                     actual_target = target_data[t]
                     
                     pred = None
-                    predictor = VectorPredictors()
-                    if t < warmup_limit:
-                        pred = actual_target
-                    else:
-                        try:
-                            # We don't need 'if t == 0' anymore because Delta starts at 1
+                    # FIX: We now pass the historical data into the predictor!
+                    try:
+                        predictor = VectorPredictors(history)
+                        if t < warmup_limit:
+                            pred = actual_target
+                        else:
                             if m.startswith("SMA_"):
                                 w = int(m.split("_")[1])
                                 pred = predictor.predict_sma(window=min(w, len(history)))
-                            elif m == "VAR":
-                                # VAR needs at least D points to solve the matrix
-                                pred = predictor.predict_var() if len(history) > D else actual_target
-                        except Exception:
-                            pred = history[-1] if len(history) > 0 else actual_target
+                            elif m == "V-EWMA": pred = predictor.predict_vewma(alpha=0.8)
+                            elif m == "AES":    pred = predictor.predict_aes()
+                            elif m == "SSM":    pred = predictor.predict_ssm()
+                            elif m == "VAR":    pred = predictor.predict_var() if len(history) > D else actual_target
+                            elif m == "VECM":   pred = predictor.predict_vecm() if len(history) > D else actual_target
+                    except Exception as e:
+                        # Fallback to persistence (now it will only trigger on legitimate mathematical errors, not object errors)
+                        pred = history[-1] if len(history) > 0 else actual_target
 
                     # --- RECONSTRUCTION ---
                     if mode == "Delta":
-                        # t is now at least 1, so gt_embeddings[t-1] is safe
-                        raw_pred = reconstruct_from_delta(gt_embeddings[t-1], pred)
+                        # FIX: Protect against the -1 array wrap-around at t=0
+                        raw_pred = reconstruct_from_delta(gt_embeddings[t-1] if t > 0 else gt_embeddings[0], pred)
                     else:
                         raw_pred = pred
 
                     # Normalize to enforce probability rules [0,1]
+                    # Since _normalize_probabilities doesn't rely on self.data, we can safely call it even if history was empty
                     raw_pred = predictor._normalize_probabilities(raw_pred)
                     complete_pred_series.append(raw_pred)
                     
-                    # MSE Calculation (Now only for t >= start_t)
-                    mse_val = np.mean((gt_embeddings[t] - raw_pred)**2)
-                    for name, indices in splits.items():
-                        if t in indices:
-                            split_mse_totals[name].append(mse_val)
+                    # MSE Calculation (Now strictly enforced for t >= start_t to avoid Day 0 noise in Delta mode)
+                    if t >= start_t:
+                        mse_val = np.mean((gt_embeddings[t] - raw_pred)**2)
+                        for name, indices in splits.items():
+                            if t in indices:
+                                split_mse_totals[name].append(mse_val)
 
-                # --- MOVE PLOTTING INSIDE THE METHOD LOOP ---
+                # # --- MOVE PLOTTING INSIDE THE METHOD LOOP ---
                 pred_df = pd.DataFrame(complete_pred_series)
                 real_df = pd.DataFrame(gt_embeddings)
-                figures_output_path = f"data/output/ProbabilityTesting/data/sample_plots/"
+                figures_output_path = f"data/output/ProbabilityTesting/data/sample_plots/{m}/{mode}/"
                 os.makedirs(figures_output_path, exist_ok=True)
                 for i in range(0, 6):
                     # Plot Nodes/Edges (-2 and -1 are the last threshold pair)
                     Visualizer.plot_scatter(pred_df.iloc[:, i], real_df.iloc[:, i], 
                                         f"{figures_output_path}{dataset}_{m}_idx{i}_{mode}.pdf", mode="nodes" if i < 2 else "edges")
 
-                print(len(complete_pred_series), len(gt_embeddings), len(probabilities))
-
+                print(f"Generated {len(complete_pred_series)} predictions for {len(gt_embeddings)} true values.")
 
                 pickle_dir = f'data/input/cached/{dataset}/predValues/'
                 os.makedirs(pickle_dir, exist_ok=True)
@@ -227,6 +238,7 @@ if __name__ == "__main__":
                 for split_name in splits.keys():
                     if split_mse_totals[split_name]:
                         ds_results[f"{split_name}_{m}_MSE"] = np.mean(split_mse_totals[split_name])
+                        print(f"  {split_name} Split | MSE: {ds_results[f'{split_name}_{m}_MSE']:.4f}")
 
             # --- APPEND TO RESULTS AFTER ALL METHODS FOR DATASET ARE DONE ---
             all_final_results.append(ds_results)

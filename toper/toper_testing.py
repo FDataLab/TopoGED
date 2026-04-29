@@ -95,20 +95,21 @@ class VectorPredictors:
             state_est = pred_state + kalman_gain * (self.data[i] - pred_state)
             error_cov = (1 - kalman_gain) * pred_error_cov
             
-        return state_est
+        return state_est  # TRy using 
     
     
 if __name__ == "__main__":
     np.random.seed(1024)  # Matches other files 
     
-    datasets = ['networkiconomi']
+    datasets = ["CollegeMsg", "mathoverflow", "networkadex", "networkaeternity", "networkaion", "networkaragon", "networkbancor", "networkcentra", "networkcindicator", "networkcoindash", "networkdgd", "networkiconomi", "Reddit_B", "tgbl-wiki"]
 
     num_buckets = 10
     using_weight = False
     activation = 'Degree'
-    sma_windows = [3, 5, 6]
+    sma_windows = [5]
     train_split, val_split = 0.7, 0.15
-    methods = ["VAR"]
+    # methods = [f"SMA_{w}" for w in sma_windows] + ["VAR", "V-EWMA", "AES", "SSM", "VECM"]
+    methods = ["AES", "VECM", "VAR"]
     
     my_loader = Loader()
     
@@ -118,7 +119,7 @@ if __name__ == "__main__":
         all_final_results = []
         
         for dataset in datasets:
-            for num_buckets in [5, 10, 15, 20]:
+            for num_buckets in [10]:
                 # 1. Load and Flatten
                 embeddings_raw, _ = my_loader.load_data(dataset, activation, 
                                                     include_weights=using_weight, 
@@ -141,6 +142,8 @@ if __name__ == "__main__":
                     print(f"--- {mode} | {dataset} | {m} ---")
                     complete_pred_series = []
                     split_mse_totals = {name: [] for name in splits.keys()}
+                    split_mpe_nodes = {name: [] for name in splits.keys()}
+                    split_mpe_edges = {name: [] for name in splits.keys()}
 
                     for t in range(T):
                         history = target_data[:t]
@@ -167,17 +170,30 @@ if __name__ == "__main__":
                         raw_pred = reconstruct_from_delta(gt_embeddings[t-1] if t > 0 else gt_embeddings[0], pred) if mode == "Delta" else pred
                         complete_pred_series.append(raw_pred)
                         
-                        # MSE Calculation
+                        actual_nodes = gt_embeddings[t][-2]
+                        pred_nodes = raw_pred[-2]
+                        
+                        actual_edges = gt_embeddings[t][-1]
+                        pred_edges = raw_pred[-1]
+
+                        # Calculate inner fraction, guarding against division by zero
+                        err_nodes = (pred_nodes - actual_nodes) / actual_nodes if actual_nodes != 0 else 0.0
+                        err_edges = (pred_edges - actual_edges) / actual_edges if actual_edges != 0 else 0.0
+                        
                         mse_val = np.mean((gt_embeddings[t] - raw_pred)**2)
+                        
+                        # --- 3. Distribute the daily error to the correct split bucket ---
                         for name, indices in splits.items():
                             if t in indices:
                                 split_mse_totals[name].append(mse_val)
+                                split_mpe_nodes[name].append(err_nodes)
+                                split_mpe_edges[name].append(err_edges)
 
-                    # --- MOVE PLOTTING INSIDE THE METHOD LOOP ---
+                    # # --- MOVE PLOTTING INSIDE THE METHOD LOOP ---
                     if num_buckets == 10:
                         pred_df = pd.DataFrame(complete_pred_series)
                         real_df = pd.DataFrame(gt_embeddings)
-                        figures_output_path = f"data/output/TopERTesting/data/sample_plots/"
+                        figures_output_path = f"data/output/TopERTesting/data/sample_plots/{m}/{mode}/"
                         os.makedirs(figures_output_path, exist_ok=True)
                         
                         # Plot Nodes/Edges (-2 and -1 are the last threshold pair)
@@ -193,9 +209,13 @@ if __name__ == "__main__":
                         pickle.dump(complete_pred_series, f)
                         
                     # Store averages for THIS method in ds_results
-                    for split_name in splits.keys():
-                        if split_mse_totals[split_name]:
-                            ds_results[f"{split_name}_{m}_MSE"] = np.mean(split_mse_totals[split_name])
+                    for name in splits.keys():
+                        # np.mean sums the array and divides by |D| (the number of items in the split)
+                        final_mpe_nodes = np.mean(split_mpe_nodes[name])
+                        final_mpe_edges = np.mean(split_mpe_edges[name])
+                        final_mse = np.mean(split_mse_totals[name])
+                        
+                        print(f"  {name} Split | MSE: {final_mse:.4f} | Node MPE: {final_mpe_nodes:.4f} | Edge MPE: {final_mpe_edges:.4f}")
 
                 # --- APPEND TO RESULTS AFTER ALL METHODS FOR DATASET ARE DONE ---
                 all_final_results.append(ds_results)

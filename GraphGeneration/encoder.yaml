@@ -21,13 +21,13 @@ encoder_model:
   other_models:
     feature_type: 'binary'
     feature_dim: 32
-    embedding_dim: 64
+    embedding_dim: 128
     num_layers: 1
     model_type: 'GCN'
     n_neighbors: 10
   hidden_dim: 128
   nodeEmbeddingType: "GCN"
-  addOnFeature: "Degree"
+  addOnFeature: ""
 
 benchmarking:
   roland:
@@ -62,7 +62,7 @@ decoder_model:
 
 training:
   batch_size: 32 # play around
-  lr: 0.001
+  lr: 0.01
   epochs: 100
   day: 10000
   weight_decay: 0.0
@@ -77,20 +77,23 @@ sampling:
   # decay_factor: 3.0540
 
   # aion
-  beta: 0.8789
-  decay_factor: 3.6224
+  beta: 
+  decay_factor: 
 
 
   alpha: 0
 
 
-dataset: tgbl-wiki
+dataset: CollegeMsg
 seed: 1024
 days_back: 5  # Use 10000 as meaning 'all'
 directed_flag: False
 use_predicted_vals: true
 starting_graph_idx: 2 
 use_moving_average: True
-ablation: True
+ablation: False
 sensitivity_analysis: False
 num_toper_buckets: 10
+edgebank_style: "shuffle"
+use_test_style: "AES"
+new_node_strategy: "random"

@@ -141,7 +141,7 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
         model.train()
         epoch_loss = 0
         for i, (x, y_delta, x_last) in enumerate(train_loader):
-            x, y_delta, x_last = x.to(device), y_delta.to(device), x_last.to(device)
+            x, y_delta = x.to(device), y_delta.to(device)
             optimizer.zero_grad()
             predicted_delta = model(x)[:, -1, :].squeeze(1)
             loss = criterion(predicted_delta, y_delta.float())
@@ -154,7 +154,7 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
         valid_loss = 0
         with torch.no_grad():
             for i, (x, y_delta, x_last) in enumerate(valid_loader):
-                x, y_delta, x_last = x.to(device), y_delta.to(device), x_last.to(device)
+                x, y_delta = x.to(device), y_delta.to(device)
                 predicted_delta = model(x)[:, -1, :].squeeze(1)
                 valid_loss += criterion(predicted_delta, y_delta.float()).item()
         valid_loss /= len(valid_loader)
@@ -164,26 +164,32 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
             curr_batch_best_loss = valid_loss
             no_improvement_counter = 0
 
-            # Add first few vectors to preserve length
-            temp_vectors = []
-            for k in range(window_size):
-                temp_vectors.append(embeddings[k]) 
-            
             # FIX: Always use the full sequence for inference
             if norm:
                 # Normalize the full embeddings using the training stats to avoid data leakage
                 inf_data, _, _ = my_utils.normalize_embeddings(embeddings, X_val, X_test)
             else:
                 inf_data = embeddings
+                
+            # Add first few vectors to preserve length (Use inf_data so scales match!)
+            temp_vectors = []
+            for k in range(window_size):
+                temp_vectors.append(inf_data[k]) 
             
             # Create the loader with the full dataset
             full_loader = DataLoader(DeltaEmbeddingDataset(inf_data, k=window_size), batch_size=1, shuffle=False)
             
             with torch.no_grad():
-                for x_inf, _, _ in full_loader:
+                for x_inf, _, x_last in full_loader:
                     x_inf = x_inf.to(device)
+                    x_last = x_last.to(device)
+                    
+                    # 1. Predict the delta
                     delta_pred = model(x_inf)[:, -1, :].squeeze(1).cpu().numpy()
-                    temp_vectors.append(temp_vectors[-1] + delta_pred[0])
+                    
+                    # 2. Add delta to the TRUE past state to stop compounding error
+                    true_prev_state = x_last.cpu().numpy()[0]
+                    temp_vectors.append(true_prev_state + delta_pred[0])
             
             best_vectors = np.array(temp_vectors)
         
@@ -198,7 +204,14 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
     # Real vectors in embeddings
     # Take the best predicted vectors
     pred_df_discrete = pd.DataFrame(best_vectors)
-    real_df_discrete = pd.DataFrame(embeddings)
+    
+    # IMPORTANT: If 'norm' is True, best_vectors is scaled! 
+    # To plot accurately against real data, we must plot it against the scaled inf_data.
+    if norm:
+        real_df_discrete = pd.DataFrame(inf_data)
+    else:
+        real_df_discrete = pd.DataFrame(embeddings)
+        
     pred_col_nodes = pred_df_discrete.iloc[:, -2]  # Nodes
     real_col_nodes = real_df_discrete.iloc[:, -2]  # Nodes
     pred_col_edges = pred_df_discrete.iloc[:, -1]  # Edges
@@ -217,6 +230,41 @@ def train_and_eval_delta(dataset, activations, window_size, norm, num_layer, dro
     with open(pickle_path, 'wb') as f:
         pickle.dump(best_vectors, f)
         
+    total_days = len(pred_df_discrete)
+    train_split_idx = int(0.7 * total_days)
+    val_split_idx = int(0.85 * total_days)
+    
+    # 2. Skip the ground-truth warmup window so we only evaluate REAL predictions
+    train_start_idx = window_size
+    
+    # 3. Calculate |D| (number of days) for the MPE denominators
+    days_train = train_split_idx - train_start_idx
+    days_val = val_split_idx - train_split_idx
+    days_test = total_days - val_split_idx
+
+    # --- MSE CALCULATION ---
+    train_mse = ((pred_df_discrete.iloc[train_start_idx:train_split_idx].values - real_df_discrete.iloc[train_start_idx:train_split_idx].values)**2).mean()
+    val_mse   = ((pred_df_discrete.iloc[train_split_idx:val_split_idx].values - real_df_discrete.iloc[train_split_idx:val_split_idx].values)**2).mean()
+    test_mse  = ((pred_df_discrete.iloc[val_split_idx:total_days].values - real_df_discrete.iloc[val_split_idx:total_days].values)**2).mean()
+
+    # --- MEAN PERCENTAGE ERROR (V_hat - V) / V ---
+    # Nodes (-2)
+    train_pd_nodes = ((pred_df_discrete.iloc[train_start_idx:train_split_idx, -2] - real_df_discrete.iloc[train_start_idx:train_split_idx, -2]) / real_df_discrete.iloc[train_start_idx:train_split_idx, -2]).sum()
+    val_pd_nodes   = ((pred_df_discrete.iloc[train_split_idx:val_split_idx, -2] - real_df_discrete.iloc[train_split_idx:val_split_idx, -2]) / real_df_discrete.iloc[train_split_idx:val_split_idx, -2]).sum()
+    test_pd_nodes  = ((pred_df_discrete.iloc[val_split_idx:total_days, -2] - real_df_discrete.iloc[val_split_idx:total_days, -2]) / real_df_discrete.iloc[val_split_idx:total_days, -2]).sum()
+
+    # Edges (-1)
+    train_pd_edges = ((pred_df_discrete.iloc[train_start_idx:train_split_idx, -1] - real_df_discrete.iloc[train_start_idx:train_split_idx, -1]) / real_df_discrete.iloc[train_start_idx:train_split_idx, -1]).sum()
+    val_pd_edges   = ((pred_df_discrete.iloc[train_split_idx:val_split_idx, -1] - real_df_discrete.iloc[train_split_idx:val_split_idx, -1]) / real_df_discrete.iloc[train_split_idx:val_split_idx, -1]).sum()
+    test_pd_edges  = ((pred_df_discrete.iloc[val_split_idx:total_days, -1] - real_df_discrete.iloc[val_split_idx:total_days, -1]) / real_df_discrete.iloc[val_split_idx:total_days, -1]).sum()
+
+    res_df = pd.DataFrame({
+        "MSE": [train_mse, val_mse, test_mse],
+        "Node Percent Diff": [train_pd_nodes / days_train, val_pd_nodes / days_val, test_pd_nodes / days_test],
+        "Edge Percent Diff": [train_pd_edges / days_train, val_pd_edges / days_val, test_pd_edges / days_test]
+    }, index=["Train", "Validation", "Test"])
+
+    print(res_df)
 
 def main():
     for num_buckets in [10]:

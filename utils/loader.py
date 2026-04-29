@@ -203,16 +203,29 @@ class Loader():
         return labels
         
     
-    # Load the data from edge list txt file
+    def get_snapshot_duration(self, dataset):
+        if dataset in ['CollegeMsg', 'mathoverflow', 'networkadex', 'networkaion', 'networkaeternity', 'networkaragon', 
+                    'networkbancor', 'networkcentra', 'networkcoindash', 'networkiconomi', 'networkcindicator', 
+                    'networkdgd', 'Reddit_B', 'tgbl-wiki', 'bitcoinotc', 'bitcoinalpha', 'uci-message']:
+            return '1D'
+        elif dataset in ['Hypertext09', 'ia-contact']:
+            return '10min'
+        elif dataset in ['enron']:
+            return '11_BINS' # Special flag to force exactly 11 equal-edge snapshots
+        elif dataset in ['radoslaw', 'fb-forum']:
+            return '8H'
+        elif dataset in ['HepPH', 'HepTH']:
+            return '1M' # 1 Month
+        elif dataset == 'tgbl-review':
+            return '1W' # 1 Week
+        else:
+            return '1D' # Default fallback
+    
+    
+    # Load the data from edge list txt file (Undirected)
     def read_edges(self, dataset):
         """
         Read the edgelists a file for later processing
-        
-        Args:
-            dataset (string): The name of the dataset to load
-        
-        Returns:
-            data (list): All graphs created for processing
         """
         print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
         data = []
@@ -225,28 +238,41 @@ class Loader():
         
         edgelist_df.to_csv(edgelist_rawfile, index=False)
         
-        uniq_ts_list = np.unique(edgelist_df['date'])
+        # --- TIME WINDOW GROUPING LOGIC ---
+        freq = self.get_snapshot_duration(dataset)
+        edgelist_df['date_dt'] = pd.to_datetime(edgelist_df['date'])
+        
+        # Sort chronologically so our bins are perfectly sequential
+        edgelist_df = edgelist_df.sort_values('date_dt').reset_index(drop=True)
 
-        # Loop over snapshot ids
+        if freq == '11_BINS':
+            # Splits the sorted dataframe into exactly 11 equal-sized chunks (0 through 10)
+            edgelist_df['group_ts'] = pd.qcut(edgelist_df.index, 11, labels=False)
+        elif freq.endswith('M'):
+            edgelist_df['group_ts'] = edgelist_df['date_dt'].dt.to_period('M').dt.start_time
+        elif freq.endswith('W'):
+            edgelist_df['group_ts'] = edgelist_df['date_dt'].dt.to_period('W').dt.start_time
+        else:
+            edgelist_df['group_ts'] = edgelist_df['date_dt'].dt.floor(freq)
+            
+        uniq_ts_list = sorted(edgelist_df['group_ts'].unique())
+
+        # Loop over aggregated snapshot ids
         for ts in uniq_ts_list:
-            # NOTE: this code does not use any node or edge features
-            ts_edges = edgelist_df.loc[edgelist_df['date'] == ts, ['from', 'to']]
+            ts_edges = edgelist_df.loc[edgelist_df['group_ts'] == ts, ['from', 'to']]
             ts_edges = ts_edges.drop_duplicates()
+            
+            # This automatically only includes nodes that have edges in this snapshot
             ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to')
             data.append(ts_G)
         
         return data
     
     
+    # Load the data from edge list txt file (Directed)
     def read_edges_directed(self, dataset, norm=False):
         """
         Read the edgelists a file for later processing
-        
-        Args:
-            dataset (string): The name of the dataset to load
-        
-        Returns:
-            data (list): All graphs created for processing
         """
         print("INFO: Loading a Graph from `Temporal Graph Classification (TGC)` Category: {}".format(dataset))
         data = []
@@ -259,32 +285,36 @@ class Loader():
         
         edgelist_df.to_csv(edgelist_rawfile, index=False)
         
-        if dataset == 'tgbl-review':  # We use week long snapshots here
-            edgelist_df['date_dt'] = pd.to_datetime(edgelist_df['date'])
+        # --- TIME WINDOW GROUPING LOGIC ---
+        freq = self.get_snapshot_duration(dataset)
+        edgelist_df['date_dt'] = pd.to_datetime(edgelist_df['date'])
+        
+        # Sort chronologically so our bins are perfectly sequential
+        edgelist_df = edgelist_df.sort_values('date_dt').reset_index(drop=True)
+        
+        if freq == '11_BINS':
+            # Splits the sorted dataframe into exactly 11 equal-sized chunks (0 through 10)
+            edgelist_df['group_ts'] = pd.qcut(edgelist_df.index, 11, labels=False)
+        elif freq.endswith('M'):
+            edgelist_df['group_ts'] = edgelist_df['date_dt'].dt.to_period('M').dt.start_time
+        elif freq.endswith('W'):
             edgelist_df['group_ts'] = edgelist_df['date_dt'].dt.to_period('W').dt.start_time
         else:
-            # For other datasets, keep the daily string as the group key
-            edgelist_df['group_ts'] = edgelist_df['date']
+            edgelist_df['group_ts'] = edgelist_df['date_dt'].dt.floor(freq)
             
-        # Get chronological list of snapshots
         uniq_ts_list = sorted(edgelist_df['group_ts'].unique())
         
         if norm:
             edgelist_df = self.normalize_edge_weights(edgelist_df)
         
-        # Loop over snapshots (weeks for tgbl-review, days for others)
+        # Loop over snapshots
         for ts in uniq_ts_list:
-            # Select edges for this specific week/day
             ts_edges = edgelist_df.loc[edgelist_df['group_ts'] == ts, ['from', 'to', 'value']]
-            
-            # AGGREGATION: If node A talked to node B twice in one week,
-            # we sum their 'value' to create a single weighted edge.
             ts_edges = ts_edges.groupby(['from', 'to'])['value'].sum().reset_index()
             
-            # Create the directed graph for this snapshot
+            # This automatically only includes nodes that have edges in this snapshot
             ts_G = nx.from_pandas_edgelist(ts_edges, 'from', 'to', edge_attr=True, create_using=nx.DiGraph())
             
-            # Reddit specific processing
             if dataset == 'Reddit_B':
                 for u, v, graph_data in ts_G.edges(data=True):
                     graph_data['value'] = 1 / (1 + np.exp(-graph_data['value']))
@@ -292,7 +322,6 @@ class Loader():
             data.append(ts_G)
         
         return data
-
 
     def normalize_edge_weights(self, edges_df):
         INT_MAX = 2**31 - 1  # Maximum 32-bit integer value
@@ -330,8 +359,8 @@ class Loader():
         # Betweenness takes too long to process and are deemed not feasible 
         activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedBetweenness, EmbedIncrementalCloseness]  # All activation functions to use
         activation_names = ['Degree', 'Forman', 'Weight', 'Betweenness', 'Closeness']
-        activations = [EmbedDegree, EmbedForman, EmbedWeight, EmbedIncrementalCloseness]  # All activation functions to use
-        activation_names = ['Degree', 'Forman', 'Weight', 'Closeness']
+        activations = [EmbedDegree]  # All activation functions to use
+        activation_names = ['Degree']
 
         # If you want to use Betweenness, just run it here
         # activations = [EmbedBetweenness] 
@@ -378,23 +407,23 @@ class Loader():
                     if not os.path.exists(activation_file):
                         missing_cached.append(dataset)
                         break  # Skip to the next dataset if any activation file is missing
-                
+            
             # Check the probabilities
             probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_all_back.csv')
             if not os.path.exists(probabilities_file):
                 missing_cached.append(dataset)
-                
+            
             # Check the normalized probabilities
             probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_all_back_norm.csv')
             if not os.path.exists(probabilities_file):
                 missing_cached.append(dataset)
-                
+            
             for num_back in [5, 7]:
                 probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_{num_back}_back.csv')
                 if not os.path.exists(probabilities_file):
                     missing_cached.append(dataset)
         
-                
+            
         # If we are missing files, generate them
         missing_cached = list(set(missing_cached))
         if missing_cached:

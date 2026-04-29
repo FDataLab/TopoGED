@@ -1,6 +1,6 @@
 """Euclidean manifold."""
 
-from script.hgcn.manifolds.base import Manifold
+from benchmarkers.htgn.script.hgcn.manifolds.base import Manifold
 
 
 class Euclidean(Manifold):

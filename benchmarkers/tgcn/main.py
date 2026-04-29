@@ -70,7 +70,7 @@ def optimize_threshold(model, val_snaps, train_snaps, node_count, hidden_dim, de
     y_scores = torch.cat(all_probs).cpu().numpy()
     y_true = torch.cat(all_targets).cpu().numpy()
     
-    thresholds = np.linspace(0.01, 0.99, 50)
+    thresholds = np.linspace(0.05, 0.99, 95)
     best_f1, best_threshold = 0, 0.5
     
     for t in thresholds:
@@ -78,88 +78,160 @@ def optimize_threshold(model, val_snaps, train_snaps, node_count, hidden_dim, de
         score = f1_score(y_true, preds, zero_division=0)
         if score > best_f1:
             best_f1, best_threshold = score, t
-            
+    print(f"--- Probability Distribution Check ---")
+    print(f"Positives | Mean: {pos_scores.mean():.6f} | Std: {pos_scores.std():.6f} | Max: {pos_scores.max():.6f} | Min: {pos_scores.min():.6f}")
+    print(f"Negatives | Mean: {neg_scores.mean():.6f} | Std: {neg_scores.std():.6f} | Max: {neg_scores.max():.6f} | Min: {neg_scores.min():.6f}")
+                
     print(f"Optimal Threshold: {best_threshold:.2f} | Sampled Val F1: {best_f1:.4f}")
     return best_threshold
 
 @torch.no_grad()
 def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count, hidden_dim, device, dataset, file_path, is_directed=True, threshold=0.5):
-    from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
+    import scipy.sparse as sp
+    import gc
+    import pickle
+    import psutil
+    import os
+    import numpy as np
+    import torch
+    import networkx as nx
+
+    def get_ram_usage():
+        return psutil.Process().memory_info().rss / (1024 * 1024)
+
     model.eval()
     
-    # Warm up
+    # 1. Load Ground Truth for Metrics and Dynamic Capping
+    from GraphGeneration.scripts.load_data import load_data
+    _, _, _, target_graphs = load_data(
+        dataset, '', '', '', 'all', 
+        use_predicted=False, num_buckets=10, use_test_style=None
+    )
+    
+    # Flatten buckets and calculate edge counts
+    target_graphs_flat = [bucket[-1] for bucket in target_graphs]
+    num_edges_in_targets = [g.number_of_edges() for g in target_graphs_flat]
+
+    # Calculate the global starting index for the test set
+    # Assuming test is the last portion of the total sequence
+    total_snaps = len(target_graphs_flat)
+    test_start_idx = total_snaps - len(current_snaps)
+
+    # 2. Warm up hidden state
     h = torch.zeros(node_count, hidden_dim, device=device)
     for snap in previous_snaps:
         x = snap.x.to_dense() if snap.x.is_sparse else snap.x
         _, h = model(x.to(device), snap.edge_index.to(device), h)
             
-    # Generate embeddings for forecasting
-    all_embeddings = []
-    for snap in current_snaps:
+    predicted_networks = []
+
+    # 3. Sequential Inference and Standardized Construction
+    print(f"--- Starting TGCN Sparse Construction (5x Dynamic Cap): {len(current_snaps)} Snapshots ---")
+    for t_local, snap in enumerate(current_snaps):
+        # Global index for target alignment
+        t_global = test_start_idx + t_local
+        
         x = snap.x.to_dense() if snap.x.is_sparse else snap.x
         z, h = model(x.to(device), snap.edge_index.to(device), h)
-        all_embeddings.append(z)
+        
+        # CHUNKED CANDIDATE COLLECTION
+        all_rows, all_cols, all_scores = [], [], []
+        chunk_size = 512
+        
+        for i in range(0, node_count, chunk_size):
+            end_i = min(i + chunk_size, node_count)
+            logits_chunk = torch.mm(z[i:end_i], z.t())
+            probs_chunk = torch.sigmoid(logits_chunk)
             
-    try:
-        top_k_values = get_topk(dataset, use_true=False)
-        test_top_k = top_k_values[-len(current_snaps):]
-        strategies = [True, False]
-    except:
-        strategies = [False]
-
-    for using_topk in strategies:
-        predicted_networks = []
-        for t, z in enumerate(all_embeddings):
-            # CHUNKED RECONSTRUCTION to avoid N x N crash
-            adj_matrix = np.zeros((node_count, node_count), dtype=np.int8)
-            chunk_size = 512
+            # Zero out self-loops
+            diag_idx = torch.arange(i, end_i, device=device)
+            probs_chunk[torch.arange(end_i - i), diag_idx] = 0
             
-            if using_topk:
-                k = int(test_top_k[t])
-                all_vals, all_inds = [], []
-
-            for i in range(0, node_count, chunk_size):
-                end_i = min(i + chunk_size, node_count)
-                logits_chunk = torch.mm(z[i:end_i], z.t())
-                probs_chunk = torch.sigmoid(logits_chunk)
-                
-                # Zero out self-loops in chunk
-                diag_idx = torch.arange(i, end_i, device=device)
-                probs_chunk[torch.arange(end_i - i), diag_idx] = 0
-                
-                if using_topk:
-                    ck = min(k, probs_chunk.numel())
-                    v, l = torch.topk(probs_chunk.view(-1), ck)
-                    all_vals.append(v)
-                    all_inds.append(l + (i * node_count))
-                else:
-                    mask = (probs_chunk > threshold).cpu().numpy()
-                    adj_matrix[i:end_i] = mask.astype(np.int8)
-
-            if using_topk:
-                top_v = torch.cat(all_vals)
-                top_i = torch.cat(all_inds)
-                _, global_locs = torch.topk(top_v, min(k, top_v.numel()))
-                final_inds = top_i[global_locs]
-                rows = (final_inds // node_count).cpu().numpy()
-                cols = (final_inds % node_count).cpu().numpy()
-                adj_matrix[rows, cols] = 1
-
-            if not is_directed:
-                adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
+            mask = probs_chunk >= threshold
+            rows, cols = torch.where(mask)
+            scores = probs_chunk[mask]
             
-            predicted_networks.append(nx.from_numpy_array(adj_matrix, create_using=(nx.DiGraph() if is_directed else nx.Graph())))
+            all_rows.append((rows + i).cpu())
+            all_cols.append(cols.cpu())
+            all_scores.append(scores.cpu())
+            del logits_chunk, probs_chunk, mask
 
-        strategy = 'topk' if using_topk else 'threshold'
-        save_path = f"data/output/predicted/TGCN/{file_path}_{strategy}.pkl"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'wb') as f:
-            pickle.dump({'graphs': predicted_networks, 'node_count': node_count}, f)
-        print(f"Saved T-GCN predicted graphs ({strategy}) to {save_path}")
-            
+        # Consolidate candidates
+        full_rows_tensor = torch.cat(all_rows)
+        full_cols_tensor = torch.cat(all_cols)
+        full_scores_tensor = torch.cat(all_scores)
+        num_threshold_passed = full_scores_tensor.numel()
+
+        # 4. STANDARDIZED DYNAMIC CAPPING (5x edges of T-1)
+        max_num_edges = max(num_edges_in_targets[t_global - 1] * 5, 1000)
+        
+        # Capture raw/uncapped arrays BEFORE capping
+        raw_rows = full_rows_tensor.numpy()
+        raw_cols = full_cols_tensor.numpy()
+        
+        if num_threshold_passed > max_num_edges:
+            _, top_k_idx = torch.topk(full_scores_tensor, max_num_edges)
+            final_rows = full_rows_tensor[top_k_idx].numpy()
+            final_cols = full_cols_tensor[top_k_idx].numpy()
+            status = "CAPPED"
+        else:
+            final_rows = raw_rows
+            final_cols = raw_cols
+            status = "ACCEPTED"
+
+        # 5. PREPARE GROUND TRUTH (Keep it sparse!)
+        true_graph = target_graphs_flat[t_global].copy()
+        true_graph.add_nodes_from(range(node_count))
+        
+        true_adj_sp = nx.to_scipy_sparse_array(true_graph, nodelist=range(node_count), format='csr')
+        num_true_edges = true_adj_sp.nnz
+
+        # --- HELPER FUNCTION FOR METRICS ---
+        def get_metrics(pred_rows, pred_cols, N):
+            if len(pred_rows) > 0:
+                matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                tp = np.sum(matched > 0)
+                fp = len(pred_rows) - tp
+                fn = num_true_edges - tp
+                tn = (N * (N - 1)) - (tp + fp + fn)
+                return tp, fp, tn, fn
+            else:
+                return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+
+        # Calculate both sets of metrics
+        tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, node_count)
+        tp_cap, fp_cap, tn_cap, fn_cap = get_metrics(final_rows, final_cols, node_count)
+
+        # 6. BUILD FINAL SPARSE MATRIX (We still only save the capped version)
+        adj_final = sp.csr_matrix(
+            (np.ones(len(final_rows), dtype=np.int8), (final_rows, final_cols)),
+            shape=(node_count, node_count)
+        )
+
+        # 7. PRINT DUAL METRICS
+        print(f"\nSnap {t_global} | {status} | True Edges: {num_true_edges} | Cap Limit: {max_num_edges}")
+        print(f"  [UNCAPPED] Pred: {len(raw_rows):<7} | TP: {tp_raw:<5} | FP: {fp_raw:<7} | TN: {tn_raw:<7} | FN: {fn_raw:<5}")
+        print(f"  [CAPPED]   Pred: {adj_final.nnz:<7} | TP: {tp_cap:<5} | FP: {fp_cap:<7} | TN: {tn_cap:<7} | FN: {fn_cap:<5}")
+
+        if not is_directed:
+            adj_final = adj_final + adj_final.T
+            adj_final.data[:] = 1
+
+        predicted_networks.append(adj_final)
+        
+        # Cleanup
+        del z, all_rows, all_cols, all_scores, full_rows_tensor, full_cols_tensor, full_scores_tensor, raw_rows, raw_cols, final_rows, final_cols
+        gc.collect()
+
+    # 8. Save Logic with _5xCap suffix
+    save_path = f"data/output/predicted/TGCN/{file_path}_threshold_5xCap.pkl"
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    with open(save_path, 'wb') as f:
+        pickle.dump({'graphs': predicted_networks, 'node_count': node_count}, f)
+        
+    print(f"Saved memory-safe TGCN sparse graphs to {save_path}")
     return predicted_networks
-
-# --- 3. MAIN TRAINER ---
 
 def train_model(dataset_snaps, node_count, node_features, dataset, hidden_dim, lr, lambda_loss, is_directed=True, device='cuda'):
     model = TGCNModel(node_count, node_features, hidden_dim).to(device)

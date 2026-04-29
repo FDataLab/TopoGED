@@ -152,7 +152,8 @@ class EvolveGCNRunner:
         if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(self.device)
         
         best_train_loss = float('inf')
-        patience, no_improve = 15, 0
+        patience = 15
+        no_improve = 0
         self.best_encoder, self.best_classifier = None, None
 
         for epoch in range(1, 201):
@@ -162,11 +163,9 @@ class EvolveGCNRunner:
             
             for t in self.train_idx:
                 self.optimizer.zero_grad()
-                # Use history BEFORE t to get embeddings
                 A_win, N_win, Masks = self.get_window_and_mask(t)
                 emb = self.encoder(A_win, N_win, Masks)
                 
-                # Target is the current snapshot t
                 if self.A_list[t].is_sparse:
                     sparse_t = self.A_list[t].coalesce() 
                     indices = sparse_t.indices()
@@ -175,12 +174,12 @@ class EvolveGCNRunner:
                     pos_edges = indices[:, mask].t()
                 else:
                     pos_edges = self.A_list[t].nonzero()
+                
                 if pos_edges.size(0) == 0: continue
                 
                 num_pos = pos_edges.size(0)
-                MAX_NEG_EDGES = 20000  # should stop/limit OOM risk
+                MAX_NEG_EDGES = 20000 
                 if num_pos > MAX_NEG_EDGES:
-                    # Randomly shuffle and take the top K
                     perm = torch.randperm(num_pos)[:MAX_NEG_EDGES]
                     pos_edges = pos_edges[perm]
                     num_pos = MAX_NEG_EDGES
@@ -204,18 +203,25 @@ class EvolveGCNRunner:
 
             avg_epoch_loss = epoch_loss / len(self.train_idx)
             
+            # --- EARLY STOPPING LOGIC ---
             if avg_epoch_loss < best_train_loss:
                 best_train_loss = avg_epoch_loss
+                # Save the best model weights
                 self.best_encoder = copy.deepcopy(self.encoder)
                 self.best_classifier = copy.deepcopy(self.classifier)
                 no_improve = 0
-            else: no_improve += 1
+            else:
+                no_improve += 1
             
             if epoch % 10 == 0 or epoch == 1:
                 y_t = np.concatenate(all_epoch_targets)
                 y_p = np.concatenate(all_epoch_preds)
                 print(f"Epoch {epoch:03d} | Loss: {avg_epoch_loss:.6f} | Train AUC: {roc_auc_score(y_t, y_p):.4f}")
-            if no_improve >= patience: break
+            
+            # Check if patience has been exceeded
+            if no_improve >= patience:
+                print(f"Early stopping triggered at epoch {epoch}. Best Loss: {best_train_loss:.6f}")
+                break
 
         t1, g1, r1 = time.time() - start_train, get_gpu_memory(), get_ram_usage()
         if self.best_encoder is not None:
@@ -227,7 +233,7 @@ class EvolveGCNRunner:
         t2, g2, r2 = time.time() - start_opt, get_gpu_memory(), get_ram_usage()
 
         start_cons = time.time()
-        self.construct_graphs(opt_thresh)
+        self.construct_graphs(opt_thresh, self.args.dataset)
         t3, g3, r3 = time.time() - start_cons, get_gpu_memory(), get_ram_usage()
 
         print(f"\n--- DATASET: {self.args.dataset} (EvolveGCN) METRICS ---")
@@ -248,7 +254,16 @@ class EvolveGCNRunner:
             
             # Use positive edges from the actual snapshot
             adj_t = self.A_list[t]
-            pos_edges = adj_t.indices().t() if adj_t.is_sparse else adj_t.nonzero()
+            if adj_t.is_sparse:
+                # Crucial: coalesce first to merge duplicate entries and enable .indices()
+                coalesced_t = adj_t.coalesce()
+                # Also filter for values > 0 in case your sparse tensor includes zeros
+                indices = coalesced_t.indices()
+                values = coalesced_t.values()
+                mask = values > 0
+                pos_edges = indices[:, mask].t()
+            else:
+                pos_edges = adj_t.nonzero()
             
             # Sample 1:1 negative edges
             neg_edges = torch.randint(0, self.node_count, (pos_edges.size(0), 2)).to(self.device)
@@ -264,7 +279,8 @@ class EvolveGCNRunner:
         y_true = np.concatenate(all_targets)
         
         best_f1, best_tau = 0, 0.5
-        for tau in np.arange(0.1, 0.9, 0.05):
+        thresholds = np.linspace(0.05, 0.99, 95)
+        for tau in thresholds:
             preds = (y_scores > tau).astype(int)
             # Manual F1 to avoid sklearn overhead on large arrays
             tp = np.sum((preds == 1) & (y_true == 1))
@@ -272,49 +288,142 @@ class EvolveGCNRunner:
             fn = np.sum((preds == 0) & (y_true == 1))
             f1 = 2 * tp / (2 * tp + fp + fn + 1e-6)
             if f1 > best_f1: best_f1, best_tau = f1, tau
+
+        pos_scores = y_scores[y_true == 1]
+        neg_scores = y_scores[y_true == 0]
+
+        print(f"--- Probability Distribution Check ---")
+        print(f"Positives | Mean: {pos_scores.mean():.6f} | Std: {pos_scores.std():.6f} | Max: {pos_scores.max():.6f} | Min: {pos_scores.min():.6f}")
+        print(f"Negatives | Mean: {neg_scores.mean():.6f} | Std: {neg_scores.std():.6f} | Max: {neg_scores.max():.6f} | Min: {neg_scores.min():.6f}")
+        
+        print(f"Optimal Threshold: {best_tau:.2f} | Sampled Val F1: {best_f1:.4f}")
+
         return best_tau
 
-    def construct_graphs(self, threshold):
-        """Use the chunked score function for final output."""
-        from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
-        self.encoder.eval(); self.classifier.eval()
-        all_probs = []
+    def construct_graphs(self, threshold, dataset):
+        """
+        Memory-safe EvolveGCN graph construction with a 5x Dynamic Cap
+        and Dual Metric Printing (Capped vs Uncapped).
+        """
+        import scipy.sparse as sp
+        import gc
+        import pickle
+        import os
+        import numpy as np
+        import torch
+        import networkx as nx
+
+        self.encoder.eval()
+        self.classifier.eval()
+        
+        # Used to get number of edges to cap the datasets with X edges (for safety)    
+        from GraphGeneration.scripts.load_data import load_data
+        _, _, _, target_graphs = load_data(
+            dataset, '', '', '', 'all', 
+            use_predicted=False, num_buckets=10, use_test_style=None
+        )
+        
+        target_graphs_flat = [bucket[-1] for bucket in target_graphs]
+        num_edges_in_targets = [g.number_of_edges() for g in target_graphs_flat]
+        
+        predicted_networks = []
+
         with torch.no_grad():
-            for t in self.test_idx:
-                A_win, N_win, Masks = self.get_window_and_mask(t)
-                emb = self.encoder(A_win, N_win, Masks)
-                # Use the chunked helper
-                probs = self.get_adj_scores_chunked(emb).numpy()
-                np.fill_diagonal(probs, 0)
-                all_probs.append(probs)
+            for t_idx in self.test_idx:
+                # 1. Generate embeddings and probabilities
+                adjacency_window, node_window, masks = self.get_window_and_mask(t_idx)
+                embeddings = self.encoder(adjacency_window, node_window, masks)
+                probabilities = self.get_adj_scores_chunked(embeddings)
                 
-        try:
-            top_k_values = get_topk(self.args.dataset, use_true=False)
-            test_top_k = top_k_values[-len(self.test_idx):]
-            strategies = [True, False]
-        except: strategies = [False]
+                if isinstance(probabilities, np.ndarray):
+                    probabilities = torch.from_numpy(probabilities)
+                
+                n = probabilities.shape[0]
+                probabilities.view(-1)[::n+1] = 0
+                
+                # --- PREPARE GROUND TRUTH (Keep it sparse!) ---
+                true_graph = target_graphs_flat[t_idx].copy()
+                true_graph.add_nodes_from(range(self.node_count))
+                
+                true_adj_sp = nx.to_scipy_sparse_array(true_graph, nodelist=range(self.node_count), format='csr')
+                num_true_edges = true_adj_sp.nnz
 
-        for using_topk in strategies:
-            predicted_networks = []
-            for t, probs in enumerate(all_probs):
-                if using_topk:
-                    k = min(int(test_top_k[t]), probs.size)
-                    adj_matrix = np.zeros_like(probs, dtype=int)
-                    if k > 0:
-                        flat_indices = np.argsort(probs, axis=None)[-k:]
-                        r_idx, c_idx = np.unravel_index(flat_indices, probs.shape)
-                        adj_matrix[r_idx, c_idx] = 1
+                # 2. RAW THRESHOLD PASS
+                mask_raw = probabilities >= threshold
+                num_raw = mask_raw.sum().item()
+                indices_raw = torch.where(mask_raw)
+                
+                # Capture the raw/uncapped arrays BEFORE capping
+                raw_rows = indices_raw[0].cpu().numpy()
+                raw_cols = indices_raw[1].cpu().numpy()
+                
+                # 3. APPLY CAP (T-1 logic)
+                max_num_edges = max(num_edges_in_targets[t_idx - 1] * 5, 1000)
+                
+                if num_raw > max_num_edges:
+                    scores = probabilities[mask_raw]
+                    _, top_k_idx = torch.topk(scores, max_num_edges)
+                    final_rows = indices_raw[0][top_k_idx].cpu().numpy()
+                    final_cols = indices_raw[1][top_k_idx].cpu().numpy()
+                    status = "CAPPED"
                 else:
-                    adj_matrix = (probs > threshold).astype(int)
-                if not self.is_directed: adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
-                predicted_networks.append(nx.from_numpy_array(adj_matrix, create_using=(nx.DiGraph() if self.is_directed else nx.Graph())))
+                    final_rows = raw_rows
+                    final_cols = raw_cols
+                    status = "ACCEPTED"
 
-            strategy = 'topk' if using_topk else 'threshold'
-            file_path = f"{self.args.dataset}_{self.args.model}_{self.args.layer_1_feats}_{self.args.layer_2_feats}_{self.args.cls_feats}_{self.args.lr}_{self.args.l2_reg}_{'directed' if self.is_directed else 'undirected'}"
-            save_path = f"data/output/predicted/EvolveGCN/{file_path}_{strategy}.pkl"
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            with open(save_path, 'wb') as f:
-                pickle.dump({'graphs': predicted_networks, 'node_count': self.node_count}, f)
+                # --- HELPER FUNCTION FOR METRICS ---
+                def get_metrics(pred_rows, pred_cols, N):
+                    if len(pred_rows) > 0:
+                        matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                        tp = np.sum(matched > 0)
+                        fp = len(pred_rows) - tp
+                        fn = num_true_edges - tp
+                        tn = (N * (N - 1)) - (tp + fp + fn)
+                        return tp, fp, tn, fn
+                    else:
+                        return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+
+                # Calculate both sets of metrics
+                tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, self.node_count)
+                tp_cap, fp_cap, tn_cap, fn_cap = get_metrics(final_rows, final_cols, self.node_count)
+
+                # 4. BUILD FINAL SPARSE MATRIX (Only save the capped version)
+                adj_final = sp.csr_matrix(
+                    (np.ones(len(final_rows), dtype=np.int8), (final_rows, final_cols)), shape=(n, n)
+                )
+
+                # 5. PRINT DUAL METRICS
+                print(f"\nSnapshot {t_idx} | {status} | True Edges: {num_true_edges} | Cap Limit: {max_num_edges}")
+                print(f"  [UNCAPPED] Pred: {len(raw_rows):<7} | TP: {tp_raw:<5} | FP: {fp_raw:<7} | TN: {tn_raw:<7} | FN: {fn_raw:<5}")
+                print(f"  [CAPPED]   Pred: {adj_final.nnz:<7} | TP: {tp_cap:<5} | FP: {fp_cap:<7} | TN: {tn_cap:<7} | FN: {fn_cap:<5}")
+                
+                # Cleanup huge tensors
+                del probabilities, indices_raw, mask_raw, raw_rows, raw_cols, final_rows, final_cols
+                
+                if not self.is_directed:
+                    adj_final = adj_final + adj_final.T
+                    adj_final.data[:] = 1
+                
+                predicted_networks.append(adj_final)
+                gc.collect()
+
+        # 6. Prepare naming and save
+        file_params = (
+            f"{self.args.dataset}_{self.args.model}_"
+            f"{self.args.layer_1_feats}_{self.args.layer_2_feats}_{self.args.cls_feats}_"
+            f"{self.args.lr}_{self.args.l2_reg}_"
+            f"{'directed' if self.is_directed else 'undirected'}"
+        )
+        
+        save_path = f"data/output/predicted/EvolveGCN/{file_params}_threshold_5xCap.pkl"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        with open(save_path, 'wb') as f:
+            pickle.dump({'graphs': predicted_networks, 'node_count': self.node_count}, f)
+        
+        print(f"Saved memory-safe EvolveGCN sparse graphs to {save_path}")
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

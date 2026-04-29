@@ -10,7 +10,7 @@ import pickle
 import numpy as np
 import importlib.util
 
-from utils.loader import Loader
+from gfm_utils.loader import Loader
 
 
 

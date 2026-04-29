@@ -1,5 +1,3 @@
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from collections import defaultdict
 import random
@@ -11,11 +9,7 @@ import argparse
 import os
 import sys
 from sklearn.metrics import recall_score
-from sqlalchemy import all_
 import torch
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import pandas as pd
 from collections import defaultdict
 import torch
@@ -24,7 +18,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import roc_auc_score, precision_score, recall_score, f1_score
 
-from sympy import use
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from utils.loader import Loader
@@ -222,7 +215,7 @@ def prepare_data(graphs, probabilities):
 
     for i in range(2, len(graphs)):
         # Take previous num_back graphs as history
-        history = [graphs[j][-1] for j in range(max(0, i - num_back), i)]
+        history = [graphs[j][-1] for j in range(max(0, i - 5), i)]
 
         # Candidate options = all nodes seen in history
         options = set()
@@ -255,31 +248,28 @@ seed = 42
 
 if __name__ == "__main__":
     my_loader = Loader()
-    num_back = 5
+    num_back = 'all'
     use_predicted = False 
     starting_graph = 2
-    
-    
     
     model_res_path = ""
     performance_path = ""
     
     # Load nodes and compute reappearance probabilities for different parameters
-    # for dataset in ['networkadex', 'networkaion', 'networkbancor', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', 'networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd']:
-    # for dataset in ['networkadex','CollegeMsg', ]:
-    for dataset in ['CollegeMsg', 'networkaeternity', 'networkbancor', 'networkadex', 'networkcentra', 'networkcoindash', 'networkaragon', ]:
+    # for dataset in ['networkadex', 'networkaion', 'networkbancor', 'networkcentra', 'networkcoindash', 'mathoverflow', 'Reddit_B',  'networkaragon', 'networkaeternity', 'networkiconomi', 'CollegeMsg', 'networkcindicator', 'networkdgd', 'tgbl-wiki']:
+    for dataset in ['tgbl-review']:
         probabilities_df = my_loader.load_data(type='probabilities', dataset=dataset, activation='', normalized=True, use_predicted=use_predicted, num_back=num_back)
         probabilities = probabilities_df.values.tolist()
         thresholds = my_loader.load_data(dataset, activation='Degree', type='thresholds', include_weights=False)
-        graph_descriptions, _ = my_loader.load_data(dataset, activation='Degree', type='features', use_predicted=use_predicted, include_weights=False)
+        graph_descriptions, _ = my_loader.load_data(dataset, activation='Degree', type='features', use_predicted=use_predicted, include_weights=False, num_buckets=10)
         graph_descriptions = [[(lst[i], lst[i+1]) for i in range(0, len(lst), 2)] for lst in graph_descriptions]
         target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraphs', include_weights=False)
-        target_graphs, _ = modifyGraphIds(target_graphs, thresholds, num_back)
+        target_graphs, _ = modifyGraphIds(target_graphs, thresholds, 10000)
                 
         training_data, val_data, test_data = prepare_data(target_graphs, probabilities)
         
-        for top_k in [True]:
+        for lr_val in [0.01, 0.001]:
             print(f'Dataset: {dataset}')
-            print(f'top_k is: {top_k}')
+            print(f'LR: {lr_val}')
             model = ReappearanceModel(alpha=0, beta=3.0, decay_factor = 1.0)
-            train_model(model, training_data, val_data, epochs=50, lr=1e-3, patience=5)
+            train_model(model, training_data, val_data, epochs=100, lr=lr_val, patience=5)

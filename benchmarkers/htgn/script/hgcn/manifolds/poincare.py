@@ -1,8 +1,8 @@
 """Poincare ball manifold."""
 
 import torch
-from script.hgcn.manifolds.base import Manifold
-from script.hgcn.utils.math_utils import artanh, tanh
+from benchmarkers.htgn.script.hgcn.manifolds.base import Manifold
+from benchmarkers.htgn.script.hgcn.utils.math_utils import artanh, tanh
 
 
 class PoincareBall(Manifold):

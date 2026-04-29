@@ -1,3 +1,4 @@
+import argparse
 import math
 import numpy as np 
 import networkx as nx
@@ -79,7 +80,7 @@ random.seed(encoder_config["seed"])
 np.random.seed(encoder_config["seed"]) 
 
 class Runner(object):
-    def __init__(self):      
+    def __init__(self, args):      
         self.seed = encoder_config["seed"]
         self.use_ma = encoder_config["use_moving_average"]  # Whether to use moving average for node2vec embeddings or not
         self.model_type = encoder_config["encoder_model"]["nodeEmbeddingType"]
@@ -91,6 +92,11 @@ class Runner(object):
         self.visualizer = Visualizer()
         self.device = device
         self.process = psutil.Process(os.getpid())
+        
+        self.dataset = args.dataset 
+        self.decay_factor = args.decay_factor 
+        self.alpha = args.alpha
+        self.beta = args.beta
         
         # Controls our window size and how we actually construct the graph (directed vs undirected)
         self.days_back = encoder_config["days_back"]
@@ -105,13 +111,13 @@ class Runner(object):
             
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
-        self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data_gnn_{self.model_type}{self.feature_type}_lr{encoder_config["training"]["lr"]}_{days_back_val}back_oobankchanges')
+        self.saved_input = os.path.abspath(f'data/input/cached/{self.dataset}/saved_data_gnn_{self.model_type}{self.feature_type}_lr{encoder_config["training"]["lr"]}_{days_back_val}back_oobankchanges')
         self.saved_samples = os.path.join(self.saved_input, 'saved_samples.pkl')
         self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}_lr{encoder_config["training"]["lr"]}_{days_back_val}back_oobankchanges_predvals{encoder_config["use_predicted_vals"]}'
-        self.saved_graph_dir = f'data/output/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}_edgebank_{self.edgebank_style}'
+        self.saved_graph_dir = f'data/output/constructed_graphs/{self.dataset}_{self.common_suffix}_edgebank_{self.edgebank_style}'
 
         
-        save_dir = os.path.join(self.file_visualization_path, encoder_config["dataset"], encoder_config["encoder_model"]["nodeEmbeddingType"])
+        save_dir = os.path.join(self.file_visualization_path, self.dataset, encoder_config["encoder_model"]["nodeEmbeddingType"])
         os.makedirs(save_dir, exist_ok=True)
         
         # Current target snapshot we want to predict
@@ -131,7 +137,7 @@ class Runner(object):
         
         days_back_val = 'all' 
         print('[INFO] USING ALL BACK FOR PROBABILITIES AS A TEST SINCE IM PRETTY SURE THAT ACTUALLY MAKES MORE SENSE')
-        self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
+        self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(self.dataset, encoder_config["encoder_model"]["addOnFeature"], 
                                                                                                      encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], days_back_val, encoder_config["use_predicted_vals"], encoder_config["num_toper_buckets"], use_test_style=encoder_config["use_test_style"])
         
         # Modify the graph ids to 1,2,3,...
@@ -724,7 +730,7 @@ class Runner(object):
             None
         """     
         start_time = time.time()
-        print("INFO: Dataset: {}".format(encoder_config["dataset"]))
+        print("INFO: Dataset: {}".format(self.dataset))
         self.learnable_path = os.path.join(self.saved_input, rf"saved_models/embeddings")
         self.encoder_model_path = os.path.join(self.saved_input, rf'saved_models/embedder_{encoder_config["learnable_embedder"]["setup"]["init_type"]}_{self.seed}')
         self.decoder_model_path = os.path.join(self.saved_input, rf"saved_models/decoder_MLP_{self.seed}")
@@ -763,7 +769,7 @@ class Runner(object):
             peak_alloc = torch.cuda.max_memory_allocated(self.device) / (1024 ** 2)
             gpu_stats = f" | GPU Allocated: {curr_alloc:.2f}MB | GPU Peak: {peak_alloc:.2f}MB"
         
-        print(f"{encoder_config['dataset']} oobankchanges TRAIN TIME: {times['train']:.2f}s | RAM: {ram_mb:.2f}MB{gpu_stats}")
+        print(f"{self.dataset} oobankchanges TRAIN TIME: {times['train']:.2f}s | RAM: {ram_mb:.2f}MB{gpu_stats}")
         
         # Reset peak stats for Construction phase monitoring
         if torch.cuda.is_available():
@@ -794,31 +800,31 @@ class Runner(object):
                     continue
                 if ablation_mode > 0:
                     # Change it since that makes more sense now
-                    self.saved_graph_dir = f'data/output/ablation/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}_edgebank_{self.edgebank_style}_ablation{ablation_mode}'
+                    self.saved_graph_dir = f'data/output/ablation/constructed_graphs/{self.dataset}_{self.common_suffix}_edgebank_{self.edgebank_style}_ablation{ablation_mode}'
                     os.makedirs(self.saved_graph_dir, exist_ok=True)
                     # This gets unchanged if not using ablation
                     if ablation_mode < 9:
                         self.graph_descriptions, self.probabilities = ablationSetup(base_toper, base_probs, setting=ablation_mode)
                     elif ablation_mode == 9:
                         use_predicted_vals = False
-                        _, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
+                        _, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(self.dataset, encoder_config["encoder_model"]["addOnFeature"], 
                                 encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], 'all', use_predicted_vals, toper_len, use_test_style=encoder_config["use_test_style"])
                         self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, 10000)
                         self.graph_descriptions = [[(lst[i], lst[i+1]) for i in range(0, len(lst), 2)] for lst in self.graph_descriptions]
                 elif encoder_config["sensitivity_analysis"]:
                     # Change the TopER length here
-                    _, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
+                    _, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(self.dataset, encoder_config["encoder_model"]["addOnFeature"], 
                                                                 encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], 'all', encoder_config["use_predicted_vals"], toper_len, use_test_style=encoder_config["use_test_style"])
                     self.probabilities = base_probs.copy()  # Just in case
                     # We have to redo these steps now
                     # Modify the graph ids to 1,2,3,...
                     self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, 10000)
                     self.graph_descriptions = [[(lst[i], lst[i+1]) for i in range(0, len(lst), 2)] for lst in self.graph_descriptions]
-                    self.saved_graph_dir = f'data/output/sensitivity_analysis/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}_edgebank_{self.edgebank_style}_len{toper_len}'
+                    self.saved_graph_dir = f'data/output/sensitivity_analysis/constructed_graphs/{self.dataset}_{self.common_suffix}_edgebank_{self.edgebank_style}_len{toper_len}'
                     os.makedirs(self.saved_graph_dir, exist_ok=True)
                     
                 
-                output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}.pkl")
+                output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{self.dataset}.pkl")
                 
                 
                 # Old graphs that we know up to now
@@ -905,7 +911,7 @@ class Runner(object):
                     self.old_graphs.append(self.target_graphs[i][-1])
             
                     
-                output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}.pkl")
+                output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{self.dataset}.pkl")
                 os.makedirs(self.saved_graph_dir, exist_ok=True)
 
                 data_to_save = (all_built_graphs, all_target_graphs, all_pred_nodes, all_true_nodes)
@@ -917,7 +923,7 @@ class Runner(object):
                 with open(output_filepath, "wb") as f:
                     pickle.dump(data_to_save, f, protocol=5) 
                     
-                output_filepath_old_only = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}_old_only.pkl")
+                output_filepath_old_only = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{self.dataset}_old_only.pkl")
                 
                 # Take the graphs that are just old nodes (o-o-bank and o-o-nobank only)
                 # So we will save the same data (including nodes, minus new nodes and edges involving new nodes)
@@ -961,31 +967,18 @@ class Runner(object):
                     peak_alloc = torch.cuda.max_memory_allocated(self.device) / (1024 ** 2)
                     gpu_stats = f" | GPU Allocated: {curr_alloc:.2f}MB | GPU Peak: {peak_alloc:.2f}MB"
                 
-                print(f"{encoder_config['dataset']} TopoGED CONSTRUCTION TIME: {times['construction']:.2f}s | RAM: {ram_mb:.2f}MB{gpu_stats}")
+                print(f"{self.dataset} TopoGED CONSTRUCTION TIME: {times['construction']:.2f}s | RAM: {ram_mb:.2f}MB{gpu_stats}")
                 print(f"Total Times: {times}")
                 
 if __name__ == '__main__':
-    runner = Runner()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument("--decay_factor", type=float, required=True)
+    parser.add_argument("--alpha", type=float, required=True)
+    parser.add_argument("--beta", type=float, required=True)
+    args = parser.parse_args()
+    runner = Runner(args)
     runner.run()
 
 # To run the script
 # python GraphGeneration/scripts/topoGED_end_to_end.py 
-
-"""
-[ro214340@evuser1 Topological-Temporal-GFM]$ squeue -u 'ro214340'
-    JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
-585371   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585372   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585373   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585374   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585375   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585376   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585370   highgpu TopoGED_ ro214340 PD       0:00      1 (Resources)
-585377   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585378   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585379   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585381   highgpu TopoGED_ ro214340 PD       0:00      1 (Priority)
-585369   highgpu TopoGED_ ro214340  R      15:24      1 evc104
-585368   highgpu TopoGED_ ro214340  R      15:29      1 evc103
-585367   highgpu TopoGED_ ro214340  R      15:43      1 evc103
-"""

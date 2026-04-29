@@ -1,0 +1,2845 @@
+========================================================================
+STARTING GLOBAL DATASET: CollegeMsg
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 181 snapshots...]
+[Done] Total Snapshots processed: 181
+
+Statistics for CollegeMsg:
+	Nodes: 1893
+	Edges: 33624
+	Snaps: 181
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.149413 | Sampled Train AUC: 0.6935
+Epoch 020 | Loss: 1.090465 | Sampled Train AUC: 0.6897
+Epoch 030 | Loss: 1.041686 | Sampled Train AUC: 0.6836
+Epoch 040 | Loss: 1.015913 | Sampled Train AUC: 0.6753
+Epoch 050 | Loss: 0.971756 | Sampled Train AUC: 0.6734
+Epoch 060 | Loss: 0.951423 | Sampled Train AUC: 0.6707
+Epoch 070 | Loss: 0.922754 | Sampled Train AUC: 0.6674
+Epoch 080 | Loss: 0.924842 | Sampled Train AUC: 0.6631
+Epoch 090 | Loss: 0.884485 | Sampled Train AUC: 0.6624
+Epoch 100 | Loss: 0.852402 | Sampled Train AUC: 0.6612
+Epoch 110 | Loss: 0.841268 | Sampled Train AUC: 0.6611
+Epoch 120 | Loss: 0.821474 | Sampled Train AUC: 0.6610
+Epoch 130 | Loss: 0.820883 | Sampled Train AUC: 0.6586
+Epoch 140 | Loss: 0.796280 | Sampled Train AUC: 0.6582
+Epoch 150 | Loss: 0.783796 | Sampled Train AUC: 0.6560
+Epoch 160 | Loss: 0.766329 | Sampled Train AUC: 0.6582
+Epoch 170 | Loss: 0.759087 | Sampled Train AUC: 0.6585
+Epoch 180 | Loss: 0.754963 | Sampled Train AUC: 0.6589
+Epoch 190 | Loss: 0.753136 | Sampled Train AUC: 0.6592
+Epoch 200 | Loss: 0.752072 | Sampled Train AUC: 0.6590
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.628422 | Std: 0.395728 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.293025 | Std: 0.257515 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.33 | Sampled Val F1: 0.6699
+Loading data for CollegeMsg with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 153 | CAPPED | True Edges: 61 | Cap Limit: 385
+  [UNCAPPED] Pred: 3243198 | TP: 59    | FP: 3243139 | TN: 338356  | FN: 2    
+  [CAPPED]   Pred: 385     | TP: 0     | FP: 385     | TN: 3581110 | FN: 61   
+
+Snap 154 | CAPPED | True Edges: 32 | Cap Limit: 305
+  [UNCAPPED] Pred: 3200206 | TP: 28    | FP: 3200178 | TN: 381346  | FN: 4    
+  [CAPPED]   Pred: 305     | TP: 0     | FP: 305     | TN: 3581219 | FN: 32   
+
+Snap 155 | CAPPED | True Edges: 27 | Cap Limit: 160
+  [UNCAPPED] Pred: 3209604 | TP: 23    | FP: 3209581 | TN: 371948  | FN: 4    
+  [CAPPED]   Pred: 160     | TP: 0     | FP: 160     | TN: 3581369 | FN: 27   
+
+Snap 156 | CAPPED | True Edges: 34 | Cap Limit: 135
+  [UNCAPPED] Pred: 3184724 | TP: 27    | FP: 3184697 | TN: 396825  | FN: 7    
+  [CAPPED]   Pred: 135     | TP: 0     | FP: 135     | TN: 3581387 | FN: 34   
+
+Snap 157 | CAPPED | True Edges: 42 | Cap Limit: 170
+  [UNCAPPED] Pred: 3202448 | TP: 34    | FP: 3202414 | TN: 379100  | FN: 8    
+  [CAPPED]   Pred: 170     | TP: 0     | FP: 170     | TN: 3581344 | FN: 42   
+
+Snap 158 | CAPPED | True Edges: 42 | Cap Limit: 210
+  [UNCAPPED] Pred: 3213352 | TP: 33    | FP: 3213319 | TN: 368195  | FN: 9    
+  [CAPPED]   Pred: 210     | TP: 0     | FP: 210     | TN: 3581304 | FN: 42   
+
+Snap 159 | CAPPED | True Edges: 52 | Cap Limit: 210
+  [UNCAPPED] Pred: 3233602 | TP: 49    | FP: 3233553 | TN: 347951  | FN: 3    
+  [CAPPED]   Pred: 210     | TP: 0     | FP: 210     | TN: 3581294 | FN: 52   
+
+Snap 160 | CAPPED | True Edges: 58 | Cap Limit: 260
+  [UNCAPPED] Pred: 3288510 | TP: 49    | FP: 3288461 | TN: 293037  | FN: 9    
+  [CAPPED]   Pred: 260     | TP: 0     | FP: 260     | TN: 3581238 | FN: 58   
+
+Snap 161 | CAPPED | True Edges: 32 | Cap Limit: 290
+  [UNCAPPED] Pred: 3313912 | TP: 28    | FP: 3313884 | TN: 267640  | FN: 4    
+  [CAPPED]   Pred: 290     | TP: 0     | FP: 290     | TN: 3581234 | FN: 32   
+
+Snap 162 | CAPPED | True Edges: 29 | Cap Limit: 160
+  [UNCAPPED] Pred: 3324166 | TP: 28    | FP: 3324138 | TN: 257389  | FN: 1    
+  [CAPPED]   Pred: 160     | TP: 0     | FP: 160     | TN: 3581367 | FN: 29   
+
+Snap 163 | CAPPED | True Edges: 52 | Cap Limit: 145
+  [UNCAPPED] Pred: 3257728 | TP: 44    | FP: 3257684 | TN: 323820  | FN: 8    
+  [CAPPED]   Pred: 145     | TP: 0     | FP: 145     | TN: 3581359 | FN: 52   
+
+Snap 164 | CAPPED | True Edges: 43 | Cap Limit: 260
+  [UNCAPPED] Pred: 3233220 | TP: 31    | FP: 3233189 | TN: 348324  | FN: 12   
+  [CAPPED]   Pred: 260     | TP: 0     | FP: 260     | TN: 3581253 | FN: 43   
+
+Snap 165 | CAPPED | True Edges: 39 | Cap Limit: 215
+  [UNCAPPED] Pred: 3228628 | TP: 33    | FP: 3228595 | TN: 352922  | FN: 6    
+  [CAPPED]   Pred: 215     | TP: 0     | FP: 215     | TN: 3581302 | FN: 39   
+
+Snap 166 | CAPPED | True Edges: 41 | Cap Limit: 195
+  [UNCAPPED] Pred: 3228012 | TP: 38    | FP: 3227974 | TN: 353541  | FN: 3    
+  [CAPPED]   Pred: 195     | TP: 0     | FP: 195     | TN: 3581320 | FN: 41   
+
+Snap 167 | CAPPED | True Edges: 40 | Cap Limit: 205
+  [UNCAPPED] Pred: 3252948 | TP: 31    | FP: 3252917 | TN: 328599  | FN: 9    
+  [CAPPED]   Pred: 205     | TP: 0     | FP: 205     | TN: 3581311 | FN: 40   
+
+Snap 168 | CAPPED | True Edges: 21 | Cap Limit: 200
+  [UNCAPPED] Pred: 3255748 | TP: 19    | FP: 3255729 | TN: 325806  | FN: 2    
+  [CAPPED]   Pred: 200     | TP: 0     | FP: 200     | TN: 3581335 | FN: 21   
+
+Snap 169 | CAPPED | True Edges: 24 | Cap Limit: 105
+  [UNCAPPED] Pred: 3275944 | TP: 21    | FP: 3275923 | TN: 305609  | FN: 3    
+  [CAPPED]   Pred: 105     | TP: 0     | FP: 105     | TN: 3581427 | FN: 24   
+
+Snap 170 | CAPPED | True Edges: 29 | Cap Limit: 120
+  [UNCAPPED] Pred: 3300158 | TP: 22    | FP: 3300136 | TN: 281391  | FN: 7    
+  [CAPPED]   Pred: 120     | TP: 0     | FP: 120     | TN: 3581407 | FN: 29   
+
+Snap 171 | CAPPED | True Edges: 37 | Cap Limit: 145
+  [UNCAPPED] Pred: 3295932 | TP: 32    | FP: 3295900 | TN: 285619  | FN: 5    
+  [CAPPED]   Pred: 145     | TP: 0     | FP: 145     | TN: 3581374 | FN: 37   
+
+Snap 172 | CAPPED | True Edges: 30 | Cap Limit: 185
+  [UNCAPPED] Pred: 3328392 | TP: 25    | FP: 3328367 | TN: 253159  | FN: 5    
+  [CAPPED]   Pred: 185     | TP: 0     | FP: 185     | TN: 3581341 | FN: 30   
+
+Snap 173 | CAPPED | True Edges: 44 | Cap Limit: 150
+  [UNCAPPED] Pred: 3342212 | TP: 39    | FP: 3342173 | TN: 239339  | FN: 5    
+  [CAPPED]   Pred: 150     | TP: 0     | FP: 150     | TN: 3581362 | FN: 44   
+
+Snap 174 | CAPPED | True Edges: 8 | Cap Limit: 220
+  [UNCAPPED] Pred: 3363482 | TP: 8     | FP: 3363474 | TN: 218074  | FN: 0    
+  [CAPPED]   Pred: 220     | TP: 0     | FP: 220     | TN: 3581328 | FN: 8    
+
+Snap 175 | CAPPED | True Edges: 17 | Cap Limit: 40
+  [UNCAPPED] Pred: 3373148 | TP: 17    | FP: 3373131 | TN: 208408  | FN: 0    
+  [CAPPED]   Pred: 40      | TP: 0     | FP: 40      | TN: 3581499 | FN: 17   
+
+Snap 176 | CAPPED | True Edges: 23 | Cap Limit: 85
+  [UNCAPPED] Pred: 3366348 | TP: 19    | FP: 3366329 | TN: 215204  | FN: 4    
+  [CAPPED]   Pred: 85      | TP: 0     | FP: 85      | TN: 3581448 | FN: 23   
+
+Snap 177 | CAPPED | True Edges: 27 | Cap Limit: 115
+  [UNCAPPED] Pred: 3365608 | TP: 25    | FP: 3365583 | TN: 215946  | FN: 2    
+  [CAPPED]   Pred: 115     | TP: 0     | FP: 115     | TN: 3581414 | FN: 27   
+
+Snap 178 | CAPPED | True Edges: 26 | Cap Limit: 135
+  [UNCAPPED] Pred: 3344936 | TP: 24    | FP: 3344912 | TN: 236618  | FN: 2    
+  [CAPPED]   Pred: 135     | TP: 0     | FP: 135     | TN: 3581395 | FN: 26   
+
+Snap 179 | CAPPED | True Edges: 23 | Cap Limit: 130
+  [UNCAPPED] Pred: 3324134 | TP: 18    | FP: 3324116 | TN: 257417  | FN: 5    
+  [CAPPED]   Pred: 130     | TP: 0     | FP: 130     | TN: 3581403 | FN: 23   
+
+Snap 180 | CAPPED | True Edges: 32 | Cap Limit: 125
+  [UNCAPPED] Pred: 3330834 | TP: 29    | FP: 3330805 | TN: 250719  | FN: 3    
+  [CAPPED]   Pred: 125     | TP: 0     | FP: 125     | TN: 3581399 | FN: 32   
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/CollegeMsg_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: CollegeMsg (SFDyG) METRICS ---
+TRAIN:  Time=251.57s, GPU=15076.00MB, RAM=1626.23MB
+THRESH: Time=0.36s, GPU=15076.00MB, RAM=1626.33MB
+CONST:  Time=12.72s, GPU=15076.00MB, RAM=1792.40MB
+
+========================================================================
+COMPLETED DATASET: CollegeMsg
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: mathoverflow
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 189 snapshots...]
+[Done] Total Snapshots processed: 189
+
+Statistics for mathoverflow:
+	Nodes: 4966
+	Edges: 26983
+	Snaps: 189
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.217368 | Sampled Train AUC: 0.6209
+Epoch 020 | Loss: 1.202008 | Sampled Train AUC: 0.6194
+Epoch 030 | Loss: 1.177144 | Sampled Train AUC: 0.6183
+Epoch 040 | Loss: 1.174655 | Sampled Train AUC: 0.6164
+Epoch 050 | Loss: 1.158949 | Sampled Train AUC: 0.6165
+Epoch 060 | Loss: 1.147706 | Sampled Train AUC: 0.6126
+Epoch 070 | Loss: 1.135904 | Sampled Train AUC: 0.6141
+Epoch 080 | Loss: 1.130022 | Sampled Train AUC: 0.6123
+Epoch 090 | Loss: 1.144132 | Sampled Train AUC: 0.6111
+Epoch 100 | Loss: 1.115497 | Sampled Train AUC: 0.6118
+Epoch 110 | Loss: 1.111552 | Sampled Train AUC: 0.6107
+Epoch 120 | Loss: 1.106466 | Sampled Train AUC: 0.6112
+Epoch 130 | Loss: 1.103993 | Sampled Train AUC: 0.6102
+Epoch 140 | Loss: 1.096726 | Sampled Train AUC: 0.6107
+Epoch 150 | Loss: 1.090217 | Sampled Train AUC: 0.6109
+Epoch 160 | Loss: 1.080854 | Sampled Train AUC: 0.6112
+Epoch 170 | Loss: 1.076303 | Sampled Train AUC: 0.6118
+Epoch 180 | Loss: 1.073261 | Sampled Train AUC: 0.6122
+Epoch 190 | Loss: 1.072784 | Sampled Train AUC: 0.6123
+Epoch 200 | Loss: 1.072517 | Sampled Train AUC: 0.6122
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.525928 | Std: 0.335218 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.365837 | Std: 0.230352 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.6519
+Loading data for mathoverflow with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 160 | CAPPED | True Edges: 15 | Cap Limit: 740
+  [UNCAPPED] Pred: 23573832 | TP: 5     | FP: 23573827 | TN: 1082348 | FN: 10   
+  [CAPPED]   Pred: 740     | TP: 0     | FP: 740     | TN: 24655435 | FN: 15   
+
+Snap 161 | CAPPED | True Edges: 12 | Cap Limit: 730
+  [UNCAPPED] Pred: 23686242 | TP: 4     | FP: 23686238 | TN: 969940  | FN: 8    
+  [CAPPED]   Pred: 730     | TP: 0     | FP: 730     | TN: 24655448 | FN: 12   
+
+Snap 162 | CAPPED | True Edges: 8 | Cap Limit: 740
+  [UNCAPPED] Pred: 23622110 | TP: 4     | FP: 23622106 | TN: 1034076 | FN: 4    
+  [CAPPED]   Pred: 740     | TP: 0     | FP: 740     | TN: 24655442 | FN: 8    
+
+Snap 163 | CAPPED | True Edges: 20 | Cap Limit: 715
+  [UNCAPPED] Pred: 23789770 | TP: 9     | FP: 23789761 | TN: 866409  | FN: 11   
+  [CAPPED]   Pred: 715     | TP: 0     | FP: 715     | TN: 24655455 | FN: 20   
+
+Snap 164 | CAPPED | True Edges: 9 | Cap Limit: 860
+  [UNCAPPED] Pred: 23856564 | TP: 6     | FP: 23856558 | TN: 799623  | FN: 3    
+  [CAPPED]   Pred: 860     | TP: 0     | FP: 860     | TN: 24655321 | FN: 9    
+
+Snap 165 | CAPPED | True Edges: 9 | Cap Limit: 495
+  [UNCAPPED] Pred: 23679604 | TP: 3     | FP: 23679601 | TN: 976580  | FN: 6    
+  [CAPPED]   Pred: 495     | TP: 0     | FP: 495     | TN: 24655686 | FN: 9    
+
+Snap 166 | CAPPED | True Edges: 11 | Cap Limit: 620
+  [UNCAPPED] Pred: 23672562 | TP: 4     | FP: 23672558 | TN: 983621  | FN: 7    
+  [CAPPED]   Pred: 620     | TP: 0     | FP: 620     | TN: 24655559 | FN: 11   
+
+Snap 167 | CAPPED | True Edges: 14 | Cap Limit: 710
+  [UNCAPPED] Pred: 23766584 | TP: 5     | FP: 23766579 | TN: 889597  | FN: 9    
+  [CAPPED]   Pred: 710     | TP: 0     | FP: 710     | TN: 24655466 | FN: 14   
+
+Snap 168 | CAPPED | True Edges: 11 | Cap Limit: 655
+  [UNCAPPED] Pred: 23691990 | TP: 5     | FP: 23691985 | TN: 964194  | FN: 6    
+  [CAPPED]   Pred: 655     | TP: 0     | FP: 655     | TN: 24655524 | FN: 11   
+
+Snap 169 | CAPPED | True Edges: 16 | Cap Limit: 895
+  [UNCAPPED] Pred: 23787320 | TP: 5     | FP: 23787315 | TN: 868859  | FN: 11   
+  [CAPPED]   Pred: 895     | TP: 0     | FP: 895     | TN: 24655279 | FN: 16   
+
+Snap 170 | CAPPED | True Edges: 18 | Cap Limit: 970
+  [UNCAPPED] Pred: 23575452 | TP: 6     | FP: 23575446 | TN: 1080726 | FN: 12   
+  [CAPPED]   Pred: 970     | TP: 0     | FP: 970     | TN: 24655202 | FN: 18   
+
+Snap 171 | CAPPED | True Edges: 4 | Cap Limit: 800
+  [UNCAPPED] Pred: 23731598 | TP: 3     | FP: 23731595 | TN: 924591  | FN: 1    
+  [CAPPED]   Pred: 800     | TP: 0     | FP: 800     | TN: 24655386 | FN: 4    
+
+Snap 172 | CAPPED | True Edges: 10 | Cap Limit: 645
+  [UNCAPPED] Pred: 23666472 | TP: 4     | FP: 23666468 | TN: 989712  | FN: 6    
+  [CAPPED]   Pred: 645     | TP: 0     | FP: 645     | TN: 24655535 | FN: 10   
+
+Snap 173 | CAPPED | True Edges: 6 | Cap Limit: 645
+  [UNCAPPED] Pred: 23464180 | TP: 2     | FP: 23464178 | TN: 1192006 | FN: 4    
+  [CAPPED]   Pred: 645     | TP: 0     | FP: 645     | TN: 24655539 | FN: 6    
+
+Snap 174 | CAPPED | True Edges: 12 | Cap Limit: 715
+  [UNCAPPED] Pred: 23444044 | TP: 4     | FP: 23444040 | TN: 1212138 | FN: 8    
+  [CAPPED]   Pred: 715     | TP: 0     | FP: 715     | TN: 24655463 | FN: 12   
+
+Snap 175 | CAPPED | True Edges: 8 | Cap Limit: 905
+  [UNCAPPED] Pred: 23641482 | TP: 2     | FP: 23641480 | TN: 1014702 | FN: 6    
+  [CAPPED]   Pred: 905     | TP: 0     | FP: 905     | TN: 24655277 | FN: 8    
+
+Snap 176 | CAPPED | True Edges: 15 | Cap Limit: 870
+  [UNCAPPED] Pred: 23650134 | TP: 5     | FP: 23650129 | TN: 1006046 | FN: 10   
+  [CAPPED]   Pred: 870     | TP: 0     | FP: 870     | TN: 24655305 | FN: 15   
+
+Snap 177 | CAPPED | True Edges: 17 | Cap Limit: 835
+  [UNCAPPED] Pred: 23640644 | TP: 10    | FP: 23640634 | TN: 1015539 | FN: 7    
+  [CAPPED]   Pred: 835     | TP: 0     | FP: 835     | TN: 24655338 | FN: 17   
+
+Snap 178 | CAPPED | True Edges: 14 | Cap Limit: 720
+  [UNCAPPED] Pred: 23657508 | TP: 7     | FP: 23657501 | TN: 998675  | FN: 7    
+  [CAPPED]   Pred: 720     | TP: 0     | FP: 720     | TN: 24655456 | FN: 14   
+
+Snap 179 | CAPPED | True Edges: 10 | Cap Limit: 620
+  [UNCAPPED] Pred: 23590590 | TP: 7     | FP: 23590583 | TN: 1065597 | FN: 3    
+  [CAPPED]   Pred: 620     | TP: 0     | FP: 620     | TN: 24655560 | FN: 10   
+
+Snap 180 | CAPPED | True Edges: 6 | Cap Limit: 655
+  [UNCAPPED] Pred: 23737402 | TP: 2     | FP: 23737400 | TN: 918784  | FN: 4    
+  [CAPPED]   Pred: 655     | TP: 0     | FP: 655     | TN: 24655529 | FN: 6    
+
+Snap 181 | CAPPED | True Edges: 13 | Cap Limit: 650
+  [UNCAPPED] Pred: 23634044 | TP: 5     | FP: 23634039 | TN: 1022138 | FN: 8    
+  [CAPPED]   Pred: 650     | TP: 0     | FP: 650     | TN: 24655527 | FN: 13   
+
+Snap 182 | CAPPED | True Edges: 15 | Cap Limit: 755
+  [UNCAPPED] Pred: 23671578 | TP: 6     | FP: 23671572 | TN: 984603  | FN: 9    
+  [CAPPED]   Pred: 755     | TP: 0     | FP: 755     | TN: 24655420 | FN: 15   
+
+Snap 183 | CAPPED | True Edges: 20 | Cap Limit: 830
+  [UNCAPPED] Pred: 23727010 | TP: 11    | FP: 23726999 | TN: 929171  | FN: 9    
+  [CAPPED]   Pred: 830     | TP: 0     | FP: 830     | TN: 24655340 | FN: 20   
+
+Snap 184 | CAPPED | True Edges: 19 | Cap Limit: 905
+  [UNCAPPED] Pred: 23690770 | TP: 10    | FP: 23690760 | TN: 965411  | FN: 9    
+  [CAPPED]   Pred: 905     | TP: 0     | FP: 905     | TN: 24655266 | FN: 19   
+
+Snap 185 | CAPPED | True Edges: 7 | Cap Limit: 775
+  [UNCAPPED] Pred: 23579252 | TP: 3     | FP: 23579249 | TN: 1076934 | FN: 4    
+  [CAPPED]   Pred: 775     | TP: 0     | FP: 775     | TN: 24655408 | FN: 7    
+
+Snap 186 | CAPPED | True Edges: 10 | Cap Limit: 615
+  [UNCAPPED] Pred: 23625548 | TP: 5     | FP: 23625543 | TN: 1030637 | FN: 5    
+  [CAPPED]   Pred: 615     | TP: 0     | FP: 615     | TN: 24655565 | FN: 10   
+
+Snap 187 | CAPPED | True Edges: 8 | Cap Limit: 620
+  [UNCAPPED] Pred: 23718268 | TP: 4     | FP: 23718264 | TN: 937918  | FN: 4    
+  [CAPPED]   Pred: 620     | TP: 0     | FP: 620     | TN: 24655562 | FN: 8    
+
+Snap 188 | CAPPED | True Edges: 14 | Cap Limit: 665
+  [UNCAPPED] Pred: 23663486 | TP: 8     | FP: 23663478 | TN: 992698  | FN: 6    
+  [CAPPED]   Pred: 665     | TP: 0     | FP: 665     | TN: 24655511 | FN: 14   
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/mathoverflow_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: mathoverflow (SFDyG) METRICS ---
+TRAIN:  Time=207.60s, GPU=2170.00MB, RAM=1881.47MB
+THRESH: Time=0.19s, GPU=2170.00MB, RAM=1881.56MB
+CONST:  Time=22.71s, GPU=2170.00MB, RAM=2283.12MB
+
+========================================================================
+COMPLETED DATASET: mathoverflow
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkadex
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 299 snapshots...]
+[Done] Total Snapshots processed: 299
+
+Statistics for networkadex:
+	Nodes: 38553
+	Edges: 60049
+	Snaps: 299
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.358206 | Sampled Train AUC: 0.4952
+Epoch 020 | Loss: 1.355488 | Sampled Train AUC: 0.4941
+Epoch 030 | Loss: 1.351629 | Sampled Train AUC: 0.4933
+Epoch 040 | Loss: 1.351676 | Sampled Train AUC: 0.4935
+Epoch 050 | Loss: 1.352705 | Sampled Train AUC: 0.4940
+Epoch 060 | Loss: 1.351086 | Sampled Train AUC: 0.4934
+Epoch 070 | Loss: 1.344797 | Sampled Train AUC: 0.4936
+Epoch 080 | Loss: 1.345112 | Sampled Train AUC: 0.4959
+Epoch 090 | Loss: 1.342279 | Sampled Train AUC: 0.4962
+Epoch 100 | Loss: 1.344021 | Sampled Train AUC: 0.4969
+Early stopping triggered at epoch 108. Best Training Loss: 1.340734
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.381966 | Std: 0.282510 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.398251 | Std: 0.213108 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.5615
+Loading data for networkadex with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 254 | CAPPED | True Edges: 72 | Cap Limit: 600
+  [UNCAPPED] Pred: 1475172824 | TP: 60    | FP: 1475172764 | TN: 11122420 | FN: 12   
+  [CAPPED]   Pred: 600     | TP: 0     | FP: 600     | TN: 1486294584 | FN: 72   
+
+Snap 255 | CAPPED | True Edges: 51 | Cap Limit: 360
+  [UNCAPPED] Pred: 1475784500 | TP: 41    | FP: 1475784459 | TN: 10510746 | FN: 10   
+  [CAPPED]   Pred: 360     | TP: 1     | FP: 359     | TN: 1486294846 | FN: 50   
+
+Snap 256 | CAPPED | True Edges: 99 | Cap Limit: 255
+  [UNCAPPED] Pred: 1476470726 | TP: 65    | FP: 1476470661 | TN: 9824496 | FN: 34   
+  [CAPPED]   Pred: 255     | TP: 2     | FP: 253     | TN: 1486294904 | FN: 97   
+
+Snap 257 | CAPPED | True Edges: 88 | Cap Limit: 495
+  [UNCAPPED] Pred: 1477310722 | TP: 64    | FP: 1477310658 | TN: 8984510 | FN: 24   
+  [CAPPED]   Pred: 495     | TP: 1     | FP: 494     | TN: 1486294674 | FN: 87   
+
+Snap 258 | CAPPED | True Edges: 74 | Cap Limit: 440
+  [UNCAPPED] Pred: 1478231406 | TP: 58    | FP: 1478231348 | TN: 8063834 | FN: 16   
+  [CAPPED]   Pred: 440     | TP: 0     | FP: 440     | TN: 1486294742 | FN: 74   
+
+Snap 259 | CAPPED | True Edges: 50 | Cap Limit: 370
+  [UNCAPPED] Pred: 1480530826 | TP: 45    | FP: 1480530781 | TN: 5764425 | FN: 5    
+  [CAPPED]   Pred: 370     | TP: 1     | FP: 369     | TN: 1486294837 | FN: 49   
+
+Snap 260 | CAPPED | True Edges: 73 | Cap Limit: 250
+  [UNCAPPED] Pred: 1482369540 | TP: 61    | FP: 1482369479 | TN: 3925704 | FN: 12   
+  [CAPPED]   Pred: 250     | TP: 0     | FP: 250     | TN: 1486294933 | FN: 73   
+
+Snap 261 | CAPPED | True Edges: 70 | Cap Limit: 365
+  [UNCAPPED] Pred: 1482907350 | TP: 53    | FP: 1482907297 | TN: 3387889 | FN: 17   
+  [CAPPED]   Pred: 365     | TP: 0     | FP: 365     | TN: 1486294821 | FN: 70   
+
+Snap 262 | CAPPED | True Edges: 119 | Cap Limit: 350
+  [UNCAPPED] Pred: 1482907144 | TP: 109   | FP: 1482907035 | TN: 3388102 | FN: 10   
+  [CAPPED]   Pred: 350     | TP: 0     | FP: 350     | TN: 1486294787 | FN: 119  
+
+Snap 263 | CAPPED | True Edges: 95 | Cap Limit: 595
+  [UNCAPPED] Pred: 1483522128 | TP: 89    | FP: 1483522039 | TN: 2773122 | FN: 6    
+  [CAPPED]   Pred: 595     | TP: 0     | FP: 595     | TN: 1486294566 | FN: 95   
+
+Snap 264 | CAPPED | True Edges: 111 | Cap Limit: 475
+  [UNCAPPED] Pred: 1482522448 | TP: 109   | FP: 1482522339 | TN: 3772806 | FN: 2    
+  [CAPPED]   Pred: 475     | TP: 0     | FP: 475     | TN: 1486294670 | FN: 111  
+
+Snap 265 | CAPPED | True Edges: 84 | Cap Limit: 555
+  [UNCAPPED] Pred: 1483061230 | TP: 84    | FP: 1483061146 | TN: 3234026 | FN: 0    
+  [CAPPED]   Pred: 555     | TP: 0     | FP: 555     | TN: 1486294617 | FN: 84   
+
+Snap 266 | CAPPED | True Edges: 82 | Cap Limit: 420
+  [UNCAPPED] Pred: 1482215580 | TP: 82    | FP: 1482215498 | TN: 4079676 | FN: 0    
+  [CAPPED]   Pred: 420     | TP: 1     | FP: 419     | TN: 1486294755 | FN: 81   
+
+Snap 267 | CAPPED | True Edges: 71 | Cap Limit: 410
+  [UNCAPPED] Pred: 1481677178 | TP: 71    | FP: 1481677107 | TN: 4618078 | FN: 0    
+  [CAPPED]   Pred: 410     | TP: 0     | FP: 410     | TN: 1486294775 | FN: 71   
+
+Snap 268 | CAPPED | True Edges: 83 | Cap Limit: 355
+  [UNCAPPED] Pred: 1481984486 | TP: 82    | FP: 1481984404 | TN: 4310769 | FN: 1    
+  [CAPPED]   Pred: 355     | TP: 0     | FP: 355     | TN: 1486294818 | FN: 83   
+
+Snap 269 | CAPPED | True Edges: 124 | Cap Limit: 415
+  [UNCAPPED] Pred: 1481370346 | TP: 88    | FP: 1481370258 | TN: 4924874 | FN: 36   
+  [CAPPED]   Pred: 415     | TP: 1     | FP: 414     | TN: 1486294718 | FN: 123  
+
+Snap 270 | CAPPED | True Edges: 94 | Cap Limit: 620
+  [UNCAPPED] Pred: 1480757948 | TP: 72    | FP: 1480757876 | TN: 5537286 | FN: 22   
+  [CAPPED]   Pred: 620     | TP: 0     | FP: 620     | TN: 1486294542 | FN: 94   
+
+Snap 271 | CAPPED | True Edges: 70 | Cap Limit: 470
+  [UNCAPPED] Pred: 1480912646 | TP: 57    | FP: 1480912589 | TN: 5382597 | FN: 13   
+  [CAPPED]   Pred: 470     | TP: 1     | FP: 469     | TN: 1486294717 | FN: 69   
+
+Snap 272 | CAPPED | True Edges: 115 | Cap Limit: 350
+  [UNCAPPED] Pred: 1478687070 | TP: 80    | FP: 1478686990 | TN: 7608151 | FN: 35   
+  [CAPPED]   Pred: 350     | TP: 3     | FP: 347     | TN: 1486294794 | FN: 112  
+
+Snap 273 | CAPPED | True Edges: 71 | Cap Limit: 575
+  [UNCAPPED] Pred: 1477692656 | TP: 53    | FP: 1477692603 | TN: 8602582 | FN: 18   
+  [CAPPED]   Pred: 575     | TP: 0     | FP: 575     | TN: 1486294610 | FN: 71   
+
+Snap 274 | CAPPED | True Edges: 57 | Cap Limit: 355
+  [UNCAPPED] Pred: 1476621260 | TP: 43    | FP: 1476621217 | TN: 9673982 | FN: 14   
+  [CAPPED]   Pred: 355     | TP: 0     | FP: 355     | TN: 1486294844 | FN: 57   
+
+Snap 275 | CAPPED | True Edges: 56 | Cap Limit: 285
+  [UNCAPPED] Pred: 1476698286 | TP: 41    | FP: 1476698245 | TN: 9596955 | FN: 15   
+  [CAPPED]   Pred: 285     | TP: 0     | FP: 285     | TN: 1486294915 | FN: 56   
+
+Snap 276 | CAPPED | True Edges: 50 | Cap Limit: 280
+  [UNCAPPED] Pred: 1477542640 | TP: 41    | FP: 1477542599 | TN: 8752607 | FN: 9    
+  [CAPPED]   Pred: 280     | TP: 1     | FP: 279     | TN: 1486294927 | FN: 49   
+
+Snap 277 | CAPPED | True Edges: 72 | Cap Limit: 250
+  [UNCAPPED] Pred: 1480300718 | TP: 51    | FP: 1480300667 | TN: 5994517 | FN: 21   
+  [CAPPED]   Pred: 250     | TP: 1     | FP: 249     | TN: 1486294935 | FN: 71   
+
+Snap 278 | CAPPED | True Edges: 89 | Cap Limit: 360
+  [UNCAPPED] Pred: 1480760658 | TP: 66    | FP: 1480760592 | TN: 5534575 | FN: 23   
+  [CAPPED]   Pred: 360     | TP: 1     | FP: 359     | TN: 1486294808 | FN: 88   
+
+Snap 279 | CAPPED | True Edges: 70 | Cap Limit: 445
+  [UNCAPPED] Pred: 1480836078 | TP: 47    | FP: 1480836031 | TN: 5459155 | FN: 23   
+  [CAPPED]   Pred: 445     | TP: 1     | FP: 444     | TN: 1486294742 | FN: 69   
+
+Snap 280 | CAPPED | True Edges: 59 | Cap Limit: 350
+  [UNCAPPED] Pred: 1482292896 | TP: 50    | FP: 1482292846 | TN: 4002351 | FN: 9    
+  [CAPPED]   Pred: 350     | TP: 0     | FP: 350     | TN: 1486294847 | FN: 59   
+
+Snap 281 | CAPPED | True Edges: 69 | Cap Limit: 295
+  [UNCAPPED] Pred: 1482677318 | TP: 62    | FP: 1482677256 | TN: 3617931 | FN: 7    
+  [CAPPED]   Pred: 295     | TP: 1     | FP: 294     | TN: 1486294893 | FN: 68   
+
+Snap 282 | CAPPED | True Edges: 108 | Cap Limit: 345
+  [UNCAPPED] Pred: 1482137916 | TP: 93    | FP: 1482137823 | TN: 4157325 | FN: 15   
+  [CAPPED]   Pred: 345     | TP: 2     | FP: 343     | TN: 1486294805 | FN: 106  
+
+Snap 283 | CAPPED | True Edges: 96 | Cap Limit: 540
+  [UNCAPPED] Pred: 1481908712 | TP: 67    | FP: 1481908645 | TN: 4386515 | FN: 29   
+  [CAPPED]   Pred: 540     | TP: 2     | FP: 538     | TN: 1486294622 | FN: 94   
+
+Snap 284 | CAPPED | True Edges: 74 | Cap Limit: 480
+  [UNCAPPED] Pred: 1481832790 | TP: 50    | FP: 1481832740 | TN: 4462442 | FN: 24   
+  [CAPPED]   Pred: 480     | TP: 3     | FP: 477     | TN: 1486294705 | FN: 71   
+
+Snap 285 | CAPPED | True Edges: 78 | Cap Limit: 370
+  [UNCAPPED] Pred: 1482447356 | TP: 62    | FP: 1482447294 | TN: 3847884 | FN: 16   
+  [CAPPED]   Pred: 370     | TP: 1     | FP: 369     | TN: 1486294809 | FN: 77   
+
+Snap 286 | CAPPED | True Edges: 126 | Cap Limit: 390
+  [UNCAPPED] Pred: 1482448198 | TP: 95    | FP: 1482448103 | TN: 3847027 | FN: 31   
+  [CAPPED]   Pred: 390     | TP: 1     | FP: 389     | TN: 1486294741 | FN: 125  
+
+Snap 287 | CAPPED | True Edges: 163 | Cap Limit: 630
+  [UNCAPPED] Pred: 1482372698 | TP: 118   | FP: 1482372580 | TN: 3922513 | FN: 45   
+  [CAPPED]   Pred: 630     | TP: 0     | FP: 630     | TN: 1486294463 | FN: 163  
+
+Snap 288 | CAPPED | True Edges: 138 | Cap Limit: 815
+  [UNCAPPED] Pred: 1480838774 | TP: 105   | FP: 1480838669 | TN: 5456449 | FN: 33   
+  [CAPPED]   Pred: 815     | TP: 2     | FP: 813     | TN: 1486294305 | FN: 136  
+
+Snap 289 | CAPPED | True Edges: 79 | Cap Limit: 690
+  [UNCAPPED] Pred: 1480612702 | TP: 52    | FP: 1480612650 | TN: 5682527 | FN: 27   
+  [CAPPED]   Pred: 690     | TP: 0     | FP: 690     | TN: 1486294487 | FN: 79   
+
+Snap 290 | CAPPED | True Edges: 145 | Cap Limit: 395
+  [UNCAPPED] Pred: 1480537824 | TP: 102   | FP: 1480537722 | TN: 5757389 | FN: 43   
+  [CAPPED]   Pred: 395     | TP: 3     | FP: 392     | TN: 1486294719 | FN: 142  
+
+Snap 291 | CAPPED | True Edges: 90 | Cap Limit: 725
+  [UNCAPPED] Pred: 1479848538 | TP: 67    | FP: 1479848471 | TN: 6446695 | FN: 23   
+  [CAPPED]   Pred: 725     | TP: 2     | FP: 723     | TN: 1486294443 | FN: 88   
+
+Snap 292 | CAPPED | True Edges: 133 | Cap Limit: 450
+  [UNCAPPED] Pred: 1478084554 | TP: 97    | FP: 1478084457 | TN: 8210666 | FN: 36   
+  [CAPPED]   Pred: 450     | TP: 2     | FP: 448     | TN: 1486294675 | FN: 131  
+
+Snap 293 | CAPPED | True Edges: 146 | Cap Limit: 665
+  [UNCAPPED] Pred: 1477931162 | TP: 98    | FP: 1477931064 | TN: 8364046 | FN: 48   
+  [CAPPED]   Pred: 665     | TP: 5     | FP: 660     | TN: 1486294450 | FN: 141  
+
+Snap 294 | CAPPED | True Edges: 113 | Cap Limit: 730
+  [UNCAPPED] Pred: 1478310384 | TP: 73    | FP: 1478310311 | TN: 7984832 | FN: 40   
+  [CAPPED]   Pred: 730     | TP: 4     | FP: 726     | TN: 1486294417 | FN: 109  
+
+Snap 295 | CAPPED | True Edges: 302 | Cap Limit: 565
+  [UNCAPPED] Pred: 1479148954 | TP: 190   | FP: 1479148764 | TN: 7146190 | FN: 112  
+  [CAPPED]   Pred: 565     | TP: 6     | FP: 559     | TN: 1486294395 | FN: 296  
+
+Snap 296 | CAPPED | True Edges: 1135 | Cap Limit: 1510
+  [UNCAPPED] Pred: 1478074306 | TP: 698   | FP: 1478073608 | TN: 8220513 | FN: 437  
+  [CAPPED]   Pred: 1510    | TP: 7     | FP: 1503    | TN: 1486292618 | FN: 1128 
+
+Snap 297 | CAPPED | True Edges: 150 | Cap Limit: 5675
+  [UNCAPPED] Pred: 1464317420 | TP: 93    | FP: 1464317327 | TN: 21977779 | FN: 57   
+  [CAPPED]   Pred: 5675    | TP: 4     | FP: 5671    | TN: 1486289435 | FN: 146  
+
+Snap 298 | CAPPED | True Edges: 128 | Cap Limit: 750
+  [UNCAPPED] Pred: 1464691916 | TP: 89    | FP: 1464691827 | TN: 21603301 | FN: 39   
+  [CAPPED]   Pred: 750     | TP: 1     | FP: 749     | TN: 1486294379 | FN: 127  
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkadex_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkadex (SFDyG) METRICS ---
+TRAIN:  Time=595.42s, GPU=6222.00MB, RAM=6203.45MB
+THRESH: Time=0.41s, GPU=6222.00MB, RAM=6203.66MB
+CONST:  Time=1717.59s, GPU=6222.00MB, RAM=3542.28MB
+
+========================================================================
+COMPLETED DATASET: networkadex
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkaeternity
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 235 snapshots...]
+[Done] Total Snapshots processed: 235
+
+Statistics for networkaeternity:
+	Nodes: 32339
+	Edges: 66303
+	Snaps: 235
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.446324 | Sampled Train AUC: 0.5524
+Epoch 020 | Loss: 1.298249 | Sampled Train AUC: 0.5527
+Epoch 030 | Loss: 1.270072 | Sampled Train AUC: 0.5552
+Epoch 040 | Loss: 1.254352 | Sampled Train AUC: 0.5559
+Epoch 050 | Loss: 1.248853 | Sampled Train AUC: 0.5566
+Epoch 060 | Loss: 1.247860 | Sampled Train AUC: 0.5556
+Epoch 070 | Loss: 1.243343 | Sampled Train AUC: 0.5556
+Epoch 080 | Loss: 1.243221 | Sampled Train AUC: 0.5556
+Epoch 090 | Loss: 1.244741 | Sampled Train AUC: 0.5542
+Epoch 100 | Loss: 1.235384 | Sampled Train AUC: 0.5549
+Epoch 110 | Loss: 1.229649 | Sampled Train AUC: 0.5556
+Epoch 120 | Loss: 1.226139 | Sampled Train AUC: 0.5562
+Epoch 130 | Loss: 1.220294 | Sampled Train AUC: 0.5563
+Epoch 140 | Loss: 1.217676 | Sampled Train AUC: 0.5562
+Epoch 150 | Loss: 1.213011 | Sampled Train AUC: 0.5567
+Epoch 160 | Loss: 1.210537 | Sampled Train AUC: 0.5569
+Epoch 170 | Loss: 1.208538 | Sampled Train AUC: 0.5569
+Epoch 180 | Loss: 1.207202 | Sampled Train AUC: 0.5570
+Epoch 190 | Loss: 1.206665 | Sampled Train AUC: 0.5571
+Epoch 200 | Loss: 1.206703 | Sampled Train AUC: 0.5571
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.461501 | Std: 0.349823 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.373584 | Std: 0.261062 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.6008
+Loading data for networkaeternity with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 199 | CAPPED | True Edges: 4 | Cap Limit: 1460
+  [UNCAPPED] Pred: 1026915772 | TP: 4     | FP: 1026915768 | TN: 18862810 | FN: 0    
+  [CAPPED]   Pred: 1460    | TP: 0     | FP: 1460    | TN: 1045777118 | FN: 4    
+
+Snap 200 | CAPPED | True Edges: 22 | Cap Limit: 960
+  [UNCAPPED] Pred: 1025969996 | TP: 22    | FP: 1025969974 | TN: 19808586 | FN: 0    
+  [CAPPED]   Pred: 960     | TP: 0     | FP: 960     | TN: 1045777600 | FN: 22   
+
+Snap 201 | CAPPED | True Edges: 5 | Cap Limit: 1830
+  [UNCAPPED] Pred: 1026833842 | TP: 5     | FP: 1026833837 | TN: 18944740 | FN: 0    
+  [CAPPED]   Pred: 1830    | TP: 0     | FP: 1830    | TN: 1045776747 | FN: 5    
+
+Snap 202 | CAPPED | True Edges: 2 | Cap Limit: 985
+  [UNCAPPED] Pred: 1027758000 | TP: 2     | FP: 1027757998 | TN: 18020582 | FN: 0    
+  [CAPPED]   Pred: 985     | TP: 0     | FP: 985     | TN: 1045777595 | FN: 2    
+
+Snap 203 | CAPPED | True Edges: 2 | Cap Limit: 975
+  [UNCAPPED] Pred: 1026375332 | TP: 2     | FP: 1026375330 | TN: 19403250 | FN: 0    
+  [CAPPED]   Pred: 975     | TP: 0     | FP: 975     | TN: 1045777605 | FN: 2    
+
+Snap 204 | CAPPED | True Edges: 3 | Cap Limit: 970
+  [UNCAPPED] Pred: 1026183042 | TP: 3     | FP: 1026183039 | TN: 19595540 | FN: 0    
+  [CAPPED]   Pred: 970     | TP: 0     | FP: 970     | TN: 1045777609 | FN: 3    
+
+Snap 205 | CAPPED | True Edges: 10 | Cap Limit: 750
+  [UNCAPPED] Pred: 1029030320 | TP: 10    | FP: 1029030310 | TN: 16748262 | FN: 0    
+  [CAPPED]   Pred: 750     | TP: 0     | FP: 750     | TN: 1045777822 | FN: 10   
+
+Snap 206 | CAPPED | True Edges: 10 | Cap Limit: 1050
+  [UNCAPPED] Pred: 1030230858 | TP: 10    | FP: 1030230848 | TN: 15547724 | FN: 0    
+  [CAPPED]   Pred: 1050    | TP: 0     | FP: 1050    | TN: 1045777522 | FN: 10   
+
+Snap 207 | CAPPED | True Edges: 7 | Cap Limit: 960
+  [UNCAPPED] Pred: 1029789416 | TP: 7     | FP: 1029789409 | TN: 15989166 | FN: 0    
+  [CAPPED]   Pred: 960     | TP: 0     | FP: 960     | TN: 1045777615 | FN: 7    
+
+Snap 208 | CAPPED | True Edges: 12 | Cap Limit: 1030
+  [UNCAPPED] Pred: 1025711878 | TP: 11    | FP: 1025711867 | TN: 20066703 | FN: 1    
+  [CAPPED]   Pred: 1030    | TP: 0     | FP: 1030    | TN: 1045777540 | FN: 12   
+
+Snap 209 | CAPPED | True Edges: 20 | Cap Limit: 1300
+  [UNCAPPED] Pred: 1025220074 | TP: 8     | FP: 1025220066 | TN: 20558496 | FN: 12   
+  [CAPPED]   Pred: 1300    | TP: 1     | FP: 1299    | TN: 1045777263 | FN: 19   
+
+Snap 210 | CAPPED | True Edges: 18 | Cap Limit: 1585
+  [UNCAPPED] Pred: 1027048992 | TP: 9     | FP: 1027048983 | TN: 18729581 | FN: 9    
+  [CAPPED]   Pred: 1585    | TP: 0     | FP: 1585    | TN: 1045776979 | FN: 18   
+
+Snap 211 | CAPPED | True Edges: 3 | Cap Limit: 1040
+  [UNCAPPED] Pred: 1028451936 | TP: 2     | FP: 1028451934 | TN: 17326645 | FN: 1    
+  [CAPPED]   Pred: 1040    | TP: 0     | FP: 1040    | TN: 1045777539 | FN: 3    
+
+Snap 212 | CAPPED | True Edges: 6 | Cap Limit: 1090
+  [UNCAPPED] Pred: 1028453932 | TP: 4     | FP: 1028453928 | TN: 17324648 | FN: 2    
+  [CAPPED]   Pred: 1090    | TP: 0     | FP: 1090    | TN: 1045777486 | FN: 6    
+
+Snap 213 | CAPPED | True Edges: 8 | Cap Limit: 810
+  [UNCAPPED] Pred: 1029280258 | TP: 4     | FP: 1029280254 | TN: 16498320 | FN: 4    
+  [CAPPED]   Pred: 810     | TP: 0     | FP: 810     | TN: 1045777764 | FN: 8    
+
+Snap 214 | CAPPED | True Edges: 6 | Cap Limit: 850
+  [UNCAPPED] Pred: 1030047076 | TP: 3     | FP: 1030047073 | TN: 15731503 | FN: 3    
+  [CAPPED]   Pred: 850     | TP: 0     | FP: 850     | TN: 1045777726 | FN: 6    
+
+Snap 215 | CAPPED | True Edges: 10 | Cap Limit: 835
+  [UNCAPPED] Pred: 1031189504 | TP: 6     | FP: 1031189498 | TN: 14589074 | FN: 4    
+  [CAPPED]   Pred: 835     | TP: 0     | FP: 835     | TN: 1045777737 | FN: 10   
+
+Snap 216 | CAPPED | True Edges: 2 | Cap Limit: 1185
+  [UNCAPPED] Pred: 1032585654 | TP: 2     | FP: 1032585652 | TN: 13192928 | FN: 0    
+  [CAPPED]   Pred: 1185    | TP: 0     | FP: 1185    | TN: 1045777395 | FN: 2    
+
+Snap 217 | CAPPED | True Edges: 2 | Cap Limit: 635
+  [UNCAPPED] Pred: 1037938202 | TP: 2     | FP: 1037938200 | TN: 7840380 | FN: 0    
+  [CAPPED]   Pred: 635     | TP: 0     | FP: 635     | TN: 1045777945 | FN: 2    
+
+Snap 218 | CAPPED | True Edges: 4 | Cap Limit: 755
+  [UNCAPPED] Pred: 1035702268 | TP: 4     | FP: 1035702264 | TN: 10076314 | FN: 0    
+  [CAPPED]   Pred: 755     | TP: 0     | FP: 755     | TN: 1045777823 | FN: 4    
+
+Snap 219 | CAPPED | True Edges: 7 | Cap Limit: 750
+  [UNCAPPED] Pred: 1036913986 | TP: 6     | FP: 1036913980 | TN: 8864595 | FN: 1    
+  [CAPPED]   Pred: 750     | TP: 0     | FP: 750     | TN: 1045777825 | FN: 7    
+
+Snap 220 | CAPPED | True Edges: 3 | Cap Limit: 1185
+  [UNCAPPED] Pred: 1038511682 | TP: 2     | FP: 1038511680 | TN: 7266899 | FN: 1    
+  [CAPPED]   Pred: 1185    | TP: 0     | FP: 1185    | TN: 1045777394 | FN: 3    
+
+Snap 221 | CAPPED | True Edges: 4 | Cap Limit: 985
+  [UNCAPPED] Pred: 1039533508 | TP: 3     | FP: 1039533505 | TN: 6245073 | FN: 1    
+  [CAPPED]   Pred: 985     | TP: 0     | FP: 985     | TN: 1045777593 | FN: 4    
+
+Snap 222 | CAPPED | True Edges: 7 | Cap Limit: 955
+  [UNCAPPED] Pred: 1039980672 | TP: 6     | FP: 1039980666 | TN: 5797909 | FN: 1    
+  [CAPPED]   Pred: 955     | TP: 0     | FP: 955     | TN: 1045777620 | FN: 7    
+
+Snap 223 | CAPPED | True Edges: 14 | Cap Limit: 1785
+  [UNCAPPED] Pred: 1038761362 | TP: 11    | FP: 1038761351 | TN: 7017217 | FN: 3    
+  [CAPPED]   Pred: 1785    | TP: 0     | FP: 1785    | TN: 1045776783 | FN: 14   
+
+Snap 224 | CAPPED | True Edges: 3 | Cap Limit: 1950
+  [UNCAPPED] Pred: 1035888288 | TP: 3     | FP: 1035888285 | TN: 9890294 | FN: 0    
+  [CAPPED]   Pred: 1950    | TP: 0     | FP: 1950    | TN: 1045776629 | FN: 3    
+
+Snap 225 | CAPPED | True Edges: 1 | Cap Limit: 1105
+  [UNCAPPED] Pred: 1034231072 | TP: 1     | FP: 1034231071 | TN: 11547510 | FN: 0    
+  [CAPPED]   Pred: 1105    | TP: 0     | FP: 1105    | TN: 1045777476 | FN: 1    
+
+Snap 226 | CAPPED | True Edges: 4 | Cap Limit: 925
+  [UNCAPPED] Pred: 1032069744 | TP: 4     | FP: 1032069740 | TN: 13708838 | FN: 0    
+  [CAPPED]   Pred: 925     | TP: 0     | FP: 925     | TN: 1045777653 | FN: 4    
+
+Snap 227 | CAPPED | True Edges: 9 | Cap Limit: 1180
+  [UNCAPPED] Pred: 1028127736 | TP: 9     | FP: 1028127727 | TN: 17650846 | FN: 0    
+  [CAPPED]   Pred: 1180    | TP: 0     | FP: 1180    | TN: 1045777393 | FN: 9    
+
+Snap 228 | CAPPED | True Edges: 10 | Cap Limit: 1570
+  [UNCAPPED] Pred: 1028255480 | TP: 10    | FP: 1028255470 | TN: 17523102 | FN: 0    
+  [CAPPED]   Pred: 1570    | TP: 0     | FP: 1570    | TN: 1045777002 | FN: 10   
+
+Snap 229 | CAPPED | True Edges: 8 | Cap Limit: 1625
+  [UNCAPPED] Pred: 1028833200 | TP: 8     | FP: 1028833192 | TN: 16945382 | FN: 0    
+  [CAPPED]   Pred: 1625    | TP: 0     | FP: 1625    | TN: 1045776949 | FN: 8    
+
+Snap 230 | CAPPED | True Edges: 11 | Cap Limit: 1915
+  [UNCAPPED] Pred: 1030736602 | TP: 11    | FP: 1030736591 | TN: 15041980 | FN: 0    
+  [CAPPED]   Pred: 1915    | TP: 0     | FP: 1915    | TN: 1045776656 | FN: 11   
+
+Snap 231 | CAPPED | True Edges: 11 | Cap Limit: 2220
+  [UNCAPPED] Pred: 1036158164 | TP: 11    | FP: 1036158153 | TN: 9620418 | FN: 0    
+  [CAPPED]   Pred: 2220    | TP: 0     | FP: 2220    | TN: 1045776351 | FN: 11   
+
+Snap 232 | CAPPED | True Edges: 28 | Cap Limit: 4435
+  [UNCAPPED] Pred: 1035532068 | TP: 28    | FP: 1035532040 | TN: 10246514 | FN: 0    
+  [CAPPED]   Pred: 4435    | TP: 1     | FP: 4434    | TN: 1045774120 | FN: 27   
+
+Snap 233 | CAPPED | True Edges: 14 | Cap Limit: 4080
+  [UNCAPPED] Pred: 1032434862 | TP: 8     | FP: 1032434854 | TN: 13343714 | FN: 6    
+  [CAPPED]   Pred: 4080    | TP: 0     | FP: 4080    | TN: 1045774488 | FN: 14   
+
+Snap 234 | CAPPED | True Edges: 11 | Cap Limit: 8200
+  [UNCAPPED] Pred: 1033406672 | TP: 4     | FP: 1033406668 | TN: 12371903 | FN: 7    
+  [CAPPED]   Pred: 8200    | TP: 1     | FP: 8199    | TN: 1045770372 | FN: 10   
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkaeternity_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkaeternity (SFDyG) METRICS ---
+TRAIN:  Time=759.81s, GPU=9098.00MB, RAM=4641.79MB
+THRESH: Time=0.52s, GPU=9098.00MB, RAM=4641.89MB
+CONST:  Time=991.42s, GPU=9098.00MB, RAM=3135.11MB
+
+========================================================================
+COMPLETED DATASET: networkaeternity
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkaion
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 196 snapshots...]
+[Done] Total Snapshots processed: 196
+
+Statistics for networkaion:
+	Nodes: 28302
+	Edges: 46980
+	Snaps: 196
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 2.094067 | Sampled Train AUC: 0.4639
+Epoch 020 | Loss: 1.536838 | Sampled Train AUC: 0.4641
+Epoch 030 | Loss: 1.593511 | Sampled Train AUC: 0.4635
+Epoch 040 | Loss: 1.535802 | Sampled Train AUC: 0.4638
+Epoch 050 | Loss: 1.456580 | Sampled Train AUC: 0.4639
+Early stopping triggered at epoch 59. Best Training Loss: 1.434798
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.478581 | Std: 0.276594 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.491580 | Std: 0.241859 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.10 | Sampled Val F1: 0.5953
+Loading data for networkaion with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 166 | CAPPED | True Edges: 7 | Cap Limit: 1070
+  [UNCAPPED] Pred: 775590174 | TP: 3     | FP: 775590171 | TN: 25384724 | FN: 4    
+  [CAPPED]   Pred: 1070    | TP: 1     | FP: 1069    | TN: 800973826 | FN: 6    
+
+Snap 167 | CAPPED | True Edges: 8 | Cap Limit: 1200
+  [UNCAPPED] Pred: 772214984 | TP: 6     | FP: 772214978 | TN: 28759916 | FN: 2    
+  [CAPPED]   Pred: 1200    | TP: 0     | FP: 1200    | TN: 800973694 | FN: 8    
+
+Snap 168 | CAPPED | True Edges: 8 | Cap Limit: 1020
+  [UNCAPPED] Pred: 771389560 | TP: 8     | FP: 771389552 | TN: 29585342 | FN: 0    
+  [CAPPED]   Pred: 1020    | TP: 0     | FP: 1020    | TN: 800973874 | FN: 8    
+
+Snap 169 | CAPPED | True Edges: 10 | Cap Limit: 1010
+  [UNCAPPED] Pred: 772804084 | TP: 10    | FP: 772804074 | TN: 28170818 | FN: 0    
+  [CAPPED]   Pred: 1010    | TP: 0     | FP: 1010    | TN: 800973882 | FN: 10   
+
+Snap 170 | CAPPED | True Edges: 11 | Cap Limit: 1075
+  [UNCAPPED] Pred: 773892404 | TP: 10    | FP: 773892394 | TN: 27082497 | FN: 1    
+  [CAPPED]   Pred: 1075    | TP: 0     | FP: 1075    | TN: 800973816 | FN: 11   
+
+Snap 171 | CAPPED | True Edges: 6 | Cap Limit: 1135
+  [UNCAPPED] Pred: 774930908 | TP: 6     | FP: 774930902 | TN: 26043994 | FN: 0    
+  [CAPPED]   Pred: 1135    | TP: 0     | FP: 1135    | TN: 800973761 | FN: 6    
+
+Snap 172 | CAPPED | True Edges: 12 | Cap Limit: 895
+  [UNCAPPED] Pred: 776796818 | TP: 10    | FP: 776796808 | TN: 24178082 | FN: 2    
+  [CAPPED]   Pred: 895     | TP: 0     | FP: 895     | TN: 800973995 | FN: 12   
+
+Snap 173 | CAPPED | True Edges: 10 | Cap Limit: 1105
+  [UNCAPPED] Pred: 778005786 | TP: 10    | FP: 778005776 | TN: 22969116 | FN: 0    
+  [CAPPED]   Pred: 1105    | TP: 0     | FP: 1105    | TN: 800973787 | FN: 10   
+
+Snap 174 | CAPPED | True Edges: 13 | Cap Limit: 1005
+  [UNCAPPED] Pred: 778664768 | TP: 13    | FP: 778664755 | TN: 22310134 | FN: 0    
+  [CAPPED]   Pred: 1005    | TP: 0     | FP: 1005    | TN: 800973884 | FN: 13   
+
+Snap 175 | CAPPED | True Edges: 3 | Cap Limit: 1090
+  [UNCAPPED] Pred: 777898046 | TP: 1     | FP: 777898045 | TN: 23076854 | FN: 2    
+  [CAPPED]   Pred: 1090    | TP: 0     | FP: 1090    | TN: 800973809 | FN: 3    
+
+Snap 176 | CAPPED | True Edges: 8 | Cap Limit: 980
+  [UNCAPPED] Pred: 779991284 | TP: 6     | FP: 779991278 | TN: 20983616 | FN: 2    
+  [CAPPED]   Pred: 980     | TP: 1     | FP: 979     | TN: 800973915 | FN: 7    
+
+Snap 177 | CAPPED | True Edges: 1 | Cap Limit: 1125
+  [UNCAPPED] Pred: 782309924 | TP: 1     | FP: 782309923 | TN: 18664978 | FN: 0    
+  [CAPPED]   Pred: 1125    | TP: 0     | FP: 1125    | TN: 800973776 | FN: 1    
+
+Snap 178 | CAPPED | True Edges: 9 | Cap Limit: 810
+  [UNCAPPED] Pred: 783857276 | TP: 7     | FP: 783857269 | TN: 17117624 | FN: 2    
+  [CAPPED]   Pred: 810     | TP: 0     | FP: 810     | TN: 800974083 | FN: 9    
+
+Snap 179 | CAPPED | True Edges: 14 | Cap Limit: 1525
+  [UNCAPPED] Pred: 783913988 | TP: 13    | FP: 783913975 | TN: 17060913 | FN: 1    
+  [CAPPED]   Pred: 1525    | TP: 0     | FP: 1525    | TN: 800973363 | FN: 14   
+
+Snap 180 | CAPPED | True Edges: 4 | Cap Limit: 1000
+  [UNCAPPED] Pred: 784025662 | TP: 2     | FP: 784025660 | TN: 16949238 | FN: 2    
+  [CAPPED]   Pred: 1000    | TP: 0     | FP: 1000    | TN: 800973898 | FN: 4    
+
+Snap 181 | CAPPED | True Edges: 5 | Cap Limit: 770
+  [UNCAPPED] Pred: 785743190 | TP: 1     | FP: 785743189 | TN: 15231708 | FN: 4    
+  [CAPPED]   Pred: 770     | TP: 0     | FP: 770     | TN: 800974127 | FN: 5    
+
+Snap 182 | CAPPED | True Edges: 9 | Cap Limit: 1055
+  [UNCAPPED] Pred: 789126220 | TP: 5     | FP: 789126215 | TN: 11848678 | FN: 4    
+  [CAPPED]   Pred: 1055    | TP: 2     | FP: 1053    | TN: 800973840 | FN: 7    
+
+Snap 183 | CAPPED | True Edges: 9 | Cap Limit: 1285
+  [UNCAPPED] Pred: 787297252 | TP: 6     | FP: 787297246 | TN: 13677647 | FN: 3    
+  [CAPPED]   Pred: 1285    | TP: 0     | FP: 1285    | TN: 800973608 | FN: 9    
+
+Snap 184 | CAPPED | True Edges: 11 | Cap Limit: 1375
+  [UNCAPPED] Pred: 787017332 | TP: 3     | FP: 787017329 | TN: 13957562 | FN: 8    
+  [CAPPED]   Pred: 1375    | TP: 1     | FP: 1374    | TN: 800973517 | FN: 10   
+
+Snap 185 | CAPPED | True Edges: 10 | Cap Limit: 2125
+  [UNCAPPED] Pred: 785350946 | TP: 3     | FP: 785350943 | TN: 15623949 | FN: 7    
+  [CAPPED]   Pred: 2125    | TP: 0     | FP: 2125    | TN: 800972767 | FN: 10   
+
+Snap 186 | CAPPED | True Edges: 1 | Cap Limit: 1665
+  [UNCAPPED] Pred: 785402710 | TP: 0     | FP: 785402710 | TN: 15572191 | FN: 1    
+  [CAPPED]   Pred: 1665    | TP: 0     | FP: 1665    | TN: 800973236 | FN: 1    
+
+Snap 187 | CAPPED | True Edges: 8 | Cap Limit: 1420
+  [UNCAPPED] Pred: 785846300 | TP: 3     | FP: 785846297 | TN: 15128597 | FN: 5    
+  [CAPPED]   Pred: 1420    | TP: 0     | FP: 1420    | TN: 800973474 | FN: 8    
+
+Snap 188 | CAPPED | True Edges: 5 | Cap Limit: 1445
+  [UNCAPPED] Pred: 785401450 | TP: 3     | FP: 785401447 | TN: 15573450 | FN: 2    
+  [CAPPED]   Pred: 1445    | TP: 0     | FP: 1445    | TN: 800973452 | FN: 5    
+
+Snap 189 | CAPPED | True Edges: 4 | Cap Limit: 1580
+  [UNCAPPED] Pred: 783684038 | TP: 0     | FP: 783684038 | TN: 17290860 | FN: 4    
+  [CAPPED]   Pred: 1580    | TP: 0     | FP: 1580    | TN: 800973318 | FN: 4    
+
+Snap 190 | CAPPED | True Edges: 8 | Cap Limit: 1440
+  [UNCAPPED] Pred: 784068376 | TP: 3     | FP: 784068373 | TN: 16906521 | FN: 5    
+  [CAPPED]   Pred: 1440    | TP: 0     | FP: 1440    | TN: 800973454 | FN: 8    
+
+Snap 191 | CAPPED | True Edges: 13 | Cap Limit: 1660
+  [UNCAPPED] Pred: 784621420 | TP: 9     | FP: 784621411 | TN: 16353478 | FN: 4    
+  [CAPPED]   Pred: 1660    | TP: 0     | FP: 1660    | TN: 800973229 | FN: 13   
+
+Snap 192 | CAPPED | True Edges: 10 | Cap Limit: 1615
+  [UNCAPPED] Pred: 786787914 | TP: 4     | FP: 786787910 | TN: 14186982 | FN: 6    
+  [CAPPED]   Pred: 1615    | TP: 0     | FP: 1615    | TN: 800973277 | FN: 10   
+
+Snap 193 | CAPPED | True Edges: 10 | Cap Limit: 2115
+  [UNCAPPED] Pred: 786846834 | TP: 4     | FP: 786846830 | TN: 14128062 | FN: 6    
+  [CAPPED]   Pred: 2115    | TP: 0     | FP: 2115    | TN: 800972777 | FN: 10   
+
+Snap 194 | CAPPED | True Edges: 17 | Cap Limit: 2530
+  [UNCAPPED] Pred: 785015526 | TP: 10    | FP: 785015516 | TN: 15959369 | FN: 7    
+  [CAPPED]   Pred: 2530    | TP: 1     | FP: 2529    | TN: 800972356 | FN: 16   
+
+Snap 195 | CAPPED | True Edges: 14 | Cap Limit: 2100
+  [UNCAPPED] Pred: 784240136 | TP: 12    | FP: 784240124 | TN: 16734764 | FN: 2    
+  [CAPPED]   Pred: 2100    | TP: 0     | FP: 2100    | TN: 800972788 | FN: 14   
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkaion_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkaion (SFDyG) METRICS ---
+TRAIN:  Time=174.54s, GPU=5812.00MB, RAM=5021.20MB
+THRESH: Time=0.29s, GPU=5812.00MB, RAM=5021.29MB
+CONST:  Time=622.17s, GPU=5812.00MB, RAM=3347.05MB
+
+========================================================================
+COMPLETED DATASET: networkaion
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkaragon
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 343 snapshots...]
+[Done] Total Snapshots processed: 343
+
+Statistics for networkaragon:
+	Nodes: 66183
+	Edges: 106144
+	Snaps: 343
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.586013 | Sampled Train AUC: 0.4357
+Epoch 020 | Loss: 1.470190 | Sampled Train AUC: 0.4351
+Epoch 030 | Loss: 1.470378 | Sampled Train AUC: 0.4344
+Epoch 040 | Loss: 1.467799 | Sampled Train AUC: 0.4349
+Epoch 050 | Loss: 1.467193 | Sampled Train AUC: 0.4349
+Epoch 060 | Loss: 1.506915 | Sampled Train AUC: 0.4344
+Early stopping triggered at epoch 69. Best Training Loss: 1.463797
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.305443 | Std: 0.309358 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.428462 | Std: 0.251301 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.4536
+Loading data for networkaragon with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 291 | CAPPED | True Edges: 4 | Cap Limit: 1150
+  [UNCAPPED] Pred: 4356120690 | TP: 4     | FP: 4356120686 | TN: 24002616 | FN: 0    
+  [CAPPED]   Pred: 1150    | TP: 0     | FP: 1150    | TN: 4380122152 | FN: 4    
+
+Snap 292 | CAPPED | True Edges: 9 | Cap Limit: 600
+  [UNCAPPED] Pred: 4356384636 | TP: 9     | FP: 4356384627 | TN: 23738670 | FN: 0    
+  [CAPPED]   Pred: 600     | TP: 0     | FP: 600     | TN: 4380122697 | FN: 9    
+
+Snap 293 | CAPPED | True Edges: 3 | Cap Limit: 1675
+  [UNCAPPED] Pred: 4345617446 | TP: 3     | FP: 4345617443 | TN: 34505860 | FN: 0    
+  [CAPPED]   Pred: 1675    | TP: 0     | FP: 1675    | TN: 4380121628 | FN: 3    
+
+Snap 294 | CAPPED | True Edges: 2 | Cap Limit: 1050
+  [UNCAPPED] Pred: 4344717862 | TP: 2     | FP: 4344717860 | TN: 35405444 | FN: 0    
+  [CAPPED]   Pred: 1050    | TP: 0     | FP: 1050    | TN: 4380122254 | FN: 2    
+
+Snap 295 | CAPPED | True Edges: 3 | Cap Limit: 810
+  [UNCAPPED] Pred: 4338816492 | TP: 3     | FP: 4338816489 | TN: 41306814 | FN: 0    
+  [CAPPED]   Pred: 810     | TP: 0     | FP: 810     | TN: 4380122493 | FN: 3    
+
+Snap 296 | CAPPED | True Edges: 6 | Cap Limit: 735
+  [UNCAPPED] Pred: 4336713254 | TP: 6     | FP: 4336713248 | TN: 43410052 | FN: 0    
+  [CAPPED]   Pred: 735     | TP: 0     | FP: 735     | TN: 4380122565 | FN: 6    
+
+Snap 297 | CAPPED | True Edges: 5 | Cap Limit: 705
+  [UNCAPPED] Pred: 4339073366 | TP: 5     | FP: 4339073361 | TN: 41049940 | FN: 0    
+  [CAPPED]   Pred: 705     | TP: 0     | FP: 705     | TN: 4380122596 | FN: 5    
+
+Snap 298 | CAPPED | True Edges: 8 | Cap Limit: 645
+  [UNCAPPED] Pred: 4342219144 | TP: 8     | FP: 4342219136 | TN: 37904162 | FN: 0    
+  [CAPPED]   Pred: 645     | TP: 0     | FP: 645     | TN: 4380122653 | FN: 8    
+
+Snap 299 | CAPPED | True Edges: 1 | Cap Limit: 435
+  [UNCAPPED] Pred: 4342355408 | TP: 1     | FP: 4342355407 | TN: 37767898 | FN: 0    
+  [CAPPED]   Pred: 435     | TP: 0     | FP: 435     | TN: 4380122870 | FN: 1    
+
+Snap 300 | CAPPED | True Edges: 3 | Cap Limit: 490
+  [UNCAPPED] Pred: 4350346172 | TP: 3     | FP: 4350346169 | TN: 29777134 | FN: 0    
+  [CAPPED]   Pred: 490     | TP: 0     | FP: 490     | TN: 4380122813 | FN: 3    
+
+Snap 301 | CAPPED | True Edges: 7 | Cap Limit: 320
+  [UNCAPPED] Pred: 4357042660 | TP: 7     | FP: 4357042653 | TN: 23080646 | FN: 0    
+  [CAPPED]   Pred: 320     | TP: 0     | FP: 320     | TN: 4380122979 | FN: 7    
+
+Snap 302 | CAPPED | True Edges: 5 | Cap Limit: 540
+  [UNCAPPED] Pred: 4363761148 | TP: 5     | FP: 4363761143 | TN: 16362158 | FN: 0    
+  [CAPPED]   Pred: 540     | TP: 0     | FP: 540     | TN: 4380122761 | FN: 5    
+========================================================================
+COMPLETED DATASET: networkaragon
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkbancor
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 317 snapshots...]
+[Done] Total Snapshots processed: 317
+
+Statistics for networkbancor:
+	Nodes: 49378
+	Edges: 71024
+	Snaps: 317
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.364053 | Sampled Train AUC: 0.4772
+Epoch 020 | Loss: 1.356761 | Sampled Train AUC: 0.4748
+Epoch 030 | Loss: 1.352862 | Sampled Train AUC: 0.4748
+Epoch 040 | Loss: 1.345147 | Sampled Train AUC: 0.4768
+Epoch 050 | Loss: 1.342712 | Sampled Train AUC: 0.4761
+Epoch 060 | Loss: 1.343567 | Sampled Train AUC: 0.4774
+Epoch 070 | Loss: 1.362714 | Sampled Train AUC: 0.4772
+Early stopping triggered at epoch 78. Best Training Loss: 1.337188
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.320182 | Std: 0.329662 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.326387 | Std: 0.260067 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.5008
+Loading data for networkbancor with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 269 | CAPPED | True Edges: 7 | Cap Limit: 730
+  [UNCAPPED] Pred: 2419947160 | TP: 7     | FP: 2419947153 | TN: 18190346 | FN: 0    
+  [CAPPED]   Pred: 730     | TP: 0     | FP: 730     | TN: 2438136769 | FN: 7    
+
+Snap 270 | CAPPED | True Edges: 9 | Cap Limit: 660
+  [UNCAPPED] Pred: 2422503862 | TP: 9     | FP: 2422503853 | TN: 15633644 | FN: 0    
+  [CAPPED]   Pred: 660     | TP: 0     | FP: 660     | TN: 2438136837 | FN: 9    
+
+Snap 271 | CAPPED | True Edges: 4 | Cap Limit: 615
+  [UNCAPPED] Pred: 2422207986 | TP: 4     | FP: 2422207982 | TN: 15929520 | FN: 0    
+  [CAPPED]   Pred: 615     | TP: 0     | FP: 615     | TN: 2438136887 | FN: 4    
+
+Snap 272 | CAPPED | True Edges: 9 | Cap Limit: 410
+  [UNCAPPED] Pred: 2421815146 | TP: 9     | FP: 2421815137 | TN: 16322360 | FN: 0    
+  [CAPPED]   Pred: 410     | TP: 0     | FP: 410     | TN: 2438137087 | FN: 9    
+
+Snap 273 | CAPPED | True Edges: 7 | Cap Limit: 425
+  [UNCAPPED] Pred: 2422796328 | TP: 4     | FP: 2422796324 | TN: 15341175 | FN: 3    
+  [CAPPED]   Pred: 425     | TP: 0     | FP: 425     | TN: 2438137074 | FN: 7    
+
+Snap 274 | CAPPED | True Edges: 11 | Cap Limit: 475
+  [UNCAPPED] Pred: 2424958076 | TP: 9     | FP: 2424958067 | TN: 13179428 | FN: 2    
+  [CAPPED]   Pred: 475     | TP: 0     | FP: 475     | TN: 2438137020 | FN: 11   
+
+Snap 275 | CAPPED | True Edges: 2 | Cap Limit: 550
+  [UNCAPPED] Pred: 2428688282 | TP: 2     | FP: 2428688280 | TN: 9449224 | FN: 0    
+  [CAPPED]   Pred: 550     | TP: 0     | FP: 550     | TN: 2438136954 | FN: 2    
+
+Snap 276 | CAPPED | True Edges: 5 | Cap Limit: 485
+  [UNCAPPED] Pred: 2429768496 | TP: 5     | FP: 2429768491 | TN: 8369010 | FN: 0    
+  [CAPPED]   Pred: 485     | TP: 0     | FP: 485     | TN: 2438137016 | FN: 5    
+
+Snap 277 | CAPPED | True Edges: 10 | Cap Limit: 530
+  [UNCAPPED] Pred: 2428492062 | TP: 9     | FP: 2428492053 | TN: 9645443 | FN: 1    
+  [CAPPED]   Pred: 530     | TP: 0     | FP: 530     | TN: 2438136966 | FN: 10   
+
+Snap 278 | CAPPED | True Edges: 16 | Cap Limit: 550
+  [UNCAPPED] Pred: 2428984066 | TP: 14    | FP: 2428984052 | TN: 9153438 | FN: 2    
+  [CAPPED]   Pred: 550     | TP: 0     | FP: 550     | TN: 2438136940 | FN: 16   
+
+Snap 279 | CAPPED | True Edges: 5 | Cap Limit: 530
+  [UNCAPPED] Pred: 2425736644 | TP: 4     | FP: 2425736640 | TN: 12400861 | FN: 1    
+  [CAPPED]   Pred: 530     | TP: 0     | FP: 530     | TN: 2438136971 | FN: 5    
+
+Snap 280 | CAPPED | True Edges: 8 | Cap Limit: 460
+  [UNCAPPED] Pred: 2426030832 | TP: 7     | FP: 2426030825 | TN: 12106673 | FN: 1    
+  [CAPPED]   Pred: 460     | TP: 0     | FP: 460     | TN: 2438137038 | FN: 8    
+
+Snap 281 | CAPPED | True Edges: 14 | Cap Limit: 440
+  [UNCAPPED] Pred: 2425244516 | TP: 14    | FP: 2425244502 | TN: 12892990 | FN: 0    
+  [CAPPED]   Pred: 440     | TP: 0     | FP: 440     | TN: 2438137052 | FN: 14   
+
+Snap 282 | CAPPED | True Edges: 8 | Cap Limit: 460
+  [UNCAPPED] Pred: 2424260602 | TP: 8     | FP: 2424260594 | TN: 13876904 | FN: 0    
+  [CAPPED]   Pred: 460     | TP: 0     | FP: 460     | TN: 2438137038 | FN: 8    
+
+Snap 283 | CAPPED | True Edges: 10 | Cap Limit: 520
+  [UNCAPPED] Pred: 2423965326 | TP: 10    | FP: 2423965316 | TN: 14172180 | FN: 0    
+  [CAPPED]   Pred: 520     | TP: 0     | FP: 520     | TN: 2438136976 | FN: 10   
+
+Snap 284 | CAPPED | True Edges: 11 | Cap Limit: 595
+  [UNCAPPED] Pred: 2423866714 | TP: 11    | FP: 2423866703 | TN: 14270792 | FN: 0    
+  [CAPPED]   Pred: 595     | TP: 0     | FP: 595     | TN: 2438136900 | FN: 11   
+
+Snap 285 | CAPPED | True Edges: 6 | Cap Limit: 735
+  [UNCAPPED] Pred: 2423771354 | TP: 6     | FP: 2423771348 | TN: 14366152 | FN: 0    
+  [CAPPED]   Pred: 735     | TP: 0     | FP: 735     | TN: 2438136765 | FN: 6    
+
+Snap 286 | CAPPED | True Edges: 19 | Cap Limit: 490
+  [UNCAPPED] Pred: 2422692288 | TP: 19    | FP: 2422692269 | TN: 15445218 | FN: 0    
+  [CAPPED]   Pred: 490     | TP: 0     | FP: 490     | TN: 2438136997 | FN: 19   
+
+Snap 287 | CAPPED | True Edges: 8 | Cap Limit: 490
+  [UNCAPPED] Pred: 2422497606 | TP: 3     | FP: 2422497603 | TN: 15639895 | FN: 5    
+  [CAPPED]   Pred: 490     | TP: 0     | FP: 490     | TN: 2438137008 | FN: 8    
+
+Snap 288 | CAPPED | True Edges: 7 | Cap Limit: 495
+  [UNCAPPED] Pred: 2422890082 | TP: 4     | FP: 2422890078 | TN: 15247421 | FN: 3    
+  [CAPPED]   Pred: 495     | TP: 0     | FP: 495     | TN: 2438137004 | FN: 7    
+
+Snap 289 | CAPPED | True Edges: 41 | Cap Limit: 450
+  [UNCAPPED] Pred: 2422891066 | TP: 22    | FP: 2422891044 | TN: 15246421 | FN: 19   
+  [CAPPED]   Pred: 450     | TP: 0     | FP: 450     | TN: 2438137015 | FN: 41   
+
+Snap 290 | CAPPED | True Edges: 12 | Cap Limit: 1105
+  [UNCAPPED] Pred: 2420640352 | TP: 3     | FP: 2420640349 | TN: 17497145 | FN: 9    
+  [CAPPED]   Pred: 1105    | TP: 0     | FP: 1105    | TN: 2438136389 | FN: 12   
+
+Snap 291 | CAPPED | True Edges: 12 | Cap Limit: 450
+  [UNCAPPED] Pred: 2420737638 | TP: 7     | FP: 2420737631 | TN: 17399863 | FN: 5    
+  [CAPPED]   Pred: 450     | TP: 0     | FP: 450     | TN: 2438137044 | FN: 12   
+
+Snap 292 | CAPPED | True Edges: 9 | Cap Limit: 525
+  [UNCAPPED] Pred: 2420045486 | TP: 5     | FP: 2420045481 | TN: 18092016 | FN: 4    
+  [CAPPED]   Pred: 525     | TP: 0     | FP: 525     | TN: 2438136972 | FN: 9    
+
+Snap 293 | CAPPED | True Edges: 5 | Cap Limit: 430
+  [UNCAPPED] Pred: 2419747816 | TP: 3     | FP: 2419747813 | TN: 18389688 | FN: 2    
+  [CAPPED]   Pred: 430     | TP: 0     | FP: 430     | TN: 2438137071 | FN: 5    
+
+Snap 294 | CAPPED | True Edges: 5 | Cap Limit: 340
+  [UNCAPPED] Pred: 2421020934 | TP: 4     | FP: 2421020930 | TN: 17116571 | FN: 1    
+  [CAPPED]   Pred: 340     | TP: 0     | FP: 340     | TN: 2438137161 | FN: 5    
+
+Snap 295 | CAPPED | True Edges: 4 | Cap Limit: 400
+  [UNCAPPED] Pred: 2420920024 | TP: 4     | FP: 2420920020 | TN: 17217482 | FN: 0    
+  [CAPPED]   Pred: 400     | TP: 0     | FP: 400     | TN: 2438137102 | FN: 4    
+
+Snap 296 | CAPPED | True Edges: 14 | Cap Limit: 555
+  [UNCAPPED] Pred: 2421606760 | TP: 14    | FP: 2421606746 | TN: 16530746 | FN: 0    
+  [CAPPED]   Pred: 555     | TP: 0     | FP: 555     | TN: 2438136937 | FN: 14   
+
+Snap 297 | CAPPED | True Edges: 16 | Cap Limit: 575
+  [UNCAPPED] Pred: 2424257360 | TP: 16    | FP: 2424257344 | TN: 13880146 | FN: 0    
+  [CAPPED]   Pred: 575     | TP: 0     | FP: 575     | TN: 2438136915 | FN: 16   
+
+Snap 298 | CAPPED | True Edges: 9 | Cap Limit: 575
+  [UNCAPPED] Pred: 2423376822 | TP: 8     | FP: 2423376814 | TN: 14760683 | FN: 1    
+  [CAPPED]   Pred: 575     | TP: 0     | FP: 575     | TN: 2438136922 | FN: 9    
+
+Snap 299 | CAPPED | True Edges: 8 | Cap Limit: 380
+  [UNCAPPED] Pred: 2423768872 | TP: 8     | FP: 2423768864 | TN: 14368634 | FN: 0    
+  [CAPPED]   Pred: 380     | TP: 0     | FP: 380     | TN: 2438137118 | FN: 8    
+
+Snap 300 | CAPPED | True Edges: 16 | Cap Limit: 355
+  [UNCAPPED] Pred: 2423964116 | TP: 13    | FP: 2423964103 | TN: 14173387 | FN: 3    
+  [CAPPED]   Pred: 355     | TP: 0     | FP: 355     | TN: 2438137135 | FN: 16   
+
+Snap 301 | CAPPED | True Edges: 21 | Cap Limit: 620
+  [UNCAPPED] Pred: 2423573838 | TP: 15    | FP: 2423573823 | TN: 14563662 | FN: 6    
+  [CAPPED]   Pred: 620     | TP: 0     | FP: 620     | TN: 2438136865 | FN: 21   
+
+Snap 302 | CAPPED | True Edges: 26 | Cap Limit: 625
+  [UNCAPPED] Pred: 2424462386 | TP: 23    | FP: 2424462363 | TN: 13675117 | FN: 3    
+  [CAPPED]   Pred: 625     | TP: 0     | FP: 625     | TN: 2438136855 | FN: 26   
+
+Snap 303 | CAPPED | True Edges: 11 | Cap Limit: 590
+  [UNCAPPED] Pred: 2428395776 | TP: 10    | FP: 2428395766 | TN: 9741729 | FN: 1    
+  [CAPPED]   Pred: 590     | TP: 0     | FP: 590     | TN: 2438136905 | FN: 11   
+
+Snap 304 | CAPPED | True Edges: 18 | Cap Limit: 545
+  [UNCAPPED] Pred: 2430759270 | TP: 16    | FP: 2430759254 | TN: 7378234 | FN: 2    
+  [CAPPED]   Pred: 545     | TP: 0     | FP: 545     | TN: 2438136943 | FN: 18   
+
+Snap 305 | CAPPED | True Edges: 25 | Cap Limit: 625
+  [UNCAPPED] Pred: 2432728222 | TP: 25    | FP: 2432728197 | TN: 5409284 | FN: 0    
+  [CAPPED]   Pred: 625     | TP: 0     | FP: 625     | TN: 2438136856 | FN: 25   
+
+Snap 306 | CAPPED | True Edges: 10 | Cap Limit: 860
+  [UNCAPPED] Pred: 2431452350 | TP: 10    | FP: 2431452340 | TN: 6685156 | FN: 0    
+  [CAPPED]   Pred: 860     | TP: 0     | FP: 860     | TN: 2438136636 | FN: 10   
+
+Snap 307 | CAPPED | True Edges: 7 | Cap Limit: 545
+  [UNCAPPED] Pred: 2430274122 | TP: 7     | FP: 2430274115 | TN: 7863384 | FN: 0    
+  [CAPPED]   Pred: 545     | TP: 0     | FP: 545     | TN: 2438136954 | FN: 7    
+
+Snap 308 | CAPPED | True Edges: 11 | Cap Limit: 465
+  [UNCAPPED] Pred: 2428794682 | TP: 11    | FP: 2428794671 | TN: 9342824 | FN: 0    
+  [CAPPED]   Pred: 465     | TP: 0     | FP: 465     | TN: 2438137030 | FN: 11   
+
+Snap 309 | CAPPED | True Edges: 26 | Cap Limit: 570
+  [UNCAPPED] Pred: 2424956830 | TP: 19    | FP: 2424956811 | TN: 13180669 | FN: 7    
+  [CAPPED]   Pred: 570     | TP: 0     | FP: 570     | TN: 2438136910 | FN: 26   
+
+Snap 310 | CAPPED | True Edges: 8 | Cap Limit: 1200
+  [UNCAPPED] Pred: 2421432842 | TP: 8     | FP: 2421432834 | TN: 16704664 | FN: 0    
+  [CAPPED]   Pred: 1200    | TP: 0     | FP: 1200    | TN: 2438136298 | FN: 8    
+
+Snap 311 | CAPPED | True Edges: 26 | Cap Limit: 505
+  [UNCAPPED] Pred: 2418973892 | TP: 21    | FP: 2418973871 | TN: 19163609 | FN: 5    
+  [CAPPED]   Pred: 505     | TP: 0     | FP: 505     | TN: 2438136975 | FN: 26   
+
+Snap 312 | CAPPED | True Edges: 13 | Cap Limit: 1005
+  [UNCAPPED] Pred: 2416524066 | TP: 12    | FP: 2416524054 | TN: 21613439 | FN: 1    
+  [CAPPED]   Pred: 1005    | TP: 0     | FP: 1005    | TN: 2438136488 | FN: 13   
+
+Snap 313 | CAPPED | True Edges: 14 | Cap Limit: 780
+  [UNCAPPED] Pred: 2416128614 | TP: 13    | FP: 2416128601 | TN: 22008891 | FN: 1    
+  [CAPPED]   Pred: 780     | TP: 0     | FP: 780     | TN: 2438136712 | FN: 14   
+
+Snap 314 | CAPPED | True Edges: 12 | Cap Limit: 825
+  [UNCAPPED] Pred: 2415537630 | TP: 10    | FP: 2415537620 | TN: 22599874 | FN: 2    
+  [CAPPED]   Pred: 825     | TP: 0     | FP: 825     | TN: 2438136669 | FN: 12   
+
+Snap 315 | CAPPED | True Edges: 92 | Cap Limit: 785
+  [UNCAPPED] Pred: 2413875002 | TP: 83    | FP: 2413874919 | TN: 24262495 | FN: 9    
+  [CAPPED]   Pred: 785     | TP: 0     | FP: 785     | TN: 2438136629 | FN: 92   
+
+Snap 316 | CAPPED | True Edges: 32 | Cap Limit: 3780
+  [UNCAPPED] Pred: 2406661522 | TP: 16    | FP: 2406661506 | TN: 31475968 | FN: 16   
+  [CAPPED]   Pred: 3780    | TP: 1     | FP: 3779    | TN: 2438133695 | FN: 31   
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkbancor_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkbancor (SFDyG) METRICS ---
+TRAIN:  Time=466.85s, GPU=12454.00MB, RAM=11056.64MB
+THRESH: Time=0.63s, GPU=12454.00MB, RAM=11056.72MB
+CONST:  Time=3005.04s, GPU=12454.00MB, RAM=6232.87MB
+
+========================================================================
+COMPLETED DATASET: networkbancor
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkcentra
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 264 snapshots...]
+[Done] Total Snapshots processed: 264
+
+Statistics for networkcentra:
+	Nodes: 38355
+	Edges: 66785
+	Snaps: 264
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.421751 | Sampled Train AUC: 0.5245
+Epoch 020 | Loss: 1.336150 | Sampled Train AUC: 0.5253
+Epoch 030 | Loss: 1.285206 | Sampled Train AUC: 0.5284
+Epoch 040 | Loss: 1.276801 | Sampled Train AUC: 0.5310
+Epoch 050 | Loss: 1.273233 | Sampled Train AUC: 0.5333
+Epoch 060 | Loss: 1.267939 | Sampled Train AUC: 0.5384
+Epoch 070 | Loss: 1.263084 | Sampled Train AUC: 0.5379
+Epoch 080 | Loss: 1.256858 | Sampled Train AUC: 0.5383
+Epoch 090 | Loss: 1.251540 | Sampled Train AUC: 0.5373
+Epoch 100 | Loss: 1.246538 | Sampled Train AUC: 0.5398
+Epoch 110 | Loss: 1.240782 | Sampled Train AUC: 0.5404
+Epoch 120 | Loss: 1.239918 | Sampled Train AUC: 0.5398
+Epoch 130 | Loss: 1.238258 | Sampled Train AUC: 0.5408
+Epoch 140 | Loss: 1.232663 | Sampled Train AUC: 0.5418
+Epoch 150 | Loss: 1.229235 | Sampled Train AUC: 0.5418
+Epoch 160 | Loss: 1.227143 | Sampled Train AUC: 0.5422
+Epoch 170 | Loss: 1.225617 | Sampled Train AUC: 0.5425
+Epoch 180 | Loss: 1.225052 | Sampled Train AUC: 0.5426
+Epoch 190 | Loss: 1.224575 | Sampled Train AUC: 0.5429
+Epoch 200 | Loss: 1.224359 | Sampled Train AUC: 0.5431
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.395883 | Std: 0.302840 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.402261 | Std: 0.173272 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.5897
+Loading data for networkcentra with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 224 | CAPPED | True Edges: 4 | Cap Limit: 270
+  [UNCAPPED] Pred: 1470531408 | TP: 4     | FP: 1470531404 | TN: 536262  | FN: 0    
+  [CAPPED]   Pred: 270     | TP: 0     | FP: 270     | TN: 1471067396 | FN: 4    
+
+Snap 225 | CAPPED | True Edges: 0 | Cap Limit: 235
+  [UNCAPPED] Pred: 1470378386 | TP: 0     | FP: 1470378386 | TN: 689284  | FN: 0    
+  [CAPPED]   Pred: 235     | TP: 0     | FP: 235     | TN: 1471067435 | FN: 0    
+
+Snap 226 | CAPPED | True Edges: 2 | Cap Limit: 110
+  [UNCAPPED] Pred: 1470455178 | TP: 2     | FP: 1470455176 | TN: 612492  | FN: 0    
+  [CAPPED]   Pred: 110     | TP: 0     | FP: 110     | TN: 1471067558 | FN: 2    
+
+Snap 227 | CAPPED | True Edges: 1 | Cap Limit: 275
+  [UNCAPPED] Pred: 1470378622 | TP: 1     | FP: 1470378621 | TN: 689048  | FN: 0    
+  [CAPPED]   Pred: 275     | TP: 0     | FP: 275     | TN: 1471067394 | FN: 1    
+
+Snap 228 | CAPPED | True Edges: 4 | Cap Limit: 315
+  [UNCAPPED] Pred: 1470761086 | TP: 4     | FP: 1470761082 | TN: 306584  | FN: 0    
+  [CAPPED]   Pred: 315     | TP: 0     | FP: 315     | TN: 1471067351 | FN: 4    
+
+Snap 229 | CAPPED | True Edges: 9 | Cap Limit: 225
+  [UNCAPPED] Pred: 1470607982 | TP: 9     | FP: 1470607973 | TN: 459688  | FN: 0    
+  [CAPPED]   Pred: 225     | TP: 0     | FP: 225     | TN: 1471067436 | FN: 9    
+
+Snap 230 | CAPPED | True Edges: 3 | Cap Limit: 550
+  [UNCAPPED] Pred: 1470378220 | TP: 3     | FP: 1470378217 | TN: 689450  | FN: 0    
+  [CAPPED]   Pred: 550     | TP: 0     | FP: 550     | TN: 1471067117 | FN: 3    
+
+Snap 231 | CAPPED | True Edges: 13 | Cap Limit: 700
+  [UNCAPPED] Pred: 1470529782 | TP: 13    | FP: 1470529769 | TN: 537888  | FN: 0    
+  [CAPPED]   Pred: 700     | TP: 0     | FP: 700     | TN: 1471066957 | FN: 13   
+
+Snap 232 | CAPPED | True Edges: 3 | Cap Limit: 665
+  [UNCAPPED] Pred: 1470834812 | TP: 3     | FP: 1470834809 | TN: 232858  | FN: 0    
+  [CAPPED]   Pred: 665     | TP: 0     | FP: 665     | TN: 1471067002 | FN: 3    
+
+Snap 233 | CAPPED | True Edges: 5 | Cap Limit: 460
+  [UNCAPPED] Pred: 1470756034 | TP: 5     | FP: 1470756029 | TN: 311636  | FN: 0    
+  [CAPPED]   Pred: 460     | TP: 0     | FP: 460     | TN: 1471067205 | FN: 5    
+
+Snap 234 | CAPPED | True Edges: 6 | Cap Limit: 525
+  [UNCAPPED] Pred: 1470831758 | TP: 6     | FP: 1470831752 | TN: 235912  | FN: 0    
+  [CAPPED]   Pred: 525     | TP: 0     | FP: 525     | TN: 1471067139 | FN: 6    
+
+Snap 235 | CAPPED | True Edges: 4 | Cap Limit: 550
+  [UNCAPPED] Pred: 1470744918 | TP: 4     | FP: 1470744914 | TN: 322752  | FN: 0    
+  [CAPPED]   Pred: 550     | TP: 0     | FP: 550     | TN: 1471067116 | FN: 4    
+
+Snap 236 | CAPPED | True Edges: 2 | Cap Limit: 335
+  [UNCAPPED] Pred: 1470664064 | TP: 2     | FP: 1470664062 | TN: 403606  | FN: 0    
+  [CAPPED]   Pred: 335     | TP: 0     | FP: 335     | TN: 1471067333 | FN: 2    
+
+Snap 237 | CAPPED | True Edges: 1 | Cap Limit: 475
+  [UNCAPPED] Pred: 1470507954 | TP: 1     | FP: 1470507953 | TN: 559716  | FN: 0    
+  [CAPPED]   Pred: 475     | TP: 0     | FP: 475     | TN: 1471067194 | FN: 1    
+
+Snap 238 | CAPPED | True Edges: 6 | Cap Limit: 410
+  [UNCAPPED] Pred: 1470357032 | TP: 6     | FP: 1470357026 | TN: 710638  | FN: 0    
+  [CAPPED]   Pred: 410     | TP: 0     | FP: 410     | TN: 1471067254 | FN: 6    
+
+Snap 239 | CAPPED | True Edges: 5 | Cap Limit: 305
+  [UNCAPPED] Pred: 1470132308 | TP: 5     | FP: 1470132303 | TN: 935362  | FN: 0    
+  [CAPPED]   Pred: 305     | TP: 0     | FP: 305     | TN: 1471067360 | FN: 5    
+
+Snap 240 | CAPPED | True Edges: 2 | Cap Limit: 305
+  [UNCAPPED] Pred: 1470589982 | TP: 2     | FP: 1470589980 | TN: 477688  | FN: 0    
+  [CAPPED]   Pred: 305     | TP: 0     | FP: 305     | TN: 1471067363 | FN: 2    
+
+Snap 241 | CAPPED | True Edges: 10 | Cap Limit: 185
+  [UNCAPPED] Pred: 1470363870 | TP: 10    | FP: 1470363860 | TN: 703800  | FN: 0    
+  [CAPPED]   Pred: 185     | TP: 0     | FP: 185     | TN: 1471067475 | FN: 10   
+
+Snap 242 | CAPPED | True Edges: 52 | Cap Limit: 805
+  [UNCAPPED] Pred: 1470517190 | TP: 52    | FP: 1470517138 | TN: 550480  | FN: 0    
+  [CAPPED]   Pred: 805     | TP: 0     | FP: 805     | TN: 1471066813 | FN: 52   
+
+Snap 243 | CAPPED | True Edges: 33 | Cap Limit: 14605
+  [UNCAPPED] Pred: 1470378014 | TP: 33    | FP: 1470377981 | TN: 689656  | FN: 0    
+  [CAPPED]   Pred: 14605   | TP: 0     | FP: 14605   | TN: 1471053032 | FN: 33   
+
+Snap 244 | CAPPED | True Edges: 104 | Cap Limit: 4245
+  [UNCAPPED] Pred: 1470373428 | TP: 104   | FP: 1470373324 | TN: 694242  | FN: 0    
+  [CAPPED]   Pred: 4245    | TP: 0     | FP: 4245    | TN: 1471063321 | FN: 104  
+
+Snap 245 | CAPPED | True Edges: 13 | Cap Limit: 14665
+  [UNCAPPED] Pred: 1469778472 | TP: 13    | FP: 1469778459 | TN: 1289198 | FN: 0    
+  [CAPPED]   Pred: 14665   | TP: 1     | FP: 14664   | TN: 1471052993 | FN: 12   
+
+Snap 246 | CAPPED | True Edges: 26 | Cap Limit: 3660
+  [UNCAPPED] Pred: 1469759148 | TP: 26    | FP: 1469759122 | TN: 1308522 | FN: 0    
+  [CAPPED]   Pred: 3660    | TP: 0     | FP: 3660    | TN: 1471063984 | FN: 26   
+
+Snap 247 | CAPPED | True Edges: 12 | Cap Limit: 2800
+  [UNCAPPED] Pred: 1469511228 | TP: 12    | FP: 1469511216 | TN: 1556442 | FN: 0    
+  [CAPPED]   Pred: 2800    | TP: 0     | FP: 2800    | TN: 1471064858 | FN: 12   
+
+Snap 248 | CAPPED | True Edges: 7 | Cap Limit: 20340
+  [UNCAPPED] Pred: 1465693770 | TP: 7     | FP: 1465693763 | TN: 5373900 | FN: 0    
+  [CAPPED]   Pred: 20340   | TP: 0     | FP: 20340   | TN: 1471047323 | FN: 7    
+
+Snap 249 | CAPPED | True Edges: 7 | Cap Limit: 7595
+  [UNCAPPED] Pred: 1455447496 | TP: 7     | FP: 1455447489 | TN: 15620174 | FN: 0    
+  [CAPPED]   Pred: 7595    | TP: 0     | FP: 7595    | TN: 1471060068 | FN: 7    
+
+Snap 250 | CAPPED | True Edges: 2 | Cap Limit: 3350
+  [UNCAPPED] Pred: 1453278140 | TP: 2     | FP: 1453278138 | TN: 17789530 | FN: 0    
+  [CAPPED]   Pred: 3350    | TP: 0     | FP: 3350    | TN: 1471064318 | FN: 2    
+
+Snap 251 | CAPPED | True Edges: 4 | Cap Limit: 2040
+  [UNCAPPED] Pred: 1455718236 | TP: 4     | FP: 1455718232 | TN: 15349434 | FN: 0    
+  [CAPPED]   Pred: 2040    | TP: 0     | FP: 2040    | TN: 1471065626 | FN: 4    
+
+Snap 252 | CAPPED | True Edges: 6 | Cap Limit: 6425
+  [UNCAPPED] Pred: 1451335040 | TP: 4     | FP: 1451335036 | TN: 19732628 | FN: 2    
+  [CAPPED]   Pred: 6425    | TP: 0     | FP: 6425    | TN: 1471061239 | FN: 6    
+
+Snap 253 | CAPPED | True Edges: 5 | Cap Limit: 2535
+  [UNCAPPED] Pred: 1447131344 | TP: 3     | FP: 1447131341 | TN: 23936324 | FN: 2    
+  [CAPPED]   Pred: 2535    | TP: 0     | FP: 2535    | TN: 1471065130 | FN: 5    
+
+Snap 254 | CAPPED | True Edges: 3 | Cap Limit: 1380
+  [UNCAPPED] Pred: 1403655244 | TP: 2     | FP: 1403655242 | TN: 67412425 | FN: 1    
+  [CAPPED]   Pred: 1380    | TP: 0     | FP: 1380    | TN: 1471066287 | FN: 3    
+
+Snap 255 | CAPPED | True Edges: 5 | Cap Limit: 2040
+  [UNCAPPED] Pred: 1411949182 | TP: 3     | FP: 1411949179 | TN: 59118486 | FN: 2    
+  [CAPPED]   Pred: 2040    | TP: 0     | FP: 2040    | TN: 1471065625 | FN: 5    
+
+Snap 256 | CAPPED | True Edges: 2 | Cap Limit: 1435
+  [UNCAPPED] Pred: 1443592976 | TP: 0     | FP: 1443592976 | TN: 27474692 | FN: 2    
+  [CAPPED]   Pred: 1435    | TP: 0     | FP: 1435    | TN: 1471066233 | FN: 2    
+
+Snap 257 | CAPPED | True Edges: 3 | Cap Limit: 1750
+  [UNCAPPED] Pred: 1448223072 | TP: 2     | FP: 1448223070 | TN: 22844597 | FN: 1    
+  [CAPPED]   Pred: 1750    | TP: 0     | FP: 1750    | TN: 1471065917 | FN: 3    
+
+Snap 258 | CAPPED | True Edges: 10 | Cap Limit: 765
+  [UNCAPPED] Pred: 1454320276 | TP: 5     | FP: 1454320271 | TN: 16747389 | FN: 5    
+  [CAPPED]   Pred: 765     | TP: 0     | FP: 765     | TN: 1471066895 | FN: 10   
+
+Snap 259 | CAPPED | True Edges: 0 | Cap Limit: 1800
+  [UNCAPPED] Pred: 1470617030 | TP: 0     | FP: 1470617030 | TN: 450640  | FN: 0    
+  [CAPPED]   Pred: 1800    | TP: 0     | FP: 1800    | TN: 1471065870 | FN: 0    
+
+Snap 260 | CAPPED | True Edges: 3 | Cap Limit: 525
+  [UNCAPPED] Pred: 1470637646 | TP: 3     | FP: 1470637643 | TN: 430024  | FN: 0    
+  [CAPPED]   Pred: 525     | TP: 0     | FP: 525     | TN: 1471067142 | FN: 3    
+
+Snap 261 | CAPPED | True Edges: 4 | Cap Limit: 600
+  [UNCAPPED] Pred: 1470656840 | TP: 4     | FP: 1470656836 | TN: 410830  | FN: 0    
+  [CAPPED]   Pred: 600     | TP: 0     | FP: 600     | TN: 1471067066 | FN: 4    
+
+Snap 262 | CAPPED | True Edges: 4 | Cap Limit: 625
+  [UNCAPPED] Pred: 1470734878 | TP: 4     | FP: 1470734874 | TN: 332792  | FN: 0    
+  [CAPPED]   Pred: 625     | TP: 0     | FP: 625     | TN: 1471067041 | FN: 4    
+
+Snap 263 | CAPPED | True Edges: 6 | Cap Limit: 1000
+  [UNCAPPED] Pred: 1470733184 | TP: 6     | FP: 1470733178 | TN: 334486  | FN: 0    
+  [CAPPED]   Pred: 1000    | TP: 0     | FP: 1000    | TN: 1471066664 | FN: 6    
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkcentra_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkcentra (SFDyG) METRICS ---
+TRAIN:  Time=978.87s, GPU=10988.00MB, RAM=5224.68MB
+THRESH: Time=0.39s, GPU=10988.00MB, RAM=5224.98MB
+CONST:  Time=1525.81s, GPU=10988.00MB, RAM=3203.48MB
+
+========================================================================
+COMPLETED DATASET: networkcentra
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkcindicator
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 226 snapshots...]
+[Done] Total Snapshots processed: 226
+
+Statistics for networkcindicator:
+	Nodes: 34681
+	Edges: 59872
+	Snaps: 226
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.518702 | Sampled Train AUC: 0.4668
+Epoch 020 | Loss: 1.539509 | Sampled Train AUC: 0.4669
+Epoch 030 | Loss: 1.451686 | Sampled Train AUC: 0.4660
+Epoch 040 | Loss: 1.421783 | Sampled Train AUC: 0.4674
+Epoch 050 | Loss: 1.328125 | Sampled Train AUC: 0.4688
+Epoch 060 | Loss: 1.321951 | Sampled Train AUC: 0.4691
+Epoch 070 | Loss: 1.331378 | Sampled Train AUC: 0.4690
+Epoch 080 | Loss: 1.323230 | Sampled Train AUC: 0.4680
+Epoch 090 | Loss: 1.321453 | Sampled Train AUC: 0.4702
+Epoch 100 | Loss: 1.317200 | Sampled Train AUC: 0.4696
+Epoch 110 | Loss: 1.317958 | Sampled Train AUC: 0.4698
+Epoch 120 | Loss: 1.316940 | Sampled Train AUC: 0.4706
+Epoch 130 | Loss: 1.313475 | Sampled Train AUC: 0.4715
+Epoch 140 | Loss: 1.310749 | Sampled Train AUC: 0.4722
+Epoch 150 | Loss: 1.309867 | Sampled Train AUC: 0.4725
+Epoch 160 | Loss: 1.307443 | Sampled Train AUC: 0.4723
+Epoch 170 | Loss: 1.306173 | Sampled Train AUC: 0.4724
+Epoch 180 | Loss: 1.305989 | Sampled Train AUC: 0.4727
+Epoch 190 | Loss: 1.305136 | Sampled Train AUC: 0.4727
+Epoch 200 | Loss: 1.305166 | Sampled Train AUC: 0.4728
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.238332 | Std: 0.322124 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.359355 | Std: 0.259162 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.3825
+Loading data for networkcindicator with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 192 | CAPPED | True Edges: 21 | Cap Limit: 1540
+  [UNCAPPED] Pred: 1182879298 | TP: 18    | FP: 1182879280 | TN: 19857779 | FN: 3    
+  [CAPPED]   Pred: 1540    | TP: 0     | FP: 1540    | TN: 1202735519 | FN: 21   
+
+Snap 193 | CAPPED | True Edges: 7 | Cap Limit: 1495
+  [UNCAPPED] Pred: 1180489674 | TP: 6     | FP: 1180489668 | TN: 22247405 | FN: 1    
+  [CAPPED]   Pred: 1495    | TP: 0     | FP: 1495    | TN: 1202735578 | FN: 7    
+
+Snap 194 | CAPPED | True Edges: 1 | Cap Limit: 950
+  [UNCAPPED] Pred: 1180147598 | TP: 1     | FP: 1180147597 | TN: 22589482 | FN: 0    
+  [CAPPED]   Pred: 950     | TP: 0     | FP: 950     | TN: 1202736129 | FN: 1    
+
+Snap 195 | CAPPED | True Edges: 3 | Cap Limit: 825
+  [UNCAPPED] Pred: 1180825234 | TP: 3     | FP: 1180825231 | TN: 21911846 | FN: 0    
+  [CAPPED]   Pred: 825     | TP: 0     | FP: 825     | TN: 1202736252 | FN: 3    
+
+Snap 196 | CAPPED | True Edges: 9 | Cap Limit: 865
+  [UNCAPPED] Pred: 1179536178 | TP: 9     | FP: 1179536169 | TN: 23200902 | FN: 0    
+  [CAPPED]   Pred: 865     | TP: 0     | FP: 865     | TN: 1202736206 | FN: 9    
+
+Snap 197 | CAPPED | True Edges: 3 | Cap Limit: 845
+  [UNCAPPED] Pred: 1179325908 | TP: 3     | FP: 1179325905 | TN: 23411172 | FN: 0    
+  [CAPPED]   Pred: 845     | TP: 0     | FP: 845     | TN: 1202736232 | FN: 3    
+
+Snap 198 | CAPPED | True Edges: 4 | Cap Limit: 585
+  [UNCAPPED] Pred: 1180413406 | TP: 4     | FP: 1180413402 | TN: 22323674 | FN: 0    
+  [CAPPED]   Pred: 585     | TP: 0     | FP: 585     | TN: 1202736491 | FN: 4    
+
+Snap 199 | CAPPED | True Edges: 10 | Cap Limit: 560
+  [UNCAPPED] Pred: 1180683154 | TP: 10    | FP: 1180683144 | TN: 22053926 | FN: 0    
+  [CAPPED]   Pred: 560     | TP: 0     | FP: 560     | TN: 1202736510 | FN: 10   
+
+Snap 200 | CAPPED | True Edges: 4 | Cap Limit: 760
+  [UNCAPPED] Pred: 1183066438 | TP: 4     | FP: 1183066434 | TN: 19670642 | FN: 0    
+  [CAPPED]   Pred: 760     | TP: 0     | FP: 760     | TN: 1202736316 | FN: 4    
+
+Snap 201 | CAPPED | True Edges: 4 | Cap Limit: 690
+  [UNCAPPED] Pred: 1184294644 | TP: 4     | FP: 1184294640 | TN: 18442436 | FN: 0    
+  [CAPPED]   Pred: 690     | TP: 0     | FP: 690     | TN: 1202736386 | FN: 4    
+
+Snap 202 | CAPPED | True Edges: 4 | Cap Limit: 645
+  [UNCAPPED] Pred: 1183953608 | TP: 4     | FP: 1183953604 | TN: 18783472 | FN: 0    
+  [CAPPED]   Pred: 645     | TP: 0     | FP: 645     | TN: 1202736431 | FN: 4    
+
+Snap 203 | CAPPED | True Edges: 7 | Cap Limit: 855
+  [UNCAPPED] Pred: 1184157506 | TP: 7     | FP: 1184157499 | TN: 18579574 | FN: 0    
+  [CAPPED]   Pred: 855     | TP: 0     | FP: 855     | TN: 1202736218 | FN: 7    
+
+Snap 204 | CAPPED | True Edges: 10 | Cap Limit: 605
+  [UNCAPPED] Pred: 1185181380 | TP: 10    | FP: 1185181370 | TN: 17555700 | FN: 0    
+  [CAPPED]   Pred: 605     | TP: 0     | FP: 605     | TN: 1202736465 | FN: 10   
+
+Snap 205 | CAPPED | True Edges: 17 | Cap Limit: 800
+  [UNCAPPED] Pred: 1183680148 | TP: 15    | FP: 1183680133 | TN: 19056930 | FN: 2    
+  [CAPPED]   Pred: 800     | TP: 0     | FP: 800     | TN: 1202736263 | FN: 17   
+
+Snap 206 | CAPPED | True Edges: 6 | Cap Limit: 935
+  [UNCAPPED] Pred: 1184227748 | TP: 6     | FP: 1184227742 | TN: 18509332 | FN: 0    
+  [CAPPED]   Pred: 935     | TP: 0     | FP: 935     | TN: 1202736139 | FN: 6    
+
+Snap 207 | CAPPED | True Edges: 10 | Cap Limit: 610
+  [UNCAPPED] Pred: 1185732048 | TP: 6     | FP: 1185732042 | TN: 17005028 | FN: 4    
+  [CAPPED]   Pred: 610     | TP: 0     | FP: 610     | TN: 1202736460 | FN: 10   
+
+Snap 208 | CAPPED | True Edges: 6 | Cap Limit: 725
+  [UNCAPPED] Pred: 1186620562 | TP: 2     | FP: 1186620560 | TN: 16116514 | FN: 4    
+  [CAPPED]   Pred: 725     | TP: 0     | FP: 725     | TN: 1202736349 | FN: 6    
+
+Snap 209 | CAPPED | True Edges: 5 | Cap Limit: 505
+  [UNCAPPED] Pred: 1188470058 | TP: 2     | FP: 1188470056 | TN: 14267019 | FN: 3    
+  [CAPPED]   Pred: 505     | TP: 0     | FP: 505     | TN: 1202736570 | FN: 5    
+
+Snap 210 | CAPPED | True Edges: 5 | Cap Limit: 530
+  [UNCAPPED] Pred: 1189703718 | TP: 3     | FP: 1189703715 | TN: 13033360 | FN: 2    
+  [CAPPED]   Pred: 530     | TP: 0     | FP: 530     | TN: 1202736545 | FN: 5    
+
+Snap 211 | CAPPED | True Edges: 8 | Cap Limit: 620
+  [UNCAPPED] Pred: 1190870006 | TP: 6     | FP: 1190870000 | TN: 11867072 | FN: 2    
+  [CAPPED]   Pred: 620     | TP: 0     | FP: 620     | TN: 1202736452 | FN: 8    
+
+Snap 212 | CAPPED | True Edges: 10 | Cap Limit: 680
+  [UNCAPPED] Pred: 1193000542 | TP: 3     | FP: 1193000539 | TN: 9736531 | FN: 7    
+  [CAPPED]   Pred: 680     | TP: 0     | FP: 680     | TN: 1202736390 | FN: 10   
+
+Snap 213 | CAPPED | True Edges: 4 | Cap Limit: 745
+  [UNCAPPED] Pred: 1193136986 | TP: 2     | FP: 1193136984 | TN: 9600092 | FN: 2    
+  [CAPPED]   Pred: 745     | TP: 0     | FP: 745     | TN: 1202736331 | FN: 4    
+
+Snap 214 | CAPPED | True Edges: 16 | Cap Limit: 805
+  [UNCAPPED] Pred: 1193480238 | TP: 7     | FP: 1193480231 | TN: 9256833 | FN: 9    
+  [CAPPED]   Pred: 805     | TP: 0     | FP: 805     | TN: 1202736259 | FN: 16   
+
+Snap 215 | CAPPED | True Edges: 6 | Cap Limit: 1280
+  [UNCAPPED] Pred: 1192794250 | TP: 5     | FP: 1192794245 | TN: 9942829 | FN: 1    
+  [CAPPED]   Pred: 1280    | TP: 0     | FP: 1280    | TN: 1202735794 | FN: 6    
+
+Snap 216 | CAPPED | True Edges: 6 | Cap Limit: 860
+  [UNCAPPED] Pred: 1192038966 | TP: 5     | FP: 1192038961 | TN: 10698113 | FN: 1    
+  [CAPPED]   Pred: 860     | TP: 0     | FP: 860     | TN: 1202736214 | FN: 6    
+
+Snap 217 | CAPPED | True Edges: 4 | Cap Limit: 680
+  [UNCAPPED] Pred: 1191970950 | TP: 3     | FP: 1191970947 | TN: 10766129 | FN: 1    
+  [CAPPED]   Pred: 680     | TP: 0     | FP: 680     | TN: 1202736396 | FN: 4    
+
+Snap 218 | CAPPED | True Edges: 2 | Cap Limit: 775
+  [UNCAPPED] Pred: 1191285666 | TP: 0     | FP: 1191285666 | TN: 11451412 | FN: 2    
+  [CAPPED]   Pred: 775     | TP: 0     | FP: 775     | TN: 1202736303 | FN: 2    
+
+Snap 219 | CAPPED | True Edges: 4 | Cap Limit: 775
+  [UNCAPPED] Pred: 1190531472 | TP: 3     | FP: 1190531469 | TN: 12205607 | FN: 1    
+  [CAPPED]   Pred: 775     | TP: 0     | FP: 775     | TN: 1202736301 | FN: 4    
+
+Snap 220 | CAPPED | True Edges: 12 | Cap Limit: 800
+  [UNCAPPED] Pred: 1190944016 | TP: 11    | FP: 1190944005 | TN: 11793063 | FN: 1    
+  [CAPPED]   Pred: 800     | TP: 0     | FP: 800     | TN: 1202736268 | FN: 12   
+
+Snap 221 | CAPPED | True Edges: 12 | Cap Limit: 910
+  [UNCAPPED] Pred: 1190186676 | TP: 9     | FP: 1190186667 | TN: 12550401 | FN: 3    
+  [CAPPED]   Pred: 910     | TP: 0     | FP: 910     | TN: 1202736158 | FN: 12   
+
+Snap 222 | CAPPED | True Edges: 6 | Cap Limit: 1235
+  [UNCAPPED] Pred: 1190736144 | TP: 6     | FP: 1190736138 | TN: 12000936 | FN: 0    
+  [CAPPED]   Pred: 1235    | TP: 0     | FP: 1235    | TN: 1202735839 | FN: 6    
+
+Snap 223 | CAPPED | True Edges: 2 | Cap Limit: 955
+  [UNCAPPED] Pred: 1190669158 | TP: 2     | FP: 1190669156 | TN: 12067922 | FN: 0    
+  [CAPPED]   Pred: 955     | TP: 0     | FP: 955     | TN: 1202736123 | FN: 2    
+
+Snap 224 | CAPPED | True Edges: 9 | Cap Limit: 850
+  [UNCAPPED] Pred: 1190600390 | TP: 8     | FP: 1190600382 | TN: 12136689 | FN: 1    
+  [CAPPED]   Pred: 850     | TP: 0     | FP: 850     | TN: 1202736221 | FN: 9    
+
+Snap 225 | CAPPED | True Edges: 12 | Cap Limit: 1130
+  [UNCAPPED] Pred: 1191016058 | TP: 12    | FP: 1191016046 | TN: 11721022 | FN: 0    
+  [CAPPED]   Pred: 1130    | TP: 0     | FP: 1130    | TN: 1202735938 | FN: 12   
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkcindicator_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkcindicator (SFDyG) METRICS ---
+TRAIN:  Time=772.18s, GPU=9526.00MB, RAM=4300.59MB
+THRESH: Time=0.37s, GPU=9526.00MB, RAM=4300.87MB
+CONST:  Time=1053.33s, GPU=9526.00MB, RAM=2925.07MB
+
+========================================================================
+COMPLETED DATASET: networkcindicator
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkcoindash
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 274 snapshots...]
+[Done] Total Snapshots processed: 274
+
+Statistics for networkcoindash:
+	Nodes: 36205
+	Edges: 73310
+	Snaps: 274
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.495623 | Sampled Train AUC: 0.5252
+Epoch 020 | Loss: 1.378165 | Sampled Train AUC: 0.5256
+Epoch 030 | Loss: 1.288572 | Sampled Train AUC: 0.5261
+Epoch 040 | Loss: 1.256216 | Sampled Train AUC: 0.5271
+Epoch 050 | Loss: 1.259313 | Sampled Train AUC: 0.5272
+Epoch 060 | Loss: 1.257980 | Sampled Train AUC: 0.5274
+Epoch 070 | Loss: 1.234755 | Sampled Train AUC: 0.5283
+Epoch 080 | Loss: 1.235095 | Sampled Train AUC: 0.5285
+Epoch 090 | Loss: 1.238360 | Sampled Train AUC: 0.5286
+Epoch 100 | Loss: 1.224265 | Sampled Train AUC: 0.5296
+Epoch 110 | Loss: 1.216267 | Sampled Train AUC: 0.5297
+Epoch 120 | Loss: 1.213174 | Sampled Train AUC: 0.5305
+Epoch 130 | Loss: 1.203545 | Sampled Train AUC: 0.5306
+Epoch 140 | Loss: 1.201009 | Sampled Train AUC: 0.5314
+Epoch 150 | Loss: 1.196038 | Sampled Train AUC: 0.5313
+Epoch 160 | Loss: 1.192671 | Sampled Train AUC: 0.5316
+Epoch 170 | Loss: 1.189998 | Sampled Train AUC: 0.5310
+Epoch 180 | Loss: 1.188528 | Sampled Train AUC: 0.5311
+Epoch 190 | Loss: 1.187901 | Sampled Train AUC: 0.5308
+Epoch 200 | Loss: 1.187688 | Sampled Train AUC: 0.5308
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.428916 | Std: 0.309182 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.384484 | Std: 0.227795 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.5928
+Loading data for networkcoindash with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 232 | CAPPED | True Edges: 3 | Cap Limit: 295
+  [UNCAPPED] Pred: 1304127338 | TP: 3     | FP: 1304127335 | TN: 6638482 | FN: 0    
+  [CAPPED]   Pred: 295     | TP: 0     | FP: 295     | TN: 1310765522 | FN: 3    
+
+Snap 233 | CAPPED | True Edges: 3 | Cap Limit: 315
+  [UNCAPPED] Pred: 1306072238 | TP: 3     | FP: 1306072235 | TN: 4693582 | FN: 0    
+  [CAPPED]   Pred: 315     | TP: 0     | FP: 315     | TN: 1310765502 | FN: 3    
+
+Snap 234 | CAPPED | True Edges: 0 | Cap Limit: 385
+  [UNCAPPED] Pred: 1305710656 | TP: 0     | FP: 1305710656 | TN: 5055164 | FN: 0    
+  [CAPPED]   Pred: 385     | TP: 0     | FP: 385     | TN: 1310765435 | FN: 0    
+
+Snap 235 | CAPPED | True Edges: 0 | Cap Limit: 300
+  [UNCAPPED] Pred: 1307658946 | TP: 0     | FP: 1307658946 | TN: 3106874 | FN: 0    
+  [CAPPED]   Pred: 300     | TP: 0     | FP: 300     | TN: 1310765520 | FN: 0    
+
+Snap 236 | CAPPED | True Edges: 1 | Cap Limit: 160
+  [UNCAPPED] Pred: 1308524770 | TP: 1     | FP: 1308524769 | TN: 2241050 | FN: 0    
+  [CAPPED]   Pred: 160     | TP: 0     | FP: 160     | TN: 1310765659 | FN: 1    
+
+Snap 237 | CAPPED | True Edges: 2 | Cap Limit: 300
+  [UNCAPPED] Pred: 1308813434 | TP: 2     | FP: 1308813432 | TN: 1952386 | FN: 0    
+  [CAPPED]   Pred: 300     | TP: 0     | FP: 300     | TN: 1310765518 | FN: 2    
+
+Snap 238 | CAPPED | True Edges: 2 | Cap Limit: 240
+  [UNCAPPED] Pred: 1309102748 | TP: 2     | FP: 1309102746 | TN: 1663072 | FN: 0    
+  [CAPPED]   Pred: 240     | TP: 0     | FP: 240     | TN: 1310765578 | FN: 2    
+
+Snap 239 | CAPPED | True Edges: 4 | Cap Limit: 215
+  [UNCAPPED] Pred: 1308453020 | TP: 4     | FP: 1308453016 | TN: 2312800 | FN: 0    
+  [CAPPED]   Pred: 215     | TP: 0     | FP: 215     | TN: 1310765601 | FN: 4    
+
+Snap 240 | CAPPED | True Edges: 2 | Cap Limit: 450
+  [UNCAPPED] Pred: 1307657188 | TP: 2     | FP: 1307657186 | TN: 3108632 | FN: 0    
+  [CAPPED]   Pred: 450     | TP: 0     | FP: 450     | TN: 1310765368 | FN: 2    
+
+Snap 241 | CAPPED | True Edges: 1 | Cap Limit: 350
+  [UNCAPPED] Pred: 1307945526 | TP: 1     | FP: 1307945525 | TN: 2820294 | FN: 0    
+  [CAPPED]   Pred: 350     | TP: 0     | FP: 350     | TN: 1310765469 | FN: 1    
+
+Snap 242 | CAPPED | True Edges: 1 | Cap Limit: 270
+  [UNCAPPED] Pred: 1308740470 | TP: 1     | FP: 1308740469 | TN: 2025350 | FN: 0    
+  [CAPPED]   Pred: 270     | TP: 0     | FP: 270     | TN: 1310765549 | FN: 1    
+
+Snap 243 | CAPPED | True Edges: 9 | Cap Limit: 280
+  [UNCAPPED] Pred: 1308742648 | TP: 9     | FP: 1308742639 | TN: 2023172 | FN: 0    
+  [CAPPED]   Pred: 280     | TP: 0     | FP: 280     | TN: 1310765531 | FN: 9    
+
+Snap 244 | CAPPED | True Edges: 5 | Cap Limit: 495
+  [UNCAPPED] Pred: 1308525156 | TP: 5     | FP: 1308525151 | TN: 2240664 | FN: 0    
+  [CAPPED]   Pred: 495     | TP: 0     | FP: 495     | TN: 1310765320 | FN: 5    
+
+Snap 245 | CAPPED | True Edges: 0 | Cap Limit: 405
+  [UNCAPPED] Pred: 1307445162 | TP: 0     | FP: 1307445162 | TN: 3320658 | FN: 0    
+  [CAPPED]   Pred: 405     | TP: 0     | FP: 405     | TN: 1310765415 | FN: 0    
+
+Snap 246 | CAPPED | True Edges: 2 | Cap Limit: 230
+  [UNCAPPED] Pred: 1306580200 | TP: 2     | FP: 1306580198 | TN: 4185620 | FN: 0    
+  [CAPPED]   Pred: 230     | TP: 0     | FP: 230     | TN: 1310765588 | FN: 2    
+
+Snap 247 | CAPPED | True Edges: 4 | Cap Limit: 185
+  [UNCAPPED] Pred: 1305641800 | TP: 4     | FP: 1305641796 | TN: 5124020 | FN: 0    
+  [CAPPED]   Pred: 185     | TP: 0     | FP: 185     | TN: 1310765631 | FN: 4    
+
+Snap 248 | CAPPED | True Edges: 0 | Cap Limit: 315
+  [UNCAPPED] Pred: 1305279940 | TP: 0     | FP: 1305279940 | TN: 5485880 | FN: 0    
+  [CAPPED]   Pred: 315     | TP: 0     | FP: 315     | TN: 1310765505 | FN: 0    
+
+Snap 249 | CAPPED | True Edges: 1 | Cap Limit: 210
+  [UNCAPPED] Pred: 1304412956 | TP: 1     | FP: 1304412955 | TN: 6352864 | FN: 0    
+  [CAPPED]   Pred: 210     | TP: 0     | FP: 210     | TN: 1310765609 | FN: 1    
+
+Snap 250 | CAPPED | True Edges: 0 | Cap Limit: 180
+  [UNCAPPED] Pred: 1304773336 | TP: 0     | FP: 1304773336 | TN: 5992484 | FN: 0    
+  [CAPPED]   Pred: 180     | TP: 0     | FP: 180     | TN: 1310765640 | FN: 0    
+
+Snap 251 | CAPPED | True Edges: 0 | Cap Limit: 235
+  [UNCAPPED] Pred: 1304917272 | TP: 0     | FP: 1304917272 | TN: 5848548 | FN: 0    
+  [CAPPED]   Pred: 235     | TP: 0     | FP: 235     | TN: 1310765585 | FN: 0    
+
+Snap 252 | CAPPED | True Edges: 1 | Cap Limit: 105
+  [UNCAPPED] Pred: 1305926326 | TP: 1     | FP: 1305926325 | TN: 4839494 | FN: 0    
+  [CAPPED]   Pred: 105     | TP: 0     | FP: 105     | TN: 1310765714 | FN: 1    
+
+Snap 253 | CAPPED | True Edges: 2 | Cap Limit: 155
+  [UNCAPPED] Pred: 1306288766 | TP: 2     | FP: 1306288764 | TN: 4477054 | FN: 0    
+  [CAPPED]   Pred: 155     | TP: 0     | FP: 155     | TN: 1310765663 | FN: 2    
+
+Snap 254 | CAPPED | True Edges: 7 | Cap Limit: 305
+  [UNCAPPED] Pred: 1307803616 | TP: 7     | FP: 1307803609 | TN: 2962204 | FN: 0    
+  [CAPPED]   Pred: 305     | TP: 0     | FP: 305     | TN: 1310765508 | FN: 7    
+
+Snap 255 | CAPPED | True Edges: 2 | Cap Limit: 220
+  [UNCAPPED] Pred: 1309246960 | TP: 2     | FP: 1309246958 | TN: 1518860 | FN: 0    
+  [CAPPED]   Pred: 220     | TP: 0     | FP: 220     | TN: 1310765598 | FN: 2    
+
+Snap 256 | CAPPED | True Edges: 1 | Cap Limit: 130
+  [UNCAPPED] Pred: 1309029866 | TP: 1     | FP: 1309029865 | TN: 1735954 | FN: 0    
+  [CAPPED]   Pred: 130     | TP: 0     | FP: 130     | TN: 1310765689 | FN: 1    
+
+Snap 257 | CAPPED | True Edges: 4 | Cap Limit: 175
+  [UNCAPPED] Pred: 1309536072 | TP: 4     | FP: 1309536068 | TN: 1229748 | FN: 0    
+  [CAPPED]   Pred: 175     | TP: 0     | FP: 175     | TN: 1310765641 | FN: 4    
+
+Snap 258 | CAPPED | True Edges: 3 | Cap Limit: 290
+  [UNCAPPED] Pred: 1308597346 | TP: 3     | FP: 1308597343 | TN: 2168474 | FN: 0    
+  [CAPPED]   Pred: 290     | TP: 0     | FP: 290     | TN: 1310765527 | FN: 3    
+
+Snap 259 | CAPPED | True Edges: 2 | Cap Limit: 235
+  [UNCAPPED] Pred: 1307875032 | TP: 2     | FP: 1307875030 | TN: 2890788 | FN: 0    
+  [CAPPED]   Pred: 235     | TP: 0     | FP: 235     | TN: 1310765583 | FN: 2    
+
+Snap 260 | CAPPED | True Edges: 7 | Cap Limit: 235
+  [UNCAPPED] Pred: 1308814100 | TP: 7     | FP: 1308814093 | TN: 1951720 | FN: 0    
+  [CAPPED]   Pred: 235     | TP: 0     | FP: 235     | TN: 1310765578 | FN: 7    
+
+Snap 261 | CAPPED | True Edges: 8 | Cap Limit: 245
+  [UNCAPPED] Pred: 1307298466 | TP: 8     | FP: 1307298458 | TN: 3467354 | FN: 0    
+  [CAPPED]   Pred: 245     | TP: 0     | FP: 245     | TN: 1310765567 | FN: 8    
+
+Snap 262 | CAPPED | True Edges: 4 | Cap Limit: 405
+  [UNCAPPED] Pred: 1306794416 | TP: 4     | FP: 1306794412 | TN: 3971404 | FN: 0    
+  [CAPPED]   Pred: 405     | TP: 0     | FP: 405     | TN: 1310765411 | FN: 4    
+
+Snap 263 | CAPPED | True Edges: 4 | Cap Limit: 585
+  [UNCAPPED] Pred: 1307228796 | TP: 4     | FP: 1307228792 | TN: 3537024 | FN: 0    
+  [CAPPED]   Pred: 585     | TP: 0     | FP: 585     | TN: 1310765231 | FN: 4    
+
+Snap 264 | CAPPED | True Edges: 2 | Cap Limit: 400
+  [UNCAPPED] Pred: 1307370208 | TP: 2     | FP: 1307370206 | TN: 3395612 | FN: 0    
+  [CAPPED]   Pred: 400     | TP: 0     | FP: 400     | TN: 1310765418 | FN: 2    
+
+Snap 265 | CAPPED | True Edges: 1 | Cap Limit: 400
+  [UNCAPPED] Pred: 1306720316 | TP: 1     | FP: 1306720315 | TN: 4045504 | FN: 0    
+  [CAPPED]   Pred: 400     | TP: 0     | FP: 400     | TN: 1310765419 | FN: 1    
+
+Snap 266 | CAPPED | True Edges: 1 | Cap Limit: 305
+  [UNCAPPED] Pred: 1306647928 | TP: 1     | FP: 1306647927 | TN: 4117892 | FN: 0    
+  [CAPPED]   Pred: 305     | TP: 0     | FP: 305     | TN: 1310765514 | FN: 1    
+
+Snap 267 | CAPPED | True Edges: 1 | Cap Limit: 605
+  [UNCAPPED] Pred: 1308596474 | TP: 1     | FP: 1308596473 | TN: 2169346 | FN: 0    
+  [CAPPED]   Pred: 605     | TP: 0     | FP: 605     | TN: 1310765214 | FN: 1    
+
+Snap 268 | CAPPED | True Edges: 4 | Cap Limit: 840
+  [UNCAPPED] Pred: 1307442434 | TP: 4     | FP: 1307442430 | TN: 3323386 | FN: 0    
+  [CAPPED]   Pred: 840     | TP: 0     | FP: 840     | TN: 1310764976 | FN: 4    
+
+Snap 269 | CAPPED | True Edges: 0 | Cap Limit: 620
+  [UNCAPPED] Pred: 1308306296 | TP: 0     | FP: 1308306296 | TN: 2459524 | FN: 0    
+  [CAPPED]   Pred: 620     | TP: 0     | FP: 620     | TN: 1310765200 | FN: 0    
+
+Snap 270 | CAPPED | True Edges: 7 | Cap Limit: 535
+  [UNCAPPED] Pred: 1308309576 | TP: 7     | FP: 1308309569 | TN: 2456244 | FN: 0    
+  [CAPPED]   Pred: 535     | TP: 0     | FP: 535     | TN: 1310765278 | FN: 7    
+
+Snap 271 | CAPPED | True Edges: 1 | Cap Limit: 525
+  [UNCAPPED] Pred: 1305137272 | TP: 1     | FP: 1305137271 | TN: 5628548 | FN: 0    
+  [CAPPED]   Pred: 525     | TP: 0     | FP: 525     | TN: 1310765294 | FN: 1    
+
+Snap 272 | CAPPED | True Edges: 6 | Cap Limit: 980
+  [UNCAPPED] Pred: 1304780664 | TP: 6     | FP: 1304780658 | TN: 5985156 | FN: 0    
+  [CAPPED]   Pred: 980     | TP: 0     | FP: 980     | TN: 1310764834 | FN: 6    
+
+Snap 273 | CAPPED | True Edges: 7 | Cap Limit: 5625
+  [UNCAPPED] Pred: 1304353042 | TP: 7     | FP: 1304353035 | TN: 6412778 | FN: 0    
+  [CAPPED]   Pred: 5625    | TP: 0     | FP: 5625    | TN: 1310760188 | FN: 7    
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkcoindash_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkcoindash (SFDyG) METRICS ---
+TRAIN:  Time=1069.34s, GPU=13772.00MB, RAM=6068.21MB
+THRESH: Time=0.37s, GPU=13772.00MB, RAM=6068.57MB
+CONST:  Time=1446.04s, GPU=13772.00MB, RAM=3558.77MB
+
+========================================================================
+COMPLETED DATASET: networkcoindash
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkdgd
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 725 snapshots...]
+[Done] Total Snapshots processed: 725
+
+Statistics for networkdgd:
+	Nodes: 21297
+	Edges: 44830
+	Snaps: 725
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.307406 | Sampled Train AUC: 0.5304
+Epoch 020 | Loss: 1.302809 | Sampled Train AUC: 0.5275
+Epoch 030 | Loss: 1.291086 | Sampled Train AUC: 0.5277
+Epoch 040 | Loss: 1.265657 | Sampled Train AUC: 0.5366
+Epoch 050 | Loss: 1.251959 | Sampled Train AUC: 0.5398
+Epoch 060 | Loss: 1.248252 | Sampled Train AUC: 0.5449
+Epoch 070 | Loss: 1.245058 | Sampled Train AUC: 0.5455
+Epoch 080 | Loss: 1.230632 | Sampled Train AUC: 0.5459
+Epoch 090 | Loss: 1.225725 | Sampled Train AUC: 0.5531
+Epoch 100 | Loss: 1.218666 | Sampled Train AUC: 0.5570
+Epoch 110 | Loss: 1.217836 | Sampled Train AUC: 0.5603
+Epoch 120 | Loss: 1.212916 | Sampled Train AUC: 0.5602
+Epoch 130 | Loss: 1.207871 | Sampled Train AUC: 0.5613
+Epoch 140 | Loss: 1.203917 | Sampled Train AUC: 0.5610
+Epoch 150 | Loss: 1.202278 | Sampled Train AUC: 0.5634
+Epoch 160 | Loss: 1.208314 | Sampled Train AUC: 0.5652
+Epoch 170 | Loss: 1.205544 | Sampled Train AUC: 0.5655
+Early stopping triggered at epoch 177. Best Training Loss: 1.199215
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.497771 | Std: 0.285526 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.407486 | Std: 0.191074 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.6417
+Loading data for networkdgd with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 616 | CAPPED | True Edges: 39 | Cap Limit: 495
+  [UNCAPPED] Pred: 452147482 | TP: 39    | FP: 452147443 | TN: 1393430 | FN: 0    
+  [CAPPED]   Pred: 495     | TP: 0     | FP: 495     | TN: 453540378 | FN: 39   
+
+Snap 617 | CAPPED | True Edges: 29 | Cap Limit: 955
+  [UNCAPPED] Pred: 451857332 | TP: 29    | FP: 451857303 | TN: 1683580 | FN: 0    
+  [CAPPED]   Pred: 955     | TP: 0     | FP: 955     | TN: 453539928 | FN: 29   
+
+Snap 618 | CAPPED | True Edges: 34 | Cap Limit: 1015
+  [UNCAPPED] Pred: 451443478 | TP: 34    | FP: 451443444 | TN: 2097434 | FN: 0    
+  [CAPPED]   Pred: 1015    | TP: 0     | FP: 1015    | TN: 453539863 | FN: 34   
+
+Snap 619 | CAPPED | True Edges: 47 | Cap Limit: 850
+  [UNCAPPED] Pred: 451653608 | TP: 47    | FP: 451653561 | TN: 1887304 | FN: 0    
+  [CAPPED]   Pred: 850     | TP: 0     | FP: 850     | TN: 453540015 | FN: 47   
+
+Snap 620 | CAPPED | True Edges: 45 | Cap Limit: 1480
+  [UNCAPPED] Pred: 451698716 | TP: 45    | FP: 451698671 | TN: 1842196 | FN: 0    
+  [CAPPED]   Pred: 1480    | TP: 0     | FP: 1480    | TN: 453539387 | FN: 45   
+
+Snap 621 | CAPPED | True Edges: 9 | Cap Limit: 1190
+  [UNCAPPED] Pred: 451328216 | TP: 9     | FP: 451328207 | TN: 2212696 | FN: 0    
+  [CAPPED]   Pred: 1190    | TP: 0     | FP: 1190    | TN: 453539713 | FN: 9    
+
+Snap 622 | CAPPED | True Edges: 15 | Cap Limit: 670
+  [UNCAPPED] Pred: 451084366 | TP: 15    | FP: 451084351 | TN: 2456546 | FN: 0    
+  [CAPPED]   Pred: 670     | TP: 0     | FP: 670     | TN: 453540227 | FN: 15   
+
+Snap 623 | CAPPED | True Edges: 28 | Cap Limit: 685
+  [UNCAPPED] Pred: 451450202 | TP: 28    | FP: 451450174 | TN: 2090710 | FN: 0    
+  [CAPPED]   Pred: 685     | TP: 0     | FP: 685     | TN: 453540199 | FN: 28   
+
+Snap 624 | CAPPED | True Edges: 11 | Cap Limit: 2465
+  [UNCAPPED] Pred: 452781770 | TP: 10    | FP: 452781760 | TN: 759141  | FN: 1    
+  [CAPPED]   Pred: 2465    | TP: 0     | FP: 2465    | TN: 453538436 | FN: 11   
+
+Snap 625 | CAPPED | True Edges: 9 | Cap Limit: 1225
+  [UNCAPPED] Pred: 452959086 | TP: 9     | FP: 452959077 | TN: 581826  | FN: 0    
+  [CAPPED]   Pred: 1225    | TP: 0     | FP: 1225    | TN: 453539678 | FN: 9    
+
+Snap 626 | CAPPED | True Edges: 22 | Cap Limit: 850
+  [UNCAPPED] Pred: 453167092 | TP: 22    | FP: 453167070 | TN: 373820  | FN: 0    
+  [CAPPED]   Pred: 850     | TP: 0     | FP: 850     | TN: 453540040 | FN: 22   
+
+Snap 627 | CAPPED | True Edges: 18 | Cap Limit: 615
+  [UNCAPPED] Pred: 453417860 | TP: 18    | FP: 453417842 | TN: 123052  | FN: 0    
+  [CAPPED]   Pred: 615     | TP: 0     | FP: 615     | TN: 453540279 | FN: 18   
+
+Snap 628 | CAPPED | True Edges: 14 | Cap Limit: 660
+  [UNCAPPED] Pred: 453373690 | TP: 14    | FP: 453373676 | TN: 167222  | FN: 0    
+  [CAPPED]   Pred: 660     | TP: 0     | FP: 660     | TN: 453540238 | FN: 14   
+
+Snap 629 | CAPPED | True Edges: 11 | Cap Limit: 720
+  [UNCAPPED] Pred: 453409466 | TP: 11    | FP: 453409455 | TN: 131446  | FN: 0    
+  [CAPPED]   Pred: 720     | TP: 0     | FP: 720     | TN: 453540181 | FN: 11   
+
+Snap 630 | CAPPED | True Edges: 10 | Cap Limit: 475
+  [UNCAPPED] Pred: 453327488 | TP: 10    | FP: 453327478 | TN: 213424  | FN: 0    
+  [CAPPED]   Pred: 475     | TP: 0     | FP: 475     | TN: 453540427 | FN: 10   
+
+Snap 631 | CAPPED | True Edges: 9 | Cap Limit: 420
+  [UNCAPPED] Pred: 453535608 | TP: 9     | FP: 453535599 | TN: 5304    | FN: 0    
+  [CAPPED]   Pred: 420     | TP: 0     | FP: 420     | TN: 453540483 | FN: 9    
+
+Snap 632 | CAPPED | True Edges: 5 | Cap Limit: 500
+  [UNCAPPED] Pred: 453493096 | TP: 5     | FP: 453493091 | TN: 47816   | FN: 0    
+  [CAPPED]   Pred: 500     | TP: 0     | FP: 500     | TN: 453540407 | FN: 5    
+
+Snap 633 | CAPPED | True Edges: 14 | Cap Limit: 370
+  [UNCAPPED] Pred: 453540410 | TP: 14    | FP: 453540396 | TN: 502     | FN: 0    
+  [CAPPED]   Pred: 370     | TP: 0     | FP: 370     | TN: 453540528 | FN: 14   
+
+Snap 634 | CAPPED | True Edges: 6 | Cap Limit: 505
+  [UNCAPPED] Pred: 453456316 | TP: 6     | FP: 453456310 | TN: 84596   | FN: 0    
+  [CAPPED]   Pred: 505     | TP: 0     | FP: 505     | TN: 453540401 | FN: 6    
+
+Snap 635 | CAPPED | True Edges: 13 | Cap Limit: 310
+  [UNCAPPED] Pred: 453498498 | TP: 13    | FP: 453498485 | TN: 42414   | FN: 0    
+  [CAPPED]   Pred: 310     | TP: 0     | FP: 310     | TN: 453540589 | FN: 13   
+
+Snap 636 | CAPPED | True Edges: 32 | Cap Limit: 435
+  [UNCAPPED] Pred: 453455418 | TP: 32    | FP: 453455386 | TN: 85494   | FN: 0    
+  [CAPPED]   Pred: 435     | TP: 0     | FP: 435     | TN: 453540445 | FN: 32   
+
+Snap 637 | CAPPED | True Edges: 8 | Cap Limit: 945
+  [UNCAPPED] Pred: 453366792 | TP: 8     | FP: 453366784 | TN: 174120  | FN: 0    
+  [CAPPED]   Pred: 945     | TP: 0     | FP: 945     | TN: 453539959 | FN: 8    
+
+Snap 638 | CAPPED | True Edges: 6 | Cap Limit: 410
+  [UNCAPPED] Pred: 453366852 | TP: 6     | FP: 453366846 | TN: 174060  | FN: 0    
+  [CAPPED]   Pred: 410     | TP: 0     | FP: 410     | TN: 453540496 | FN: 6    
+
+Snap 639 | CAPPED | True Edges: 6 | Cap Limit: 355
+  [UNCAPPED] Pred: 453324508 | TP: 6     | FP: 453324502 | TN: 216404  | FN: 0    
+  [CAPPED]   Pred: 355     | TP: 0     | FP: 355     | TN: 453540551 | FN: 6    
+
+Snap 640 | CAPPED | True Edges: 14 | Cap Limit: 340
+  [UNCAPPED] Pred: 453239770 | TP: 13    | FP: 453239757 | TN: 301141  | FN: 1    
+  [CAPPED]   Pred: 340     | TP: 0     | FP: 340     | TN: 453540558 | FN: 14   
+
+Snap 641 | CAPPED | True Edges: 13 | Cap Limit: 550
+  [UNCAPPED] Pred: 453280380 | TP: 13    | FP: 453280367 | TN: 260532  | FN: 0    
+  [CAPPED]   Pred: 550     | TP: 0     | FP: 550     | TN: 453540349 | FN: 13   
+
+Snap 642 | CAPPED | True Edges: 32 | Cap Limit: 610
+  [UNCAPPED] Pred: 452606040 | TP: 31    | FP: 452606009 | TN: 934871  | FN: 1    
+  [CAPPED]   Pred: 610     | TP: 0     | FP: 610     | TN: 453540270 | FN: 32   
+
+Snap 643 | CAPPED | True Edges: 50 | Cap Limit: 1035
+  [UNCAPPED] Pred: 452226142 | TP: 49    | FP: 452226093 | TN: 1314769 | FN: 1    
+  [CAPPED]   Pred: 1035    | TP: 0     | FP: 1035    | TN: 453539827 | FN: 50   
+
+Snap 644 | CAPPED | True Edges: 28 | Cap Limit: 4130
+  [UNCAPPED] Pred: 452204298 | TP: 28    | FP: 452204270 | TN: 1336614 | FN: 0    
+  [CAPPED]   Pred: 4130    | TP: 0     | FP: 4130    | TN: 453536754 | FN: 28   
+
+Snap 645 | CAPPED | True Edges: 14 | Cap Limit: 1600
+  [UNCAPPED] Pred: 451782340 | TP: 14    | FP: 451782326 | TN: 1758572 | FN: 0    
+  [CAPPED]   Pred: 1600    | TP: 0     | FP: 1600    | TN: 453539298 | FN: 14   
+
+Snap 646 | CAPPED | True Edges: 13 | Cap Limit: 1100
+  [UNCAPPED] Pred: 451691098 | TP: 13    | FP: 451691085 | TN: 1849814 | FN: 0    
+  [CAPPED]   Pred: 1100    | TP: 0     | FP: 1100    | TN: 453539799 | FN: 13   
+
+Snap 647 | CAPPED | True Edges: 8 | Cap Limit: 1070
+  [UNCAPPED] Pred: 451725110 | TP: 8     | FP: 451725102 | TN: 1815802 | FN: 0    
+  [CAPPED]   Pred: 1070    | TP: 0     | FP: 1070    | TN: 453539834 | FN: 8    
+
+Snap 648 | CAPPED | True Edges: 14 | Cap Limit: 820
+  [UNCAPPED] Pred: 451703182 | TP: 14    | FP: 451703168 | TN: 1837730 | FN: 0    
+  [CAPPED]   Pred: 820     | TP: 0     | FP: 820     | TN: 453540078 | FN: 14   
+
+Snap 649 | CAPPED | True Edges: 4 | Cap Limit: 615
+  [UNCAPPED] Pred: 451630644 | TP: 4     | FP: 451630640 | TN: 1910268 | FN: 0    
+  [CAPPED]   Pred: 615     | TP: 0     | FP: 615     | TN: 453540293 | FN: 4    
+
+Snap 650 | CAPPED | True Edges: 5 | Cap Limit: 280
+  [UNCAPPED] Pred: 452706804 | TP: 5     | FP: 452706799 | TN: 834108  | FN: 0    
+  [CAPPED]   Pred: 280     | TP: 0     | FP: 280     | TN: 453540627 | FN: 5    
+
+Snap 651 | CAPPED | True Edges: 2 | Cap Limit: 490
+  [UNCAPPED] Pred: 452980416 | TP: 2     | FP: 452980414 | TN: 560496  | FN: 0    
+  [CAPPED]   Pred: 490     | TP: 0     | FP: 490     | TN: 453540420 | FN: 2    
+
+Snap 652 | CAPPED | True Edges: 1 | Cap Limit: 390
+  [UNCAPPED] Pred: 452978744 | TP: 1     | FP: 452978743 | TN: 562168  | FN: 0    
+  [CAPPED]   Pred: 390     | TP: 0     | FP: 390     | TN: 453540521 | FN: 1    
+
+Snap 653 | CAPPED | True Edges: 8 | Cap Limit: 335
+  [UNCAPPED] Pred: 453147750 | TP: 8     | FP: 453147742 | TN: 393162  | FN: 0    
+  [CAPPED]   Pred: 335     | TP: 0     | FP: 335     | TN: 453540569 | FN: 8    
+
+Snap 654 | CAPPED | True Edges: 4 | Cap Limit: 355
+  [UNCAPPED] Pred: 451469644 | TP: 4     | FP: 451469640 | TN: 2071268 | FN: 0    
+  [CAPPED]   Pred: 355     | TP: 0     | FP: 355     | TN: 453540553 | FN: 4    
+
+Snap 655 | CAPPED | True Edges: 9 | Cap Limit: 285
+  [UNCAPPED] Pred: 451767924 | TP: 9     | FP: 451767915 | TN: 1772988 | FN: 0    
+  [CAPPED]   Pred: 285     | TP: 0     | FP: 285     | TN: 453540618 | FN: 9    
+
+Snap 656 | CAPPED | True Edges: 2 | Cap Limit: 455
+  [UNCAPPED] Pred: 452313528 | TP: 2     | FP: 452313526 | TN: 1227384 | FN: 0    
+  [CAPPED]   Pred: 455     | TP: 0     | FP: 455     | TN: 453540455 | FN: 2    
+
+Snap 657 | CAPPED | True Edges: 3 | Cap Limit: 320
+  [UNCAPPED] Pred: 453280828 | TP: 3     | FP: 453280825 | TN: 260084  | FN: 0    
+  [CAPPED]   Pred: 320     | TP: 0     | FP: 320     | TN: 453540589 | FN: 3    
+
+Snap 658 | CAPPED | True Edges: 2 | Cap Limit: 225
+  [UNCAPPED] Pred: 452986230 | TP: 2     | FP: 452986228 | TN: 554682  | FN: 0    
+  [CAPPED]   Pred: 225     | TP: 0     | FP: 225     | TN: 453540685 | FN: 2    
+
+Snap 659 | CAPPED | True Edges: 14 | Cap Limit: 240
+  [UNCAPPED] Pred: 453325634 | TP: 14    | FP: 453325620 | TN: 215278  | FN: 0    
+  [CAPPED]   Pred: 240     | TP: 0     | FP: 240     | TN: 453540658 | FN: 14   
+
+Snap 660 | CAPPED | True Edges: 3 | Cap Limit: 805
+  [UNCAPPED] Pred: 453240458 | TP: 3     | FP: 453240455 | TN: 300454  | FN: 0    
+  [CAPPED]   Pred: 805     | TP: 0     | FP: 805     | TN: 453540104 | FN: 3    
+
+Snap 661 | CAPPED | True Edges: 3 | Cap Limit: 440
+  [UNCAPPED] Pred: 452396608 | TP: 3     | FP: 452396605 | TN: 1144304 | FN: 0    
+  [CAPPED]   Pred: 440     | TP: 0     | FP: 440     | TN: 453540469 | FN: 3    
+
+Snap 662 | CAPPED | True Edges: 27 | Cap Limit: 420
+  [UNCAPPED] Pred: 452395934 | TP: 27    | FP: 452395907 | TN: 1144978 | FN: 0    
+  [CAPPED]   Pred: 420     | TP: 0     | FP: 420     | TN: 453540465 | FN: 27   
+
+Snap 663 | CAPPED | True Edges: 8 | Cap Limit: 1075
+  [UNCAPPED] Pred: 452223342 | TP: 4     | FP: 452223338 | TN: 1317566 | FN: 4    
+  [CAPPED]   Pred: 1075    | TP: 0     | FP: 1075    | TN: 453539829 | FN: 8    
+
+Snap 664 | CAPPED | True Edges: 14 | Cap Limit: 545
+  [UNCAPPED] Pred: 452354358 | TP: 6     | FP: 452354352 | TN: 1186546 | FN: 8    
+  [CAPPED]   Pred: 545     | TP: 0     | FP: 545     | TN: 453540353 | FN: 14   
+
+Snap 665 | CAPPED | True Edges: 6 | Cap Limit: 635
+  [UNCAPPED] Pred: 452353794 | TP: 4     | FP: 452353790 | TN: 1187116 | FN: 2    
+  [CAPPED]   Pred: 635     | TP: 0     | FP: 635     | TN: 453540271 | FN: 6    
+
+Snap 666 | CAPPED | True Edges: 8 | Cap Limit: 955
+  [UNCAPPED] Pred: 453148374 | TP: 8     | FP: 453148366 | TN: 392538  | FN: 0    
+  [CAPPED]   Pred: 955     | TP: 0     | FP: 955     | TN: 453539949 | FN: 8    
+
+Snap 667 | CAPPED | True Edges: 14 | Cap Limit: 755
+  [UNCAPPED] Pred: 452809294 | TP: 7     | FP: 452809287 | TN: 731611  | FN: 7    
+  [CAPPED]   Pred: 755     | TP: 0     | FP: 755     | TN: 453540143 | FN: 14   
+
+Snap 668 | CAPPED | True Edges: 26 | Cap Limit: 990
+  [UNCAPPED] Pred: 453139056 | TP: 26    | FP: 453139030 | TN: 401856  | FN: 0    
+  [CAPPED]   Pred: 990     | TP: 0     | FP: 990     | TN: 453539896 | FN: 26   
+
+Snap 669 | CAPPED | True Edges: 43 | Cap Limit: 1125
+  [UNCAPPED] Pred: 453009968 | TP: 30    | FP: 453009938 | TN: 530931  | FN: 13   
+  [CAPPED]   Pred: 1125    | TP: 0     | FP: 1125    | TN: 453539744 | FN: 43   
+
+Snap 670 | CAPPED | True Edges: 27 | Cap Limit: 2055
+  [UNCAPPED] Pred: 453210068 | TP: 17    | FP: 453210051 | TN: 330834  | FN: 10   
+  [CAPPED]   Pred: 2055    | TP: 2     | FP: 2053    | TN: 453538832 | FN: 25   
+
+Snap 671 | CAPPED | True Edges: 11 | Cap Limit: 1620
+  [UNCAPPED] Pred: 453236822 | TP: 8     | FP: 453236814 | TN: 304087  | FN: 3    
+  [CAPPED]   Pred: 1620    | TP: 0     | FP: 1620    | TN: 453539281 | FN: 11   
+
+Snap 672 | CAPPED | True Edges: 12 | Cap Limit: 830
+  [UNCAPPED] Pred: 453266186 | TP: 7     | FP: 453266179 | TN: 274721  | FN: 5    
+  [CAPPED]   Pred: 830     | TP: 0     | FP: 830     | TN: 453540070 | FN: 12   
+
+Snap 673 | CAPPED | True Edges: 11 | Cap Limit: 815
+  [UNCAPPED] Pred: 453314652 | TP: 11    | FP: 453314641 | TN: 226260  | FN: 0    
+  [CAPPED]   Pred: 815     | TP: 0     | FP: 815     | TN: 453540086 | FN: 11   
+
+Snap 674 | CAPPED | True Edges: 6 | Cap Limit: 765
+  [UNCAPPED] Pred: 453193124 | TP: 6     | FP: 453193118 | TN: 347788  | FN: 0    
+  [CAPPED]   Pred: 765     | TP: 0     | FP: 765     | TN: 453540141 | FN: 6    
+
+Snap 675 | CAPPED | True Edges: 11 | Cap Limit: 570
+  [UNCAPPED] Pred: 453107892 | TP: 11    | FP: 453107881 | TN: 433020  | FN: 0    
+  [CAPPED]   Pred: 570     | TP: 0     | FP: 570     | TN: 453540331 | FN: 11   
+
+Snap 676 | CAPPED | True Edges: 12 | Cap Limit: 755
+  [UNCAPPED] Pred: 453025458 | TP: 12    | FP: 453025446 | TN: 515454  | FN: 0    
+  [CAPPED]   Pred: 755     | TP: 0     | FP: 755     | TN: 453540145 | FN: 12   
+
+Snap 677 | CAPPED | True Edges: 16 | Cap Limit: 540
+  [UNCAPPED] Pred: 453078830 | TP: 8     | FP: 453078822 | TN: 462074  | FN: 8    
+  [CAPPED]   Pred: 540     | TP: 0     | FP: 540     | TN: 453540356 | FN: 16   
+
+Snap 678 | CAPPED | True Edges: 13 | Cap Limit: 750
+  [UNCAPPED] Pred: 453068560 | TP: 13    | FP: 453068547 | TN: 472352  | FN: 0    
+  [CAPPED]   Pred: 750     | TP: 1     | FP: 749     | TN: 453540150 | FN: 12   
+
+Snap 679 | CAPPED | True Edges: 3 | Cap Limit: 635
+  [UNCAPPED] Pred: 453078096 | TP: 1     | FP: 453078095 | TN: 462814  | FN: 2    
+  [CAPPED]   Pred: 635     | TP: 0     | FP: 635     | TN: 453540274 | FN: 3    
+
+Snap 680 | CAPPED | True Edges: 1 | Cap Limit: 520
+  [UNCAPPED] Pred: 453164768 | TP: 1     | FP: 453164767 | TN: 376144  | FN: 0    
+  [CAPPED]   Pred: 520     | TP: 0     | FP: 520     | TN: 453540391 | FN: 1    
+
+Snap 681 | CAPPED | True Edges: 1 | Cap Limit: 300
+  [UNCAPPED] Pred: 453289728 | TP: 1     | FP: 453289727 | TN: 251184  | FN: 0    
+  [CAPPED]   Pred: 300     | TP: 0     | FP: 300     | TN: 453540611 | FN: 1    
+
+Snap 682 | CAPPED | True Edges: 4 | Cap Limit: 290
+  [UNCAPPED] Pred: 453373452 | TP: 1     | FP: 453373451 | TN: 167457  | FN: 3    
+  [CAPPED]   Pred: 290     | TP: 0     | FP: 290     | TN: 453540618 | FN: 4    
+
+Snap 683 | CAPPED | True Edges: 19 | Cap Limit: 395
+  [UNCAPPED] Pred: 453348900 | TP: 19    | FP: 453348881 | TN: 192012  | FN: 0    
+  [CAPPED]   Pred: 395     | TP: 0     | FP: 395     | TN: 453540498 | FN: 19   
+
+Snap 684 | CAPPED | True Edges: 27 | Cap Limit: 1210
+  [UNCAPPED] Pred: 453455884 | TP: 27    | FP: 453455857 | TN: 85028   | FN: 0    
+  [CAPPED]   Pred: 1210    | TP: 0     | FP: 1210    | TN: 453539675 | FN: 27   
+
+Snap 685 | CAPPED | True Edges: 18 | Cap Limit: 1165
+  [UNCAPPED] Pred: 453393830 | TP: 18    | FP: 453393812 | TN: 147082  | FN: 0    
+  [CAPPED]   Pred: 1165    | TP: 1     | FP: 1164    | TN: 453539730 | FN: 17   
+
+Snap 686 | CAPPED | True Edges: 16 | Cap Limit: 760
+  [UNCAPPED] Pred: 453395214 | TP: 16    | FP: 453395198 | TN: 145698  | FN: 0    
+  [CAPPED]   Pred: 760     | TP: 0     | FP: 760     | TN: 453540136 | FN: 16   
+
+Snap 687 | CAPPED | True Edges: 11 | Cap Limit: 630
+  [UNCAPPED] Pred: 453357088 | TP: 11    | FP: 453357077 | TN: 183824  | FN: 0    
+  [CAPPED]   Pred: 630     | TP: 0     | FP: 630     | TN: 453540271 | FN: 11   
+
+Snap 688 | CAPPED | True Edges: 4 | Cap Limit: 440
+  [UNCAPPED] Pred: 453441180 | TP: 4     | FP: 453441176 | TN: 99732   | FN: 0    
+  [CAPPED]   Pred: 440     | TP: 0     | FP: 440     | TN: 453540468 | FN: 4    
+
+Snap 689 | CAPPED | True Edges: 3 | Cap Limit: 540
+  [UNCAPPED] Pred: 453443268 | TP: 3     | FP: 453443265 | TN: 97644   | FN: 0    
+  [CAPPED]   Pred: 540     | TP: 0     | FP: 540     | TN: 453540369 | FN: 3    
+
+Snap 690 | CAPPED | True Edges: 23 | Cap Limit: 365
+  [UNCAPPED] Pred: 453438494 | TP: 23    | FP: 453438471 | TN: 102418  | FN: 0    
+  [CAPPED]   Pred: 365     | TP: 0     | FP: 365     | TN: 453540524 | FN: 23   
+
+Snap 691 | CAPPED | True Edges: 9 | Cap Limit: 775
+  [UNCAPPED] Pred: 453391416 | TP: 9     | FP: 453391407 | TN: 149496  | FN: 0    
+  [CAPPED]   Pred: 775     | TP: 0     | FP: 775     | TN: 453540128 | FN: 9    
+
+Snap 692 | CAPPED | True Edges: 8 | Cap Limit: 550
+  [UNCAPPED] Pred: 453396750 | TP: 8     | FP: 453396742 | TN: 144162  | FN: 0    
+  [CAPPED]   Pred: 550     | TP: 0     | FP: 550     | TN: 453540354 | FN: 8    
+
+Snap 693 | CAPPED | True Edges: 1 | Cap Limit: 530
+  [UNCAPPED] Pred: 453401038 | TP: 1     | FP: 453401037 | TN: 139874  | FN: 0    
+  [CAPPED]   Pred: 530     | TP: 0     | FP: 530     | TN: 453540381 | FN: 1    
+
+Snap 694 | CAPPED | True Edges: 3 | Cap Limit: 365
+  [UNCAPPED] Pred: 453485948 | TP: 3     | FP: 453485945 | TN: 54964   | FN: 0    
+  [CAPPED]   Pred: 365     | TP: 0     | FP: 365     | TN: 453540544 | FN: 3    
+
+Snap 695 | CAPPED | True Edges: 14 | Cap Limit: 345
+  [UNCAPPED] Pred: 453484242 | TP: 14    | FP: 453484228 | TN: 56670   | FN: 0    
+  [CAPPED]   Pred: 345     | TP: 0     | FP: 345     | TN: 453540553 | FN: 14   
+
+Snap 696 | CAPPED | True Edges: 6 | Cap Limit: 600
+  [UNCAPPED] Pred: 453229162 | TP: 6     | FP: 453229156 | TN: 311750  | FN: 0    
+  [CAPPED]   Pred: 600     | TP: 0     | FP: 600     | TN: 453540306 | FN: 6    
+
+Snap 697 | CAPPED | True Edges: 6 | Cap Limit: 500
+  [UNCAPPED] Pred: 452934166 | TP: 6     | FP: 452934160 | TN: 606746  | FN: 0    
+  [CAPPED]   Pred: 500     | TP: 0     | FP: 500     | TN: 453540406 | FN: 6    
+
+Snap 698 | CAPPED | True Edges: 13 | Cap Limit: 400
+  [UNCAPPED] Pred: 453019774 | TP: 13    | FP: 453019761 | TN: 521138  | FN: 0    
+  [CAPPED]   Pred: 400     | TP: 0     | FP: 400     | TN: 453540499 | FN: 13   
+
+Snap 699 | CAPPED | True Edges: 6 | Cap Limit: 580
+  [UNCAPPED] Pred: 452951640 | TP: 6     | FP: 452951634 | TN: 589272  | FN: 0    
+  [CAPPED]   Pred: 580     | TP: 0     | FP: 580     | TN: 453540326 | FN: 6    
+
+Snap 700 | CAPPED | True Edges: 3 | Cap Limit: 455
+  [UNCAPPED] Pred: 453035760 | TP: 3     | FP: 453035757 | TN: 505152  | FN: 0    
+  [CAPPED]   Pred: 455     | TP: 0     | FP: 455     | TN: 453540454 | FN: 3    
+
+Snap 701 | CAPPED | True Edges: 6 | Cap Limit: 360
+  [UNCAPPED] Pred: 452278512 | TP: 6     | FP: 452278506 | TN: 1262400 | FN: 0    
+  [CAPPED]   Pred: 360     | TP: 0     | FP: 360     | TN: 453540546 | FN: 6    
+
+Snap 702 | CAPPED | True Edges: 2 | Cap Limit: 265
+  [UNCAPPED] Pred: 452235998 | TP: 2     | FP: 452235996 | TN: 1304914 | FN: 0    
+  [CAPPED]   Pred: 265     | TP: 0     | FP: 265     | TN: 453540645 | FN: 2    
+
+Snap 703 | CAPPED | True Edges: 5 | Cap Limit: 355
+  [UNCAPPED] Pred: 452698108 | TP: 5     | FP: 452698103 | TN: 842804  | FN: 0    
+  [CAPPED]   Pred: 355     | TP: 0     | FP: 355     | TN: 453540552 | FN: 5    
+
+Snap 704 | CAPPED | True Edges: 4 | Cap Limit: 345
+  [UNCAPPED] Pred: 453287914 | TP: 4     | FP: 453287910 | TN: 252998  | FN: 0    
+  [CAPPED]   Pred: 345     | TP: 0     | FP: 345     | TN: 453540563 | FN: 4    
+
+Snap 705 | CAPPED | True Edges: 4 | Cap Limit: 490
+  [UNCAPPED] Pred: 453245766 | TP: 4     | FP: 453245762 | TN: 295146  | FN: 0    
+  [CAPPED]   Pred: 490     | TP: 0     | FP: 490     | TN: 453540418 | FN: 4    
+
+Snap 706 | CAPPED | True Edges: 13 | Cap Limit: 345
+  [UNCAPPED] Pred: 453414296 | TP: 13    | FP: 453414283 | TN: 126616  | FN: 0    
+  [CAPPED]   Pred: 345     | TP: 0     | FP: 345     | TN: 453540554 | FN: 13   
+
+Snap 707 | CAPPED | True Edges: 6 | Cap Limit: 730
+  [UNCAPPED] Pred: 453330398 | TP: 6     | FP: 453330392 | TN: 210514  | FN: 0    
+  [CAPPED]   Pred: 730     | TP: 0     | FP: 730     | TN: 453540176 | FN: 6    
+
+Snap 708 | CAPPED | True Edges: 2 | Cap Limit: 400
+  [UNCAPPED] Pred: 453330486 | TP: 2     | FP: 453330484 | TN: 210426  | FN: 0    
+  [CAPPED]   Pred: 400     | TP: 0     | FP: 400     | TN: 453540510 | FN: 2    
+
+Snap 709 | CAPPED | True Edges: 2 | Cap Limit: 210
+  [UNCAPPED] Pred: 453330386 | TP: 2     | FP: 453330384 | TN: 210526  | FN: 0    
+  [CAPPED]   Pred: 210     | TP: 0     | FP: 210     | TN: 453540700 | FN: 2    
+
+Snap 710 | CAPPED | True Edges: 2 | Cap Limit: 310
+  [UNCAPPED] Pred: 453288186 | TP: 2     | FP: 453288184 | TN: 252726  | FN: 0    
+  [CAPPED]   Pred: 310     | TP: 0     | FP: 310     | TN: 453540600 | FN: 2    
+
+Snap 711 | CAPPED | True Edges: 3 | Cap Limit: 355
+  [UNCAPPED] Pred: 452992926 | TP: 3     | FP: 452992923 | TN: 547986  | FN: 0    
+  [CAPPED]   Pred: 355     | TP: 0     | FP: 355     | TN: 453540554 | FN: 3    
+
+Snap 712 | CAPPED | True Edges: 6 | Cap Limit: 410
+  [UNCAPPED] Pred: 452697318 | TP: 6     | FP: 452697312 | TN: 843594  | FN: 0    
+  [CAPPED]   Pred: 410     | TP: 0     | FP: 410     | TN: 453540496 | FN: 6    
+
+Snap 713 | CAPPED | True Edges: 11 | Cap Limit: 450
+  [UNCAPPED] Pred: 452738488 | TP: 11    | FP: 452738477 | TN: 802424  | FN: 0    
+  [CAPPED]   Pred: 450     | TP: 0     | FP: 450     | TN: 453540451 | FN: 11   
+
+Snap 714 | CAPPED | True Edges: 15 | Cap Limit: 440
+  [UNCAPPED] Pred: 452863598 | TP: 15    | FP: 452863583 | TN: 677314  | FN: 0    
+  [CAPPED]   Pred: 440     | TP: 0     | FP: 440     | TN: 453540457 | FN: 15   
+
+Snap 715 | CAPPED | True Edges: 2 | Cap Limit: 665
+  [UNCAPPED] Pred: 452737126 | TP: 2     | FP: 452737124 | TN: 803786  | FN: 0    
+  [CAPPED]   Pred: 665     | TP: 0     | FP: 665     | TN: 453540245 | FN: 2    
+
+Snap 716 | CAPPED | True Edges: 4 | Cap Limit: 340
+  [UNCAPPED] Pred: 452906532 | TP: 4     | FP: 452906528 | TN: 634380  | FN: 0    
+  [CAPPED]   Pred: 340     | TP: 0     | FP: 340     | TN: 453540568 | FN: 4    
+
+Snap 717 | CAPPED | True Edges: 2 | Cap Limit: 440
+  [UNCAPPED] Pred: 452988682 | TP: 2     | FP: 452988680 | TN: 552230  | FN: 0    
+  [CAPPED]   Pred: 440     | TP: 0     | FP: 440     | TN: 453540470 | FN: 2    
+
+Snap 718 | CAPPED | True Edges: 2 | Cap Limit: 315
+  [UNCAPPED] Pred: 453200228 | TP: 2     | FP: 453200226 | TN: 340684  | FN: 0    
+  [CAPPED]   Pred: 315     | TP: 0     | FP: 315     | TN: 453540595 | FN: 2    
+
+Snap 719 | CAPPED | True Edges: 2 | Cap Limit: 255
+  [UNCAPPED] Pred: 453157654 | TP: 2     | FP: 453157652 | TN: 383258  | FN: 0    
+  [CAPPED]   Pred: 255     | TP: 0     | FP: 255     | TN: 453540655 | FN: 2    
+
+Snap 720 | CAPPED | True Edges: 5 | Cap Limit: 340
+  [UNCAPPED] Pred: 453199576 | TP: 5     | FP: 453199571 | TN: 341336  | FN: 0    
+  [CAPPED]   Pred: 340     | TP: 0     | FP: 340     | TN: 453540567 | FN: 5    
+
+Snap 721 | CAPPED | True Edges: 14 | Cap Limit: 350
+  [UNCAPPED] Pred: 453198636 | TP: 14    | FP: 453198622 | TN: 342276  | FN: 0    
+  [CAPPED]   Pred: 350     | TP: 0     | FP: 350     | TN: 453540548 | FN: 14   
+
+Snap 722 | CAPPED | True Edges: 2 | Cap Limit: 545
+  [UNCAPPED] Pred: 453281556 | TP: 2     | FP: 453281554 | TN: 259356  | FN: 0    
+  [CAPPED]   Pred: 545     | TP: 0     | FP: 545     | TN: 453540365 | FN: 2    
+
+Snap 723 | CAPPED | True Edges: 3 | Cap Limit: 295
+  [UNCAPPED] Pred: 453071068 | TP: 3     | FP: 453071065 | TN: 469844  | FN: 0    
+  [CAPPED]   Pred: 295     | TP: 0     | FP: 295     | TN: 453540614 | FN: 3    
+
+Snap 724 | CAPPED | True Edges: 3 | Cap Limit: 300
+  [UNCAPPED] Pred: 453241668 | TP: 3     | FP: 453241665 | TN: 299244  | FN: 0    
+  [CAPPED]   Pred: 300     | TP: 0     | FP: 300     | TN: 453540609 | FN: 3    
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/networkdgd_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: networkdgd (SFDyG) METRICS ---
+TRAIN:  Time=1115.71s, GPU=2128.00MB, RAM=7186.61MB
+THRESH: Time=1.28s, GPU=2128.00MB, RAM=7187.03MB
+CONST:  Time=1329.49s, GPU=3124.00MB, RAM=4104.09MB
+
+========================================================================
+COMPLETED DATASET: networkdgd
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: networkiconomi
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 548 snapshots...]
+[Done] Total Snapshots processed: 548
+
+Statistics for networkiconomi:
+	Nodes: 47446
+	Edges: 86861
+	Snaps: 548
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.379102 | Sampled Train AUC: 0.4778
+Epoch 020 | Loss: 1.424128 | Sampled Train AUC: 0.4767
+Epoch 030 | Loss: 1.370354 | Sampled Train AUC: 0.4762
+Epoch 040 | Loss: 1.389122 | Sampled Train AUC: 0.4782
+Early stopping triggered at epoch 49. Best Training Loss: 1.369549
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.381258 | Std: 0.278507 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.388291 | Std: 0.210927 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.5762
+Loading data for networkiconomi with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 465 | CAPPED | True Edges: 3 | Cap Limit: 475
+  [UNCAPPED] Pred: 2241041578 | TP: 3     | FP: 2241041575 | TN: 10033892 | FN: 0    
+  [CAPPED]   Pred: 475     | TP: 0     | FP: 475     | TN: 2251074992 | FN: 3    
+
+Snap 466 | CAPPED | True Edges: 10 | Cap Limit: 615
+  [UNCAPPED] Pred: 2240664468 | TP: 8     | FP: 2240664460 | TN: 10411000 | FN: 2    
+  [CAPPED]   Pred: 615     | TP: 0     | FP: 615     | TN: 2251074845 | FN: 10   
+
+Snap 467 | CAPPED | True Edges: 15 | Cap Limit: 595
+  [UNCAPPED] Pred: 2240286792 | TP: 15    | FP: 2240286777 | TN: 10788678 | FN: 0    
+  [CAPPED]   Pred: 595     | TP: 0     | FP: 595     | TN: 2251074860 | FN: 15   
+
+Snap 468 | CAPPED | True Edges: 1 | Cap Limit: 490
+  [UNCAPPED] Pred: 2239153736 | TP: 1     | FP: 2239153735 | TN: 11921734 | FN: 0    
+  [CAPPED]   Pred: 490     | TP: 0     | FP: 490     | TN: 2251074979 | FN: 1    
+
+Snap 469 | CAPPED | True Edges: 6 | Cap Limit: 465
+  [UNCAPPED] Pred: 2240286238 | TP: 6     | FP: 2240286232 | TN: 10789232 | FN: 0    
+  [CAPPED]   Pred: 465     | TP: 0     | FP: 465     | TN: 2251074999 | FN: 6    
+
+Snap 470 | CAPPED | True Edges: 5 | Cap Limit: 630
+  [UNCAPPED] Pred: 2240759542 | TP: 4     | FP: 2240759538 | TN: 10315927 | FN: 1    
+  [CAPPED]   Pred: 630     | TP: 0     | FP: 630     | TN: 2251074835 | FN: 5    
+
+Snap 471 | CAPPED | True Edges: 3 | Cap Limit: 540
+  [UNCAPPED] Pred: 2240475510 | TP: 3     | FP: 2240475507 | TN: 10599960 | FN: 0    
+  [CAPPED]   Pred: 540     | TP: 0     | FP: 540     | TN: 2251074927 | FN: 3    
+
+Snap 472 | CAPPED | True Edges: 2 | Cap Limit: 390
+  [UNCAPPED] Pred: 2239719628 | TP: 2     | FP: 2239719626 | TN: 11355842 | FN: 0    
+  [CAPPED]   Pred: 390     | TP: 0     | FP: 390     | TN: 2251075078 | FN: 2    
+
+Snap 473 | CAPPED | True Edges: 5 | Cap Limit: 210
+  [UNCAPPED] Pred: 2241040390 | TP: 5     | FP: 2241040385 | TN: 10035080 | FN: 0    
+  [CAPPED]   Pred: 210     | TP: 0     | FP: 210     | TN: 2251075255 | FN: 5    
+
+Snap 474 | CAPPED | True Edges: 3 | Cap Limit: 325
+  [UNCAPPED] Pred: 2242458138 | TP: 3     | FP: 2242458135 | TN: 8617332 | FN: 0    
+  [CAPPED]   Pred: 325     | TP: 0     | FP: 325     | TN: 2251075142 | FN: 3    
+
+Snap 475 | CAPPED | True Edges: 3 | Cap Limit: 465
+  [UNCAPPED] Pred: 2244065534 | TP: 3     | FP: 2244065531 | TN: 7009936 | FN: 0    
+  [CAPPED]   Pred: 465     | TP: 0     | FP: 465     | TN: 2251075002 | FN: 3    
+
+Snap 476 | CAPPED | True Edges: 8 | Cap Limit: 340
+  [UNCAPPED] Pred: 2243970882 | TP: 8     | FP: 2243970874 | TN: 7104588 | FN: 0    
+  [CAPPED]   Pred: 340     | TP: 0     | FP: 340     | TN: 2251075122 | FN: 8    
+
+Snap 477 | CAPPED | True Edges: 2 | Cap Limit: 330
+  [UNCAPPED] Pred: 2243592770 | TP: 2     | FP: 2243592768 | TN: 7482700 | FN: 0    
+  [CAPPED]   Pred: 330     | TP: 0     | FP: 330     | TN: 2251075138 | FN: 2    
+========================================================================
+COMPLETED DATASET: networkiconomi
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: Reddit_B
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 405 snapshots...]
+[Done] Total Snapshots processed: 405
+
+Statistics for Reddit_B:
+	Nodes: 20957
+	Edges: 110278
+	Snaps: 405
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.280755 | Sampled Train AUC: 0.4652
+Epoch 020 | Loss: 1.257016 | Sampled Train AUC: 0.4658
+Epoch 030 | Loss: 1.243157 | Sampled Train AUC: 0.4656
+Epoch 040 | Loss: 1.232703 | Sampled Train AUC: 0.4648
+Epoch 050 | Loss: 1.233552 | Sampled Train AUC: 0.4636
+Epoch 060 | Loss: 1.218857 | Sampled Train AUC: 0.4641
+Epoch 070 | Loss: 1.214079 | Sampled Train AUC: 0.4632
+Epoch 080 | Loss: 1.206241 | Sampled Train AUC: 0.4625
+Epoch 090 | Loss: 1.199699 | Sampled Train AUC: 0.4622
+Epoch 100 | Loss: 1.195946 | Sampled Train AUC: 0.4615
+Epoch 110 | Loss: 1.191245 | Sampled Train AUC: 0.4611
+Epoch 120 | Loss: 1.182412 | Sampled Train AUC: 0.4610
+Epoch 130 | Loss: 1.179634 | Sampled Train AUC: 0.4607
+Epoch 140 | Loss: 1.173810 | Sampled Train AUC: 0.4607
+Epoch 150 | Loss: 1.169605 | Sampled Train AUC: 0.4607
+Epoch 160 | Loss: 1.167012 | Sampled Train AUC: 0.4607
+Epoch 170 | Loss: 1.163765 | Sampled Train AUC: 0.4610
+Epoch 180 | Loss: 1.162588 | Sampled Train AUC: 0.4611
+Epoch 190 | Loss: 1.161944 | Sampled Train AUC: 0.4611
+Epoch 200 | Loss: 1.161487 | Sampled Train AUC: 0.4611
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.461931 | Std: 0.255459 | Max: 1.000000 | Min: 0.000000
+Negatives | Mean: 0.462561 | Std: 0.150529 | Max: 1.000000 | Min: 0.000000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.6476
+Loading data for Reddit_B with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 344 | CAPPED | True Edges: 0 | Cap Limit: 2165
+  [UNCAPPED] Pred: 435476156 | TP: 0     | FP: 435476156 | TN: 3698736 | FN: 0    
+  [CAPPED]   Pred: 2165    | TP: 0     | FP: 2165    | TN: 439172727 | FN: 0    
+
+Snap 345 | CAPPED | True Edges: 0 | Cap Limit: 1635
+  [UNCAPPED] Pred: 436010932 | TP: 0     | FP: 436010932 | TN: 3163960 | FN: 0    
+  [CAPPED]   Pred: 1635    | TP: 0     | FP: 1635    | TN: 439173257 | FN: 0    
+
+Snap 346 | CAPPED | True Edges: 0 | Cap Limit: 1485
+  [UNCAPPED] Pred: 435805850 | TP: 0     | FP: 435805850 | TN: 3369042 | FN: 0    
+  [CAPPED]   Pred: 1485    | TP: 0     | FP: 1485    | TN: 439173407 | FN: 0    
+
+Snap 347 | CAPPED | True Edges: 0 | Cap Limit: 1640
+  [UNCAPPED] Pred: 435238568 | TP: 0     | FP: 435238568 | TN: 3936324 | FN: 0    
+  [CAPPED]   Pred: 1640    | TP: 0     | FP: 1640    | TN: 439173252 | FN: 0    
+
+Snap 348 | CAPPED | True Edges: 0 | Cap Limit: 1390
+  [UNCAPPED] Pred: 434461786 | TP: 0     | FP: 434461786 | TN: 4713106 | FN: 0    
+  [CAPPED]   Pred: 1390    | TP: 0     | FP: 1390    | TN: 439173502 | FN: 0    
+
+Snap 349 | CAPPED | True Edges: 0 | Cap Limit: 1940
+  [UNCAPPED] Pred: 435526996 | TP: 0     | FP: 435526996 | TN: 3647896 | FN: 0    
+  [CAPPED]   Pred: 1940    | TP: 0     | FP: 1940    | TN: 439172952 | FN: 0    
+
+Snap 350 | CAPPED | True Edges: 0 | Cap Limit: 1515
+  [UNCAPPED] Pred: 436589520 | TP: 0     | FP: 436589520 | TN: 2585372 | FN: 0    
+  [CAPPED]   Pred: 1515    | TP: 0     | FP: 1515    | TN: 439173377 | FN: 0    
+
+Snap 351 | CAPPED | True Edges: 0 | Cap Limit: 1715
+  [UNCAPPED] Pred: 436341754 | TP: 0     | FP: 436341754 | TN: 2833138 | FN: 0    
+  [CAPPED]   Pred: 1715    | TP: 0     | FP: 1715    | TN: 439173177 | FN: 0    
+
+Snap 352 | CAPPED | True Edges: 0 | Cap Limit: 1840
+  [UNCAPPED] Pred: 435315998 | TP: 0     | FP: 435315998 | TN: 3858894 | FN: 0    
+  [CAPPED]   Pred: 1840    | TP: 0     | FP: 1840    | TN: 439173052 | FN: 0    
+
+Snap 353 | CAPPED | True Edges: 0 | Cap Limit: 1680
+  [UNCAPPED] Pred: 435848624 | TP: 0     | FP: 435848624 | TN: 3326268 | FN: 0    
+  [CAPPED]   Pred: 1680    | TP: 0     | FP: 1680    | TN: 439173212 | FN: 0    
+
+Snap 354 | CAPPED | True Edges: 0 | Cap Limit: 1670
+  [UNCAPPED] Pred: 435194606 | TP: 0     | FP: 435194606 | TN: 3980286 | FN: 0    
+  [CAPPED]   Pred: 1670    | TP: 0     | FP: 1670    | TN: 439173222 | FN: 0    
+
+Snap 355 | CAPPED | True Edges: 0 | Cap Limit: 1505
+  [UNCAPPED] Pred: 434586250 | TP: 0     | FP: 434586250 | TN: 4588642 | FN: 0    
+  [CAPPED]   Pred: 1505    | TP: 0     | FP: 1505    | TN: 439173387 | FN: 0    
+
+Snap 356 | CAPPED | True Edges: 0 | Cap Limit: 2225
+  [UNCAPPED] Pred: 434177602 | TP: 0     | FP: 434177602 | TN: 4997290 | FN: 0    
+  [CAPPED]   Pred: 2225    | TP: 0     | FP: 2225    | TN: 439172667 | FN: 0    
+
+Snap 357 | CAPPED | True Edges: 0 | Cap Limit: 1675
+  [UNCAPPED] Pred: 434384822 | TP: 0     | FP: 434384822 | TN: 4790070 | FN: 0    
+  [CAPPED]   Pred: 1675    | TP: 0     | FP: 1675    | TN: 439173217 | FN: 0    
+
+Snap 358 | CAPPED | True Edges: 0 | Cap Limit: 1585
+  [UNCAPPED] Pred: 432669694 | TP: 0     | FP: 432669694 | TN: 6505198 | FN: 0    
+  [CAPPED]   Pred: 1585    | TP: 0     | FP: 1585    | TN: 439173307 | FN: 0    
+
+Snap 359 | CAPPED | True Edges: 0 | Cap Limit: 1425
+  [UNCAPPED] Pred: 433850358 | TP: 0     | FP: 433850358 | TN: 5324534 | FN: 0    
+  [CAPPED]   Pred: 1425    | TP: 0     | FP: 1425    | TN: 439173467 | FN: 0    
+
+Snap 360 | CAPPED | True Edges: 0 | Cap Limit: 1285
+  [UNCAPPED] Pred: 434665476 | TP: 0     | FP: 434665476 | TN: 4509416 | FN: 0    
+  [CAPPED]   Pred: 1285    | TP: 0     | FP: 1285    | TN: 439173607 | FN: 0    
+
+Snap 361 | CAPPED | True Edges: 0 | Cap Limit: 1190
+  [UNCAPPED] Pred: 433806938 | TP: 0     | FP: 433806938 | TN: 5367954 | FN: 0    
+  [CAPPED]   Pred: 1190    | TP: 0     | FP: 1190    | TN: 439173702 | FN: 0    
+
+Snap 362 | CAPPED | True Edges: 0 | Cap Limit: 1395
+  [UNCAPPED] Pred: 434492486 | TP: 0     | FP: 434492486 | TN: 4682406 | FN: 0    
+  [CAPPED]   Pred: 1395    | TP: 0     | FP: 1395    | TN: 439173497 | FN: 0    
+
+Snap 363 | CAPPED | True Edges: 0 | Cap Limit: 1255
+  [UNCAPPED] Pred: 434861450 | TP: 0     | FP: 434861450 | TN: 4313442 | FN: 0    
+  [CAPPED]   Pred: 1255    | TP: 0     | FP: 1255    | TN: 439173637 | FN: 0    
+
+Snap 364 | CAPPED | True Edges: 0 | Cap Limit: 1625
+  [UNCAPPED] Pred: 435269170 | TP: 0     | FP: 435269170 | TN: 3905722 | FN: 0    
+  [CAPPED]   Pred: 1625    | TP: 0     | FP: 1625    | TN: 439173267 | FN: 0    
+
+Snap 365 | CAPPED | True Edges: 0 | Cap Limit: 1465
+  [UNCAPPED] Pred: 436621776 | TP: 0     | FP: 436621776 | TN: 2553116 | FN: 0    
+  [CAPPED]   Pred: 1465    | TP: 0     | FP: 1465    | TN: 439173427 | FN: 0    
+
+Snap 366 | CAPPED | True Edges: 0 | Cap Limit: 1485
+  [UNCAPPED] Pred: 436213038 | TP: 0     | FP: 436213038 | TN: 2961854 | FN: 0    
+  [CAPPED]   Pred: 1485    | TP: 0     | FP: 1485    | TN: 439173407 | FN: 0    
+
+Snap 367 | CAPPED | True Edges: 0 | Cap Limit: 1310
+  [UNCAPPED] Pred: 436335054 | TP: 0     | FP: 436335054 | TN: 2839838 | FN: 0    
+  [CAPPED]   Pred: 1310    | TP: 0     | FP: 1310    | TN: 439173582 | FN: 0    
+
+Snap 368 | CAPPED | True Edges: 0 | Cap Limit: 1540
+  [UNCAPPED] Pred: 436091296 | TP: 0     | FP: 436091296 | TN: 3083596 | FN: 0    
+  [CAPPED]   Pred: 1540    | TP: 0     | FP: 1540    | TN: 439173352 | FN: 0    
+
+Snap 369 | CAPPED | True Edges: 0 | Cap Limit: 1665
+  [UNCAPPED] Pred: 436298950 | TP: 0     | FP: 436298950 | TN: 2875942 | FN: 0    
+  [CAPPED]   Pred: 1665    | TP: 0     | FP: 1665    | TN: 439173227 | FN: 0    
+
+Snap 370 | CAPPED | True Edges: 0 | Cap Limit: 1740
+  [UNCAPPED] Pred: 435525286 | TP: 0     | FP: 435525286 | TN: 3649606 | FN: 0    
+  [CAPPED]   Pred: 1740    | TP: 0     | FP: 1740    | TN: 439173152 | FN: 0    
+
+Snap 371 | CAPPED | True Edges: 0 | Cap Limit: 1940
+  [UNCAPPED] Pred: 434831404 | TP: 0     | FP: 434831404 | TN: 4343488 | FN: 0    
+  [CAPPED]   Pred: 1940    | TP: 0     | FP: 1940    | TN: 439172952 | FN: 0    
+
+Snap 372 | CAPPED | True Edges: 0 | Cap Limit: 1595
+  [UNCAPPED] Pred: 435891980 | TP: 0     | FP: 435891980 | TN: 3282912 | FN: 0    
+  [CAPPED]   Pred: 1595    | TP: 0     | FP: 1595    | TN: 439173297 | FN: 0    
+
+Snap 373 | CAPPED | True Edges: 0 | Cap Limit: 1515
+  [UNCAPPED] Pred: 435685510 | TP: 0     | FP: 435685510 | TN: 3489382 | FN: 0    
+  [CAPPED]   Pred: 1515    | TP: 0     | FP: 1515    | TN: 439173377 | FN: 0    
+
+Snap 374 | CAPPED | True Edges: 0 | Cap Limit: 1620
+  [UNCAPPED] Pred: 435808686 | TP: 0     | FP: 435808686 | TN: 3366206 | FN: 0    
+  [CAPPED]   Pred: 1620    | TP: 0     | FP: 1620    | TN: 439173272 | FN: 0    
+
+Snap 375 | CAPPED | True Edges: 0 | Cap Limit: 1380
+  [UNCAPPED] Pred: 436587544 | TP: 0     | FP: 436587544 | TN: 2587348 | FN: 0    
+  [CAPPED]   Pred: 1380    | TP: 0     | FP: 1380    | TN: 439173512 | FN: 0    
+
+Snap 376 | CAPPED | True Edges: 0 | Cap Limit: 1490
+  [UNCAPPED] Pred: 436341636 | TP: 0     | FP: 436341636 | TN: 2833256 | FN: 0    
+  [CAPPED]   Pred: 1490    | TP: 0     | FP: 1490    | TN: 439173402 | FN: 0    
+
+Snap 377 | CAPPED | True Edges: 0 | Cap Limit: 1510
+  [UNCAPPED] Pred: 436095334 | TP: 0     | FP: 436095334 | TN: 3079558 | FN: 0    
+  [CAPPED]   Pred: 1510    | TP: 0     | FP: 1510    | TN: 439173382 | FN: 0    
+
+Snap 378 | CAPPED | True Edges: 0 | Cap Limit: 1250
+  [UNCAPPED] Pred: 435396998 | TP: 0     | FP: 435396998 | TN: 3777894 | FN: 0    
+  [CAPPED]   Pred: 1250    | TP: 0     | FP: 1250    | TN: 439173642 | FN: 0    
+
+Snap 379 | CAPPED | True Edges: 0 | Cap Limit: 1365
+  [UNCAPPED] Pred: 434497002 | TP: 0     | FP: 434497002 | TN: 4677890 | FN: 0    
+  [CAPPED]   Pred: 1365    | TP: 0     | FP: 1365    | TN: 439173527 | FN: 0    
+
+Snap 380 | CAPPED | True Edges: 0 | Cap Limit: 1640
+  [UNCAPPED] Pred: 434499710 | TP: 0     | FP: 434499710 | TN: 4675182 | FN: 0    
+  [CAPPED]   Pred: 1640    | TP: 0     | FP: 1640    | TN: 439173252 | FN: 0    
+
+Snap 381 | CAPPED | True Edges: 0 | Cap Limit: 1440
+  [UNCAPPED] Pred: 435200500 | TP: 0     | FP: 435200500 | TN: 3974392 | FN: 0    
+  [CAPPED]   Pred: 1440    | TP: 0     | FP: 1440    | TN: 439173452 | FN: 0    
+
+Snap 382 | CAPPED | True Edges: 0 | Cap Limit: 1090
+  [UNCAPPED] Pred: 435361916 | TP: 0     | FP: 435361916 | TN: 3812976 | FN: 0    
+  [CAPPED]   Pred: 1090    | TP: 0     | FP: 1090    | TN: 439173802 | FN: 0    
+
+Snap 383 | CAPPED | True Edges: 0 | Cap Limit: 1475
+  [UNCAPPED] Pred: 436014372 | TP: 0     | FP: 436014372 | TN: 3160520 | FN: 0    
+  [CAPPED]   Pred: 1475    | TP: 0     | FP: 1475    | TN: 439173417 | FN: 0    
+
+Snap 384 | CAPPED | True Edges: 0 | Cap Limit: 1515
+  [UNCAPPED] Pred: 435479736 | TP: 0     | FP: 435479736 | TN: 3695156 | FN: 0    
+  [CAPPED]   Pred: 1515    | TP: 0     | FP: 1515    | TN: 439173377 | FN: 0    
+
+Snap 385 | CAPPED | True Edges: 0 | Cap Limit: 1210
+  [UNCAPPED] Pred: 435724422 | TP: 0     | FP: 435724422 | TN: 3450470 | FN: 0    
+  [CAPPED]   Pred: 1210    | TP: 0     | FP: 1210    | TN: 439173682 | FN: 0    
+
+Snap 386 | CAPPED | True Edges: 0 | Cap Limit: 1630
+  [UNCAPPED] Pred: 435765908 | TP: 0     | FP: 435765908 | TN: 3408984 | FN: 0    
+  [CAPPED]   Pred: 1630    | TP: 0     | FP: 1630    | TN: 439173262 | FN: 0    
+
+Snap 387 | CAPPED | True Edges: 0 | Cap Limit: 1980
+  [UNCAPPED] Pred: 435566486 | TP: 0     | FP: 435566486 | TN: 3608406 | FN: 0    
+  [CAPPED]   Pred: 1980    | TP: 0     | FP: 1980    | TN: 439172912 | FN: 0    
+
+Snap 388 | CAPPED | True Edges: 0 | Cap Limit: 2080
+  [UNCAPPED] Pred: 435571392 | TP: 0     | FP: 435571392 | TN: 3603500 | FN: 0    
+  [CAPPED]   Pred: 2080    | TP: 0     | FP: 2080    | TN: 439172812 | FN: 0    
+
+Snap 389 | CAPPED | True Edges: 0 | Cap Limit: 2370
+  [UNCAPPED] Pred: 434126768 | TP: 0     | FP: 434126768 | TN: 5048124 | FN: 0    
+  [CAPPED]   Pred: 2370    | TP: 0     | FP: 2370    | TN: 439172522 | FN: 0    
+
+Snap 390 | CAPPED | True Edges: 0 | Cap Limit: 1855
+  [UNCAPPED] Pred: 433043682 | TP: 0     | FP: 433043682 | TN: 6131210 | FN: 0    
+  [CAPPED]   Pred: 1855    | TP: 0     | FP: 1855    | TN: 439173037 | FN: 0    
+
+Snap 391 | CAPPED | True Edges: 0 | Cap Limit: 1640
+  [UNCAPPED] Pred: 433693018 | TP: 0     | FP: 433693018 | TN: 5481874 | FN: 0    
+  [CAPPED]   Pred: 1640    | TP: 0     | FP: 1640    | TN: 439173252 | FN: 0    
+
+Snap 392 | CAPPED | True Edges: 0 | Cap Limit: 1455
+  [UNCAPPED] Pred: 433973274 | TP: 0     | FP: 433973274 | TN: 5201618 | FN: 0    
+  [CAPPED]   Pred: 1455    | TP: 0     | FP: 1455    | TN: 439173437 | FN: 0    
+
+Snap 393 | CAPPED | True Edges: 0 | Cap Limit: 1345
+  [UNCAPPED] Pred: 434494502 | TP: 0     | FP: 434494502 | TN: 4680390 | FN: 0    
+  [CAPPED]   Pred: 1345    | TP: 0     | FP: 1345    | TN: 439173547 | FN: 0    
+
+Snap 394 | CAPPED | True Edges: 0 | Cap Limit: 1275
+  [UNCAPPED] Pred: 433027996 | TP: 0     | FP: 433027996 | TN: 6146896 | FN: 0    
+  [CAPPED]   Pred: 1275    | TP: 0     | FP: 1275    | TN: 439173617 | FN: 0    
+
+Snap 395 | CAPPED | True Edges: 0 | Cap Limit: 1240
+  [UNCAPPED] Pred: 434070556 | TP: 0     | FP: 434070556 | TN: 5104336 | FN: 0    
+  [CAPPED]   Pred: 1240    | TP: 0     | FP: 1240    | TN: 439173652 | FN: 0    
+
+Snap 396 | CAPPED | True Edges: 0 | Cap Limit: 1245
+  [UNCAPPED] Pred: 434621542 | TP: 0     | FP: 434621542 | TN: 4553350 | FN: 0    
+  [CAPPED]   Pred: 1245    | TP: 0     | FP: 1245    | TN: 439173647 | FN: 0    
+
+Snap 397 | CAPPED | True Edges: 0 | Cap Limit: 1625
+  [UNCAPPED] Pred: 435148674 | TP: 0     | FP: 435148674 | TN: 4026218 | FN: 0    
+  [CAPPED]   Pred: 1625    | TP: 0     | FP: 1625    | TN: 439173267 | FN: 0    
+
+Snap 398 | CAPPED | True Edges: 0 | Cap Limit: 1530
+  [UNCAPPED] Pred: 436093154 | TP: 0     | FP: 436093154 | TN: 3081738 | FN: 0    
+  [CAPPED]   Pred: 1530    | TP: 0     | FP: 1530    | TN: 439173362 | FN: 0    
+
+Snap 399 | CAPPED | True Edges: 0 | Cap Limit: 1430
+  [UNCAPPED] Pred: 435763978 | TP: 0     | FP: 435763978 | TN: 3410914 | FN: 0    
+  [CAPPED]   Pred: 1430    | TP: 0     | FP: 1430    | TN: 439173462 | FN: 0    
+
+Snap 400 | CAPPED | True Edges: 0 | Cap Limit: 1360
+  [UNCAPPED] Pred: 436336412 | TP: 0     | FP: 436336412 | TN: 2838480 | FN: 0    
+  [CAPPED]   Pred: 1360    | TP: 0     | FP: 1360    | TN: 439173532 | FN: 0    
+
+Snap 401 | CAPPED | True Edges: 0 | Cap Limit: 1290
+  [UNCAPPED] Pred: 435805922 | TP: 0     | FP: 435805922 | TN: 3368970 | FN: 0    
+  [CAPPED]   Pred: 1290    | TP: 0     | FP: 1290    | TN: 439173602 | FN: 0    
+
+Snap 402 | CAPPED | True Edges: 0 | Cap Limit: 1320
+  [UNCAPPED] Pred: 435518590 | TP: 0     | FP: 435518590 | TN: 3656302 | FN: 0    
+  [CAPPED]   Pred: 1320    | TP: 0     | FP: 1320    | TN: 439173572 | FN: 0    
+
+Snap 403 | CAPPED | True Edges: 0 | Cap Limit: 1305
+  [UNCAPPED] Pred: 436093020 | TP: 0     | FP: 436093020 | TN: 3081872 | FN: 0    
+  [CAPPED]   Pred: 1305    | TP: 0     | FP: 1305    | TN: 439173587 | FN: 0    
+
+Snap 404 | CAPPED | True Edges: 0 | Cap Limit: 1645
+  [UNCAPPED] Pred: 437034070 | TP: 0     | FP: 437034070 | TN: 2140822 | FN: 0    
+  [CAPPED]   Pred: 1645    | TP: 0     | FP: 1645    | TN: 439173247 | FN: 0    
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/Reddit_B_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: Reddit_B (SFDyG) METRICS ---
+TRAIN:  Time=887.80s, GPU=5272.00MB, RAM=5082.79MB
+THRESH: Time=0.46s, GPU=5272.00MB, RAM=5083.13MB
+CONST:  Time=764.90s, GPU=5272.00MB, RAM=3166.21MB
+
+========================================================================
+COMPLETED DATASET: Reddit_B
+========================================================================
+========================================================================
+STARTING GLOBAL DATASET: tgbl-wiki
+========================================================================
+------------------------------------------------------------
+[Checking Graph Integrity for 31 snapshots...]
+[Done] Total Snapshots processed: 31
+
+Statistics for tgbl-wiki:
+	Nodes: 9227
+	Edges: 39804
+	Snaps: 31
+	Dur: 1D
+--- Training SFDyG (hgcn) | Sparse mode ---
+Epoch 010 | Loss: 1.307208 | Sampled Train AUC: 0.5000
+Epoch 020 | Loss: 1.307209 | Sampled Train AUC: 0.5000
+Epoch 030 | Loss: 1.307208 | Sampled Train AUC: 0.5000
+Early stopping triggered at epoch 31. Best Training Loss: 1.307208
+Restoring best model weights for evaluation...
+--- Optimizing Threshold (Sampled Sparse) ---
+--- Probability Distribution Check ---
+Positives | Mean: 0.500000 | Std: 0.000000 | Max: 0.500000 | Min: 0.500000
+Negatives | Mean: 0.500000 | Std: 0.000000 | Max: 0.500000 | Min: 0.500000
+[0.05 0.06 0.07 0.08 0.09 0.1  0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18
+ 0.19 0.2  0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3  0.31 0.32
+ 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4  0.41 0.42 0.43 0.44 0.45 0.46
+ 0.47 0.48 0.49 0.5  0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6
+ 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7  0.71 0.72 0.73 0.74
+ 0.75 0.76 0.77 0.78 0.79 0.8  0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88
+ 0.89 0.9  0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
+Optimal Threshold: 0.05 | Sampled Val F1: 0.6668
+Loading data for tgbl-wiki with use_predicted=False, num_back=all, num_buckets=10, use_test_style=None
+--- Starting SFDyG Sparse Construction (5x Dynamic Cap) ---
+
+Snap 26 | CAPPED | True Edges: 1421 | Cap Limit: 7105
+  [UNCAPPED] Pred: 85128302 | TP: 1421  | FP: 85126881 | TN: 0       | FN: 0    
+  [CAPPED]   Pred: 7105    | TP: 0     | FP: 7105    | TN: 85119776 | FN: 1421 
+
+Snap 27 | CAPPED | True Edges: 1197 | Cap Limit: 7105
+  [UNCAPPED] Pred: 85128302 | TP: 1197  | FP: 85127105 | TN: 0       | FN: 0    
+  [CAPPED]   Pred: 7105    | TP: 0     | FP: 7105    | TN: 85120000 | FN: 1197 
+
+Snap 28 | CAPPED | True Edges: 1289 | Cap Limit: 5985
+  [UNCAPPED] Pred: 85128302 | TP: 1289  | FP: 85127013 | TN: 0       | FN: 0    
+  [CAPPED]   Pred: 5985    | TP: 0     | FP: 5985    | TN: 85121028 | FN: 1289 
+
+Snap 29 | CAPPED | True Edges: 1153 | Cap Limit: 6445
+  [UNCAPPED] Pred: 85128302 | TP: 1153  | FP: 85127149 | TN: 0       | FN: 0    
+  [CAPPED]   Pred: 6445    | TP: 0     | FP: 6445    | TN: 85120704 | FN: 1153 
+
+Snap 30 | CAPPED | True Edges: 1138 | Cap Limit: 5765
+  [UNCAPPED] Pred: 85128302 | TP: 1138  | FP: 85127164 | TN: 0       | FN: 0    
+  [CAPPED]   Pred: 5765    | TP: 0     | FP: 5765    | TN: 85121399 | FN: 1138 
+Saved 5x-Capped SFDyG sparse graphs to data/output/predicted/SFDyG/tgbl-wiki_hgcn_7_4_0.0001_1024_100_0.0_threshold_5xCap.pkl
+
+--- DATASET: tgbl-wiki (SFDyG) METRICS ---
+TRAIN:  Time=23.49s, GPU=32796.00MB, RAM=1556.75MB
+THRESH: Time=0.15s, GPU=32796.00MB, RAM=1556.84MB
+CONST:  Time=13.72s, GPU=32796.00MB, RAM=2813.49MB
+
+========================================================================
+COMPLETED DATASET: tgbl-wiki
+========================================================================

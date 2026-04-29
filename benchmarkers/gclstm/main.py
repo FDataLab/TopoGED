@@ -72,7 +72,7 @@ def optimize_threshold(model, val_snaps, train_snaps, node_count, device, is_dir
 
     y_scores = torch.cat(all_probs).cpu().numpy()
     y_true = torch.cat(all_targets).cpu().numpy()
-    thresholds = np.linspace(0.01, 0.99, 50)
+    thresholds = np.linspace(0.05, 0.99, 95)
     best_f1, best_threshold = 0, 0.01
     
     for t in thresholds:
@@ -80,84 +80,163 @@ def optimize_threshold(model, val_snaps, train_snaps, node_count, device, is_dir
         score = f1_score(y_true, preds, zero_division=0)
         if score > best_f1: 
             best_f1, best_threshold = score, t
-            
+    pos_scores = y_scores[y_true == 1]
+    neg_scores = y_scores[y_true == 0]
+
+    print(f"--- Probability Distribution Check ---")
+    print(f"Positives | Mean: {pos_scores.mean():.6f} | Std: {pos_scores.std():.6f} | Max: {pos_scores.max():.6f} | Min: {pos_scores.min():.6f}")
+    print(f"Negatives | Mean: {neg_scores.mean():.6f} | Std: {neg_scores.std():.6f} | Max: {neg_scores.max():.6f} | Min: {neg_scores.min():.6f}")
+    
     print(f"Optimal Threshold: {best_threshold:.2f} | Sampled Val F1: {best_f1:.4f}")
     return best_threshold
 
+
 @torch.no_grad()
 def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count, device, dataset, file_path, is_directed=True, window_size=10, threshold=0.5):
-    from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
+    import scipy.sparse as sp
+    import gc
+    import pickle
+    import os
+    import numpy as np
+    import torch
+    import networkx as nx
+
     model.eval()
+    
+    # 1. Load Ground Truth for Metrics and Dynamic Capping
+    from GraphGeneration.scripts.load_data import load_data
+    _, _, _, target_graphs = load_data(
+        dataset, '', '', '', 'all', 
+        use_predicted=False, num_buckets=10, use_test_style=None
+    )
+    test_start_idx = len(target_graphs_flat) - len(current_snaps)
+    # Flatten buckets: target_graphs_flat[i] is the ground truth for snapshot i
+    target_graphs_flat = [bucket[-1] for bucket in target_graphs]
+    num_edges_in_targets = [g.number_of_edges() for g in target_graphs_flat]
+
     history = previous_snaps[-window_size:] if previous_snaps else []
     full_sequence = history + current_snaps
-    all_embeddings = []
     
+    predicted_networks = []
+    
+    # Alignment note: Loop starts at window_size, which corresponds to the first 
+    # test snapshot. This should align with the index in target_graphs_flat.
+    print(f"--- Starting GC-LSTM Sparse Construction (5x Dynamic Cap) ---")
+    
+    # We map 'i' directly to the snapshot index in the original sequence
     for i in range(window_size, len(full_sequence)):
+        global_idx = test_start_idx + (i - window_size)
         h, c = None, None 
+        # RNN Warm up
         for j in range(i - window_size, i - 1):
             snap = full_sequence[j].to(device)
             x = snap.x.to_dense() if snap.x.is_sparse else snap.x
             _, h, c = model(x, snap.edge_index, h, c)
         
+        # Get embeddings for target snapshot
         prev_snap = full_sequence[i - 1].to(device)
         x_prev = prev_snap.x.to_dense() if prev_snap.x.is_sparse else prev_snap.x
         z, _, _ = model(x_prev, prev_snap.edge_index, h, c)
-        all_embeddings.append(z)
 
-    try:
-        top_k_values = get_topk(dataset, use_true=False)
-        test_top_k = top_k_values[-len(current_snaps):]
-        strategies = [True, False]
-    except:
-        strategies = [False]
+        # CHUNKED CANDIDATE COLLECTION
+        all_rows, all_cols, all_scores = [], [], []
+        chunk_size = 512
 
-    for using_topk in strategies:
-        predicted_networks = []
-        for t, z in enumerate(all_embeddings):
-            # CHUNKED RECONSTRUCTION to prevent N x N allocation crash
-            adj_matrix = np.zeros((node_count, node_count), dtype=np.int8)
-            chunk_size = 512
+        for row_start in range(0, node_count, chunk_size):
+            row_end = min(row_start + chunk_size, node_count)
+            logits_chunk = torch.mm(z[row_start:row_end], z.t())
+            probs_chunk = torch.sigmoid(logits_chunk)
             
-            if using_topk:
-                k = int(test_top_k[t])
-                all_vals, all_inds = [], []
+            # Zero out self-loops
+            diag_idx = torch.arange(row_start, row_end, device=device)
+            probs_chunk[torch.arange(row_end - row_start), diag_idx] = 0
+            
+            mask = probs_chunk >= threshold
+            rows, cols = torch.where(mask)
+            scores = probs_chunk[mask]
+            
+            all_rows.append((rows + row_start).cpu())
+            all_cols.append(cols.cpu())
+            all_scores.append(scores.cpu())
+            del logits_chunk, probs_chunk, mask
 
-            for i in range(0, node_count, chunk_size):
-                end_i = min(i + chunk_size, node_count)
-                logits_chunk = torch.mm(z[i:end_i], z.t())
-                probs_chunk = torch.sigmoid(logits_chunk)
-                
-                # Zero out self-loops
-                diag_idx = torch.arange(i, end_i, device=device)
-                probs_chunk[torch.arange(end_i - i), diag_idx] = 0
-                
-                if using_topk:
-                    ck = min(k, probs_chunk.numel())
-                    v, l = torch.topk(probs_chunk.view(-1), ck)
-                    all_vals.append(v)
-                    all_inds.append(l + (i * node_count))
-                else:
-                    mask = (probs_chunk > threshold).cpu().numpy()
-                    adj_matrix[i:end_i] = mask.astype(np.int8)
+        # CONSOLIDATE CANDIDATES
+        final_rows_tensor = torch.cat(all_rows)
+        final_cols_tensor = torch.cat(all_cols)
+        final_scores_tensor = torch.cat(all_scores)
+        num_threshold_passed = final_scores_tensor.numel()
 
-            if using_topk:
-                top_v = torch.cat(all_vals)
-                top_i = torch.cat(all_inds)
-                _, global_locs = torch.topk(top_v, min(k, top_v.numel()))
-                final_inds = top_i[global_locs]
-                rows = (final_inds // node_count).cpu().numpy()
-                cols = (final_inds % node_count).cpu().numpy()
-                adj_matrix[rows, cols] = 1
+        # 2. DYNAMIC CAPPING LOGIC (5x edges of T-1)
+        max_num_edges = num_edges_in_targets[global_idx - 1] * 5
+        
+        # Capture raw/uncapped arrays BEFORE capping
+        raw_rows = final_rows_tensor.numpy().copy()
+        raw_cols = final_cols_tensor.numpy().copy()
+        
+        if num_threshold_passed > max_num_edges:
+            _, top_k_idx = torch.topk(final_scores_tensor, max_num_edges)
+            final_rows = final_rows_tensor[top_k_idx].numpy().copy()
+            final_cols = final_cols_tensor[top_k_idx].numpy().copy()
+            status = "CAPPED"
+        else:
+            final_rows = raw_rows
+            final_cols = raw_cols
+            status = "ACCEPTED"
 
-            if not is_directed: adj_matrix = np.maximum(adj_matrix, adj_matrix.T)
-            predicted_networks.append(nx.from_numpy_array(adj_matrix, create_using=(nx.DiGraph() if is_directed else nx.Graph())))
+        # 3. PREPARE GROUND TRUTH
+        true_graph = target_graphs_flat[global_idx].copy()
+        true_graph.add_nodes_from(range(node_count))
+        
+        true_adj_sp = nx.to_scipy_sparse_array(true_graph, nodelist=range(node_count), format='csr')
+        num_true_edges = true_adj_sp.nnz
 
-        strategy = 'topk' if using_topk else 'threshold'
-        save_path = f"data/output/predicted/GCLSTM/{file_path}_{strategy}.pkl"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, 'wb') as f:
-            pickle.dump({'graphs': predicted_networks, 'node_count': node_count}, f)
-        print(f"Saved GC-LSTM graphs ({strategy}) to {save_path}")
+        # --- HELPER FUNCTION FOR METRICS ---
+        def get_metrics(pred_rows, pred_cols, N):
+            if len(pred_rows) > 0:
+                matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                tp = np.sum(matched > 0)
+                fp = len(pred_rows) - tp
+                fn = num_true_edges - tp
+                tn = (N * (N - 1)) - (tp + fp + fn)
+                return tp, fp, tn, fn
+            else:
+                return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+        
+        # Calculate both sets of metrics
+        tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, node_count)
+        tp_cap, fp_cap, tn_cap, fn_cap = get_metrics(final_rows, final_cols, node_count)
+
+        # 4. BUILD FINAL SPARSE MATRIX (We still only save the capped version)
+        adj_final = sp.csr_matrix(
+            (np.ones(len(final_rows), dtype=np.int8), (final_rows, final_cols)),
+            shape=(node_count, node_count)
+        )
+
+        # 5. PRINT DUAL METRICS
+        print(f"\nSnap {global_idx} | {status} | True Edges: {num_true_edges} | Cap Limit: {max_num_edges}")
+        print(f"  [UNCAPPED] Pred: {len(raw_rows):<7} | TP: {tp_raw:<5} | FP: {fp_raw:<7} | TN: {tn_raw:<7} | FN: {fn_raw:<5}")
+        print(f"  [CAPPED]   Pred: {adj_final.nnz:<7} | TP: {tp_cap:<5} | FP: {fp_cap:<7} | TN: {tn_cap:<7} | FN: {fn_cap:<5}")
+
+        if not is_directed:
+            adj_final = adj_final + adj_final.T
+            adj_final.data[:] = 1
+
+        predicted_networks.append(adj_final)
+        
+        # Cleanup
+        del z, all_rows, all_cols, all_scores, final_rows_tensor, final_cols_tensor, final_scores_tensor
+        gc.collect()
+
+    # 6. Save Logic
+    base_name = file_path.replace("_threshold", "")
+    save_path = f"data/output/predicted/GCLSTM/{base_name}_threshold_5xCap.pkl"
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    with open(save_path, 'wb') as f:
+        pickle.dump({'graphs': predicted_networks, 'node_count': node_count}, f)
+    
+    print(f"Saved sparse graphs to {save_path}")
+    return predicted_networks
 
 
 def train_model(dataset_snaps, node_count, node_features, dataset, beta, hidden_dim, K, lr, is_directed=True, device='cuda'):
@@ -228,7 +307,10 @@ def train_model(dataset_snaps, node_count, node_features, dataset, beta, hidden_
             no_improve = 0
         else:
             no_improve += 1
-        if no_improve >= patience: break
+            
+        if no_improve >= patience:
+            print(f"Early stopping triggered at epoch {epoch}. Best training loss: {best_loss:.6f}")
+            break
 
     t1, g1, r1 = time.time() - start_train, get_gpu_memory(device), get_ram_usage()
 

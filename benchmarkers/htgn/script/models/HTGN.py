@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
 from torch_geometric.nn.inits import glorot, kaiming_uniform
-from script.hgcn.layers.hyplayers import HGCNConv, HypGRU, HGATConv
-from script.hgcn.manifolds import PoincareBall
-from script.models.BaseModel import BaseModel
+from benchmarkers.htgn.script.hgcn.layers.hyplayers import HGCNConv, HypGRU, HGATConv
+from benchmarkers.htgn.script.hgcn.manifolds import PoincareBall
+from benchmarkers.htgn.script.models.BaseModel import BaseModel
 
 
 class HTGN(BaseModel):

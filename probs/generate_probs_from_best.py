@@ -82,7 +82,6 @@ class ProbabilityWrapper(nn.Module):
         group2 = torch.softmax(logits[:, 2:], dim=1)
 
         return torch.cat([group1, group2], dim=1)
-
 def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_1, hidden_2, lr_val, l2_val, batch_size, combo, counter, seed):
     # 1. Setup
     my_loader = Loader()
@@ -118,7 +117,7 @@ def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_
     X_val = embeddings[val_start:val_end]
     X_test = embeddings[test_start:]
 
-    # Dataset provides (x, y_delta, x_last). We reconstruct P(t+1) = x_last + y_delta
+    # Dataset provides (x, y_delta, x_last).
     train_dataset = DeltaEmbeddingDataset(X_train, k=window_size)
     valid_dataset = DeltaEmbeddingDataset(X_val, k=window_size)
     test_dataset = DeltaEmbeddingDataset(X_test, k=window_size)
@@ -128,13 +127,12 @@ def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
                                     
             
-    # 4. Model Setup (Base Decoder + Probability Constraint Wrapper)
-    base_decoder = Decoder(
+    # 4. Model Setup (Base Decoder ONLY - removed ProbabilityWrapper so it can predict negative deltas)
+    model = Decoder(
         in_channels=input_dim, out_channels=output_dim, hids_size_rnn=[hidden_1], 
         hids_size_other=[hidden_2], num_layers=[num_layer], layers=combo, 
         bias=[True], dropout=[dropout]
-    )
-    model = ProbabilityWrapper(base_decoder).to(device)
+    ).to(device)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=lr_val, weight_decay=l2_val)
     criterion = nn.MSELoss().to(device)
@@ -148,14 +146,14 @@ def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_
         model.train()
         epoch_loss = 0
         for i, (x, y_delta, x_last) in enumerate(train_loader):
-            x, y_delta, x_last = x.to(device), y_delta.to(device), x_last.to(device)
+            x, y_delta = x.to(device), y_delta.to(device)
             optimizer.zero_grad()
             
-            # Ground Truth Target: Actual P(t+1) state
-            y_target = x_last + y_delta 
-            predicted_probs = model(x) 
+            # Predict the pure delta
+            predicted_delta = model(x)[:, -1, :].squeeze(1) 
             
-            loss = criterion(predicted_probs, y_target)
+            # Train strictly on the delta difference
+            loss = criterion(predicted_delta, y_delta.float())
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()
@@ -165,10 +163,11 @@ def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_
         valid_loss = 0
         with torch.no_grad():
             for i, (x, y_delta, x_last) in enumerate(valid_loader):
-                x, y_delta, x_last = x.to(device), y_delta.to(device), x_last.to(device)
-                y_target = (x_last + y_delta).float()
-                predicted_probs = model(x)
-                valid_loss += criterion(predicted_probs, y_target).item()
+                x, y_delta = x.to(device), y_delta.to(device)
+                
+                # Validate strictly on the delta
+                predicted_delta = model(x)[:, -1, :].squeeze(1)
+                valid_loss += criterion(predicted_delta, y_delta.float()).item()
         
         valid_loss /= len(valid_loader)
 
@@ -184,7 +183,6 @@ def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_
                 temp_vectors.append(embeddings[k])
             
             # Inference on full data: Use window size 1 context to predict next step
-            # We use embeddings (input data) to generate the full predicted TopER sequence
             full_inference_dataset = DeltaEmbeddingDataset(embeddings, k=window_size)
             inf_loader = DataLoader(full_inference_dataset, batch_size=1, shuffle=False)
             
@@ -192,25 +190,16 @@ def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_
             with torch.no_grad():
                 for x_inf, _, x_last in inf_loader:
                     x_inf = x_inf.to(device)
-                    x_last = x_last.to(device) # The state at time t
+                    x_last = x_last.to(device) # The true state at time t
                     
-                    # The model outputs the absolute probabilities for t+1
-                    # because of the ProbabilityWrapper softmax groups
-                    p_pred_abs = model(x_inf) 
+                    # 1. Model predicts the delta (can be negative or positive)
+                    predicted_delta = model(x_inf)[:, -1, :].squeeze(1) 
                     
-                    # To treat it as a delta: 
-                    # Delta = Predicted_Absolute - Last_Known_Absolute
-                    delta = p_pred_abs - x_last
+                    # 2. Reconstruct absolute probability (Yesterday + Delta)
+                    raw_absolute_prob = (x_last + predicted_delta).cpu().numpy()[0]
                     
-                    # Re-adding them (Result = x_last + delta)
-                    # This effectively uses the model's prediction while 
-                    # maintaining the mathematical flow you requested.
-                    final_vector = (x_last + delta).cpu().numpy()[0]
-                    
-                    # 3. Final grouping check (Optional safety)
-                    # Even though ProbabilityWrapper does this, doing it here
-                    # ensures the saved PKL is 100% clean
-                    final_vector = my_utils.normalize_vector_by_groups(final_vector)
+                    # 3. Clean it up so it strictly follows probability rules
+                    final_vector = my_utils.normalize_vector_by_groups(raw_absolute_prob)
                     
                     temp_vectors.append(final_vector)
             
@@ -237,6 +226,26 @@ def train_and_eval_probs(dataset, window_size, norm, num_layer, dropout, hidden_
     pickle_path = os.path.join(pickle_dir, f"{dataset}_probs_all_back.pkl")
     with open(pickle_path, 'wb') as f:
         pickle.dump(best_vectors, f)
+        
+    # For each applicable. Print the percent difference and the MSE for the columns
+    total_days = len(pred_df)
+    train_split_idx = int(0.70 * total_days)
+    val_split_idx = int(0.85 * total_days)
+    
+    # 2. Skip the ground-truth warmup window so we only evaluate REAL predictions
+    train_start_idx = window_size
+
+    # --- MSE CALCULATION ---
+    train_mse = ((pred_df.iloc[train_start_idx:train_split_idx].values - real_df.iloc[train_start_idx:train_split_idx].values)**2).mean()
+    val_mse   = ((pred_df.iloc[train_split_idx:val_split_idx].values - real_df.iloc[train_split_idx:val_split_idx].values)**2).mean()
+    test_mse  = ((pred_df.iloc[val_split_idx:total_days].values - real_df.iloc[val_split_idx:total_days].values)**2).mean()
+
+    # 3. Populate your results DataFrame
+    res_df = pd.DataFrame({
+        "MSE": [train_mse, val_mse, test_mse]
+    }, index=["Train", "Validation", "Test"])
+
+    print(res_df)
     
     
 

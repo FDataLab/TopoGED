@@ -187,7 +187,7 @@ def generate_tgcn_node_features(target_graphs, embedding_dim, feature_type='bina
         return torch.zeros((num_nodes, embedding_dim), device=device)
     
     
-def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_graphs, days_back, embedding_dim, curr_nodes, device='cpu', max_id=None):
+def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_graphs, days_back, embedding_dim, curr_nodes, thresholds=None, new_node_strategy='zeros', device='cpu', max_id=None):
     # For the last days_back graphs, compute embeddings
     history = prev_graphs[-days_back:] if len(prev_graphs) >= days_back else prev_graphs
     if curr_nodes is None or len(curr_nodes) == 0:
@@ -234,6 +234,62 @@ def generate_gnn_node_embeddings(embedder, feature_type, input_features, prev_gr
 
         for nid, emb in all_embeddings.items():
             emb_matrix[nid] = emb
+            
+        new_nodes_indices = [n for n in curr_nodes if n not in all_embeddings]
+        
+        if new_nodes_indices:
+            new_nodes_tensor = torch.tensor(new_nodes_indices, dtype=torch.long, device=device)
+            if new_node_strategy == 'zeros':
+                pass # Already initialized to zero
+            
+
+            elif new_node_strategy == 'random':
+                # Small guassian noise
+                noise = torch.randn(len(new_nodes_indices), embedding_dim, device=device) * 0.1
+                emb_matrix[new_nodes_tensor] = noise
+                
+
+            elif new_node_strategy == 'degree_average':
+                last_graph = history[-1][-1] if history else None
+                
+                bucket_embeddings = defaultdict(list)
+                
+                if last_graph:
+                    # Collect embeddings by degree bucket
+                    for nid in last_graph.nodes():
+                        if nid in all_embeddings:
+                            deg = last_graph.degree(nid)
+                            # Find bucket
+                            bucket = 0
+                            for t in thresholds:
+                                if deg <= t:
+                                    bucket = t
+                                    break
+                            if bucket == 0: bucket = float('inf') # > max threshold
+                            
+                            bucket_embeddings[bucket].append(all_embeddings[nid])
+                
+                # Compute means
+                bucket_means = {}
+                global_mean = torch.zeros(embedding_dim, device=device)
+                count = 0
+                
+                for bucket, embs in bucket_embeddings.items():
+                    if embs:
+                        stacked = torch.stack(embs)
+                        mean = torch.mean(stacked, dim=0)
+                        bucket_means[bucket] = mean
+                        global_mean += torch.sum(stacked, dim=0)
+                        count += len(embs)
+                
+                if count > 0: global_mean /= count
+
+                
+                lowest_bucket = thresholds[0] if thresholds else 0
+                
+                # If we have a mean for small nodes, use it. Else global mean. Else random.
+                fallback_emb = bucket_means.get(lowest_bucket, global_mean)
+                emb_matrix[new_nodes_tensor] = fallback_emb
         
         return emb_matrix
     

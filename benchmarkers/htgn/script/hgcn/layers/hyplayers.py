@@ -9,7 +9,7 @@ from torch_scatter import scatter, scatter_add
 from torch_geometric.nn.conv import MessagePassing, GATConv
 from torch.nn.parameter import Parameter
 from torch_geometric.nn.inits import glorot, zeros
-from script.hgcn.manifolds import PoincareBall
+from benchmarkers.htgn.script.hgcn.manifolds import PoincareBall
 import itertools
 
 

@@ -118,23 +118,47 @@ class RolandRunner:
 
         y_scores = torch.cat(all_y_scores)
         y_true = torch.cat(all_y_true)
-        thresholds = torch.linspace(0.01, 0.99, 50)
+        scores_np = y_scores.detach().numpy()
+        true_np = y_true.detach().numpy()
+        
+        pos_scores = scores_np[true_np == 1]
+        neg_scores = scores_np[true_np == 0]
+
+        print(f"--- Probability Distribution Check ---")
+        print(f"Positives | Mean: {pos_scores.mean():.6f} | Std: {pos_scores.std():.6f} | Max: {pos_scores.max():.6f} | Min: {pos_scores.min():.6f}")
+        print(f"Negatives | Mean: {neg_scores.mean():.6f} | Std: {neg_scores.std():.6f} | Max: {neg_scores.max():.6f} | Min: {neg_scores.min():.6f}")
+        # -------------------------------------------------
+
+        thresholds = np.unique(np.percentile(y_scores, np.linspace(0, 100, 100)))
         best_f1, best_tau = 0, 0.5
         for tau in thresholds:
             preds = (y_scores > tau).float()
             tp, fp, fn = (preds * y_true).sum(), (preds * (1 - y_true)).sum(), ((1 - preds) * y_true).sum()
             f1 = 2 * tp / (2 * tp + fp + fn + 1e-6)
             if f1 > best_f1: best_f1, best_tau = f1.item(), tau.item()
+        
+        print(f"--- Probability Distribution Check ---")
+        print(f"Positives | Mean: {pos_scores.mean():.6f} | Std: {pos_scores.std():.6f} | Max: {pos_scores.max():.6f} | Min: {pos_scores.min():.6f}")
+        print(f"Negatives | Mean: {neg_scores.mean():.6f} | Std: {neg_scores.std():.6f} | Max: {neg_scores.max():.6f} | Min: {neg_scores.min():.6f}")
+                
+        print(f"Optimal Threshold: {best_tau:.2f} | Sampled Val F1: {best_f1:.4f}")
         return best_tau
 
     def run(self):
+        import torch
         from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
         start_train = time.time()
         if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(self.device)
-        best_train_loss = float('inf'); patience = 15; no_improve = 0
         
+        best_train_loss = float('inf')
+        patience = 15
+        no_improve = 0
+        self.best_model = None # This will hold the state_dict for restoration
+
+        print(f"--- Training ROLAND ({self.args.dataset}) | Persistence: {patience} ---")
         for epoch in range(1, 201):
-            self.model.train(); epoch_loss = 0
+            self.model.train()
+            epoch_loss = 0
             all_preds, all_targets = [], []
             states = self.model.init_states(self.node_count, self.device)
             
@@ -155,81 +179,191 @@ class RolandRunner:
                     
                     labels = torch.cat([torch.ones_like(pos_score), torch.zeros_like(neg_score)])
                     preds = torch.cat([pos_score, neg_score])
-                    loss = self.criterion(preds, labels); loss.backward(); self.optimizer.step()
+                    loss = self.criterion(preds, labels)
+                    loss.backward()
+                    self.optimizer.step()
                     epoch_loss += loss.item()
 
                 if epoch % 10 == 0 or epoch == 1:
-                    all_preds.append(preds.detach().sigmoid().cpu()); all_targets.append(labels.cpu())
+                    all_preds.append(preds.detach().sigmoid().cpu())
+                    all_targets.append(labels.cpu())
                 states = [s.detach() for s in new_states]
             
             avg_loss = epoch_loss / ((self.train_end - 1) * self.args.num_updates_per_snapshot)
+            
+            # --- EARLY STOPPING LOGIC ---
+            if avg_loss < best_train_loss:
+                best_train_loss = avg_loss
+                # Save the absolute best weights found so far
+                self.best_model = copy.deepcopy(self.model.state_dict())
+                no_improve = 0
+            else:
+                no_improve += 1
+
             if epoch % 10 == 0 or epoch == 1:
                 train_auc = roc_auc_score(torch.cat(all_targets), torch.cat(all_preds))
                 print(f"Epoch {epoch:03d} | Loss: {avg_loss:.6f} | Train AUC: {train_auc:.4f}")
 
-            if avg_loss < best_train_loss:
-                best_train_loss = avg_loss; self.best_model = copy.deepcopy(self.model); no_improve = 0
-            else: no_improve += 1
-            if no_improve >= patience: break
+            # Check patience
+            if no_improve >= patience:
+                print(f"Early stopping triggered at epoch {epoch}. Best Loss: {best_train_loss:.6f}")
+                break
+
+        if self.best_model is not None:
+            self.model.load_state_dict(self.best_model)
 
         t1, g1, r1 = time.time() - start_train, get_gpu_memory(self.device), get_ram_usage()
-        # torch.cuda.reset_peak_memory_stats(self.device)
+        torch.cuda.reset_peak_memory_stats(self.device)
 
         start_opt = time.time()
         best_tau = self.optimize_threshold()
         t2, g2, r2 = time.time() - start_opt, get_gpu_memory(self.device), get_ram_usage()
-        # torch.cuda.reset_peak_memory_stats(self.device)
+        torch.cuda.reset_peak_memory_stats(self.device)
+        
         
         start_cons = time.time()
-        all_test_probs = []
+        import scipy.sparse as sp
+        import gc
+        import pickle
+        import os
+        import torch
+        import numpy as np
+        import networkx as nx
+
+        self.model.eval()
+        # 1. Load Ground Truth for Metrics and Dynamic Capping
+        from GraphGeneration.scripts.load_data import load_data
+        _, _, _, target_graphs = load_data(
+            self.args.dataset, '', '', '', 'all', 
+            use_predicted=False, num_buckets=10, use_test_style=None
+        )
+        
+        # Flatten buckets: target_graphs_flat[t] is the ground truth for snapshot t
+        target_graphs_flat = [bucket[-1] for bucket in target_graphs]
+        num_edges_in_targets = [g.number_of_edges() for g in target_graphs_flat]
+
+        predicted_networks = []
+
         with torch.no_grad():
+            # Warm up hidden states
             states = self.model.init_states(self.node_count, self.device)
-            for t in range(self.val_end - 1): # Re-bridge to start of test
+            for t in range(self.val_end - 1):
                 x, edge_index, edge_attr = self.get_snapshot(t)
                 states = self.model(x, edge_index, edge_attr, states)
             
+            print(f"--- Starting ROLAND Sparse Construction (5x Dynamic Cap) ---")
+            # 2. Process test snapshots sequentially
+            # t here is the snapshot index in the sequence
             for t in range(self.val_end - 1, len(self.snapshots) - 1):
                 x, edge_index, edge_attr = self.get_snapshot(t)
                 states = self.model(x, edge_index, edge_attr, states)
-                probs = self.get_probs_chunked(states[-1]).numpy() # Chunked to avoid OOM
-                if not self.is_directed: probs = (probs + probs.T) / 2.0
-                np.fill_diagonal(probs, 0); all_test_probs.append(probs)
-
-        try:
-            top_k_values = get_topk(self.dataset_name, use_true=False)
-            test_top_k = top_k_values[-(len(self.snapshots) - self.val_end):]
-            strategies = [True, False]
-        except Exception as e:
-            print(f"Top-K fetch failed, using threshold only. Error: {e}")
-            strategies = [False]
-
-        for using_topk in strategies:
-            predicted_networks = []
-            for t, probs in enumerate(all_test_probs):
-                if using_topk:
-                    k = int(test_top_k[t])
-                    adj = np.zeros_like(probs, dtype=int)
-                    if k > 0:
-                        flat = np.argsort(probs, axis=None)[-k:]
-                        r, c = np.unravel_index(flat, probs.shape)
-                        adj[r, c] = 1
-                else:
-                    adj = (probs > best_tau).astype(int)
                 
-                if not self.is_directed: adj = np.maximum(adj, adj.T)
-                predicted_networks.append(nx.from_numpy_array(adj, create_using=(nx.DiGraph() if self.is_directed else nx.Graph())))
-            
-            strategy_str = 'topk' if using_topk else 'threshold'
-            file_params = f"{self.dataset_name}_{self.args.hidden_dim}_{self.args.lr}_{self.args.num_layers}_{self.args.num_updates_per_snapshot}_{'directed' if self.is_directed else 'undirected'}"
-            save_path = f"data/output/predicted/ROLAND/{file_params}_{strategy_str}.pkl"
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            with open(save_path, 'wb') as f:
-                pickle.dump({'graphs': predicted_networks, 'node_count': self.node_count}, f)
-            print(f"Saved ROLAND graphs ({strategy_str}) to {save_path}")
-            
-        t3, g3, r3 = time.time() - start_cons, get_gpu_memory(self.device), get_ram_usage()
-        print(f"\n--- DATASET: {self.dataset_name} (ROLAND) METRICS ---\nTRAIN: {t1:.2f}s, {g1:.2f}MB\nTHRESH: {t2:.2f}s, {g2:.2f}MB\nCONST: {t3:.2f}s, {g3:.2f}MB\n")
+                # Retrieve scores
+                probs = self.get_probs_chunked(states[-1]) 
+                if isinstance(probs, np.ndarray):
+                    probs = torch.from_numpy(probs).to(self.device)
 
+                # Standardized Block Start
+                # ---------------------------------------------------------
+                # A. Mask diagonal
+                n = probs.shape[0]
+                probs.view(-1)[::n+1] = 0
+
+                if not self.is_directed:
+                    probs = (probs + probs.t()) / 2.0
+                
+                # B. Prepare Ground Truth (Sparse comparison)
+                # We compare current prediction (t) against target at t
+                true_graph = target_graphs_flat[t].copy()
+                true_graph.add_nodes_from(range(self.node_count))
+                
+                true_adj_sp = nx.to_scipy_sparse_array(true_graph, nodelist=range(self.node_count), format='csr')
+                num_true_edges = true_adj_sp.nnz
+
+                # C. Raw Threshold Pass
+                mask_raw = probs >= best_tau
+                indices_raw = torch.where(mask_raw)
+                
+                # Capture raw arrays BEFORE capping
+                raw_rows = indices_raw[0].cpu().numpy()
+                raw_cols = indices_raw[1].cpu().numpy()
+                num_raw = len(raw_rows)
+                
+                # D. Dynamic Capping (5x edges of T-1)
+                max_num_edges = max(num_edges_in_targets[t - 1] * 5, 1000)
+                
+                if num_raw > max_num_edges:
+                    scores_raw = probs[mask_raw]
+                    _, top_k_idx = torch.topk(scores_raw, max_num_edges)
+                    final_rows = indices_raw[0][top_k_idx].cpu().numpy()
+                    final_cols = indices_raw[1][top_k_idx].cpu().numpy()
+                    status = "CAPPED"
+                else:
+                    final_rows = raw_rows
+                    final_cols = raw_cols
+                    status = "ACCEPTED"
+
+                # --- HELPER FUNCTION FOR METRICS ---
+                def get_metrics(pred_rows, pred_cols, N):
+                    if len(pred_rows) > 0:
+                        matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                        tp = np.sum(matched > 0)
+                        fp = len(pred_rows) - tp
+                        fn = num_true_edges - tp
+                        tn = (N * (N - 1)) - (tp + fp + fn)
+                        return tp, fp, tn, fn
+                    else:
+                        return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+
+                # Calculate both sets of metrics
+                tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, self.node_count)
+                tp_cap, fp_cap, tn_cap, fn_cap = get_metrics(final_rows, final_cols, self.node_count)
+
+                # E. Build Final Sparse Matrix (Only save capped version)
+                adj_final = sp.csr_matrix(
+                    (np.ones(len(final_rows), dtype=np.int8), (final_rows, final_cols)),
+                    shape=(n, n)
+                )
+
+                # F. Print Snapshot Summary
+                print(f"\nSnap {t} | {status} | True Edges: {num_true_edges} | Cap Limit: {max_num_edges}")
+                print(f"  [UNCAPPED] Pred: {len(raw_rows):<7} | TP: {tp_raw:<5} | FP: {fp_raw:<7} | TN: {tn_raw:<7} | FN: {fn_raw:<5}")
+                print(f"  [CAPPED]   Pred: {adj_final.nnz:<7} | TP: {tp_cap:<5} | FP: {fp_cap:<7} | TN: {tn_cap:<7} | FN: {fn_cap:<5}")
+                
+                # Cleanup huge tensors
+                del probs, mask_raw, indices_raw, raw_rows, raw_cols, final_rows, final_cols
+                if 'scores_raw' in locals(): del scores_raw
+                # ---------------------------------------------------------
+
+                if not self.is_directed:
+                    adj_final = adj_final + adj_final.T
+                    adj_final.data[:] = 1
+
+                predicted_networks.append(adj_final)
+                gc.collect()
+
+        # 3. Save Logic
+        strategy_str = 'threshold_5xCap'
+        file_params = (
+            f"{self.dataset_name}_{self.args.hidden_dim}_{self.args.lr}_"
+            f"{self.args.num_layers}_{self.args.num_updates_per_snapshot}_"
+            f"{'directed' if self.is_directed else 'undirected'}"
+        )
+        
+        save_path = f"data/output/predicted/ROLAND/{file_params}_{strategy_str}.pkl"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        with open(save_path, 'wb') as f:
+            pickle.dump({'graphs': predicted_networks, 'node_count': self.node_count}, f)
+            
+        print(f"Saved 5x-Capped ROLAND sparse graphs to {save_path}")
+
+        t3, g3, r3 = time.time() - start_cons, get_gpu_memory(self.device), get_ram_usage()
+        print(f"\n--- DATASET: {self.dataset_name} (ROLAND) METRICS ---")
+        print(f"TRAIN:  Time={t1:.2f}s, GPU={g1:.2f}MB, RAM={r1:.2f}MB")
+        print(f"THRESH: Time={t2:.2f}s, GPU={g2:.2f}MB, RAM={r2:.2f}MB")
+        print(f"CONST:  Time={t3:.2f}s, GPU={g3:.2f}MB, RAM={r3:.2f}MB\n")
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True); parser.add_argument("--undirected", action="store_true")

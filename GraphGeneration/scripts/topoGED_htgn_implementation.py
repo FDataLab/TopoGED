@@ -1,4 +1,5 @@
 import math
+import time
 import numpy as np 
 import networkx as nx
 import random
@@ -12,6 +13,8 @@ import os
 import sys
 import yaml
 import pickle 
+from torchmetrics.functional import auroc
+
 #import line_profiler
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
@@ -44,6 +47,7 @@ from sklearn.exceptions import UndefinedMetricWarning
 
 # Suppress only the specific AUC warning
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
+
 
 # Set up device
 try:
@@ -94,28 +98,13 @@ import geoopt
 
 class Runner(object):
     def __init__(self):      
+        self.config = encoder_config
         self.seed = encoder_config["seed"]
         self.use_ma = encoder_config["use_moving_average"]  # Whether to use moving average for node2vec embeddings or not
         self.model_type = encoder_config["encoder_model"]["nodeEmbeddingType"]
         self.feature_type = encoder_config["encoder_model"]["other_models"]["feature_type"]  # Will be useful later
-        self.predict_nodes = False  # Change to use encoder_config if it works
-        
-        if self.predict_nodes:
-            self.node_predictor_path = 'GraphGeneration/output/results/old_node_optimization/best_GATmlp_model.pt'
-            # Need to load variables from a path
-            input_dim = 64
-            output_dim = 1
-            hidden_2 = 128
-            num_layer = 3 
-            combo = ['MLP']
-            dropout = 0
-            self.node_predictor = SimpleMLP(input_dim=64, hidden_dim=hidden_2, output_dim=1, num_layers=num_layer, dropout=0.2)
-            self.node_predictor.load_state_dict(torch.load(self.node_predictor_path, map_location=device))            
-            self.node_predictor.to(device)
-            self.node_predictor.eval()
         
         # Set up Evaluator
-        self.evaluator = Evaluator()
         self.visualizer = Visualizer()
         self.device = device
         
@@ -132,15 +121,14 @@ class Runner(object):
             
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
-        self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data_htgn_lr{encoder_config["training"]["lr"]}_{days_back_val}back_learnedparams')
+        self.saved_input = os.path.abspath(f'data/input/cached/{encoder_config["dataset"]}/saved_data_htgn_lr{encoder_config["training"]["lr"]}')
         self.saved_samples = os.path.join(self.saved_input, 'saved_samples.pkl')
-        self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_htgn_predictednodes{self.predict_nodes}_{days_back_val}back_learnedparams'
+        self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_htgn'
         self.edge_eval_dir = f'GraphGeneration/output/results/edges_evaluation/{encoder_config["dataset"]}/{self.common_suffix}'
         self.structure_dir = f'GraphGeneration/output/results/structure/{encoder_config["dataset"]}/{self.common_suffix}'
         self.kernel_dir = f'GraphGeneration/output/results/kernel/{encoder_config["dataset"]}/{self.common_suffix}'
         self.topER_dir = f'GraphGeneration/output/results/topER/{encoder_config["dataset"]}/{self.common_suffix}'
-        self.saved_graph_dir = f'data/output/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}'
-        self.training_plots_path = f'GraphGeneration/output/results/training_plots/{encoder_config["dataset"]}/htgn_lr{encoder_config["training"]["lr"]}_predictednodes{self.predict_nodes}_{days_back_val}back_learnedparams'
+        self.training_plots_path = f'GraphGeneration/output/results/training_plots/{encoder_config["dataset"]}/htgn_lr{encoder_config["training"]["lr"]}'
 
         
         save_dir = os.path.join(self.file_visualization_path, encoder_config["dataset"], encoder_config["encoder_model"]["nodeEmbeddingType"])
@@ -150,17 +138,14 @@ class Runner(object):
         self.starting_graph = encoder_config["starting_graph_idx"]
         self.current_target_snapshot = self.starting_graph
         
-        
-        
         # All the edge types
         self.all_edge_types = ['o-o-bank', 'n-n', 'o-n', 'o-o-nobank']
         self.best_validation_model_auc = 0
         
         # Load all the snapshot true data 
         days_back_val = 'all' 
-        print('[INFO] USING ALL BACK FOR PROBABILITIES AS A TEST SINCE IM PRETTY SURE THAT ACTUALLY MAKES MORE SENSE')
         self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
-                                                                                                     encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], days_back_val, encoder_config["use_predicted_vals"])
+                                                                                                     encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], days_back_val, use_predicted=False)  # Doesn't actually matter here since construction doesn't use probabilities or toper
         
         # Modify the graph ids to 1,2,3,...
         self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, 10000)  # Fixed
@@ -219,46 +204,15 @@ class Runner(object):
         self.validation_graphs = [self.target_graphs[i][-1] for i in range(self.train_end, self.val_end)]
         self.test_graphs = [self.target_graphs[i][-1] for i in range(self.val_end, self.num_snapshots)]
 
+        self.starting_graph = self.num_snapshots - len(self.test_graphs)
+
         self.new_node_id = 0  # The ID we will assign new node (incremented as we add nodes)
-
-
-    # ======================= HELPER FUNCTIONS =======================
-    def sample_old_nodes(self, prev_graphs):
-        """
-        Retrieve the old nodes that we want to add to the current graph
-        We use compute_reappearance_probabilities to help figure out what nodes to add back
-        
-        Params:
-            prev_graphs (list): The previous self.days_back graphs that we will take old nodes from
-            
-        Returns:
-            (set(sampled_old_nodes)): The set of nodes that we will now add during construction
-        """
-        random.seed(self.seed)
-        np.random.seed(self.seed)
-        
-        # Sample old nodes
-        #probs = compute_reappearance_probabilities(graphs=prev_graphs, days_back=self.days_back, decay_factor=0.25, alpha=5, beta=5)
-        probs = compute_reappearance_probabilities(graphs=prev_graphs, days_back=self.days_back, decay_factor=encoder_config["sampling"]["decay_factor"], alpha=encoder_config["sampling"]["alpha"], beta=encoder_config["sampling"]["beta"])
-        node_ids = list(probs.keys())
-        weights = list(probs.values())
-
-        # Prevents failing if there are no old nodes
-        if not node_ids:
-            print(f'There are no old nodes to sample from')
-            return set([])
-
-        sampled_old_nodes = list(np.random.choice(node_ids, size=self.current_target_count_old_nodes, replace=False, p=np.array(weights)/np.sum(weights)))  # Makes sure that we select only unique nodes each time
-        
-        return set(sampled_old_nodes)
     
     
     # ======================= TRAIN MODEL =======================
     def create_samples(self, graphs, is_directed=False):
         snapshot_samples = []
-        for i, graph in enumerate(graphs):
-            if i < self.starting_graph: continue
-            
+        for i, graph in enumerate(graphs):            
             nodes = list(graph.nodes())
             edges = set(graph.edges())
             current_snapshot_X, current_snapshot_y = [], []
@@ -307,7 +261,7 @@ class Runner(object):
 
                 u_ids = [s['u_id'] for s in snapshot['X']]
                 v_ids = [s['v_id'] for s in snapshot['X']]
-                y_true = torch.tensor(snapshot['y'], dtype=torch.float32, device=self.device).view(-1)
+                y_true = torch.as_tensor(snapshot['y'], dtype=torch.float32).to(self.device).view(-1)
 
                 z_u = torch.stack([embeddings_dict[u] for u in u_ids])
                 z_v = torch.stack([embeddings_dict[v] for v in v_ids])
@@ -318,8 +272,12 @@ class Runner(object):
                 loss = criterion(probs, y_true)
                 total_loss += loss.item() * len(y_true)
                 total_count += len(y_true)
-                all_preds.append(probs.cpu())
-                all_y.append(y_true.cpu())
+                all_preds.append(probs)
+                all_y.append(y_true)
+            
+            full_y = torch.cat(all_y)
+            full_preds = torch.cat(all_preds)
+            auc = auroc(full_preds, full_y.long(), task="binary").item()
 
         # FIX: Restore hidden state for next training epoch
         self.htgn_model.hiddens = original_hiddens
@@ -329,6 +287,10 @@ class Runner(object):
         return avg_loss, auc
 
     def train_htgn(self, training_snapshots, val_snapshots):
+        os.makedirs(os.path.join(self.saved_input, "saved_models"), exist_ok=True)
+        self.decoder_model_path = os.path.join(self.saved_input, f"saved_models/htgn_decoder_{self.seed}.pt")
+        self.htgn_model_path = os.path.join(self.saved_input, f"saved_models/htgn_encoder_{self.seed}.pt")
+    
         optimizer = geoopt.optim.RiemannianAdam(
             list(self.htgn_model.parameters()) + list(self.link_prediction_decoder.parameters()),
             lr=self.config["training"]["lr"]
@@ -341,6 +303,7 @@ class Runner(object):
         best_state = {"htgn": None, "decoder": None}
 
         for epoch in range(self.config["training"]["epochs"]):
+            print(f"--- Epoch {epoch+1}/{self.config['training']['epochs']} ---")
             self.htgn_model.train()
             self.link_prediction_decoder.train()
             self.htgn_model.init_hiddens()
@@ -358,7 +321,7 @@ class Runner(object):
                     
                     u_ids = [s['u_id'] for s in snapshot['X']]
                     v_ids = [s['v_id'] for s in snapshot['X']]
-                    y_true = torch.tensor(snapshot['y'], dtype=torch.float32, device=self.device).view(-1)
+                    y_true = torch.as_tensor(snapshot['y'], dtype=torch.float32).to(self.device).view(-1)
 
                     z_u = torch.stack([embeddings_dict[u] for u in u_ids])
                     z_v = torch.stack([embeddings_dict[v] for v in v_ids])
@@ -375,7 +338,8 @@ class Runner(object):
                 scaler.update()
 
                 epoch_loss += loss.item()
-                snapshot_aucs.append(roc_auc_score(y_true.cpu().numpy().ravel(), probs.detach().cpu().numpy().ravel()))
+                auc_val = auroc(probs, y_true.long(), task="binary")
+                snapshot_aucs.append(auc_val.item())
 
             avg_val_loss, avg_val_auc = self.run_htgn_validation(val_snapshots)
             train_losses.append(epoch_loss / len(training_snapshots))
@@ -383,7 +347,7 @@ class Runner(object):
             val_losses.append(avg_val_loss)
             val_aucs.append(avg_val_auc)
 
-            print(f"Epoch {epoch:02d} | Train Loss: {train_losses[-1]:.4f} | Val AUC: {avg_val_auc:.4f}")
+            # print(f"Epoch {epoch:02d} | Train Loss: {train_losses[-1]:.4f} | Val AUC: {avg_val_auc:.4f}")
 
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
@@ -392,16 +356,24 @@ class Runner(object):
                     "htgn": {k: v.cpu().clone() for k, v in self.htgn_model.state_dict().items()},
                     "decoder": {k: v.cpu().clone() for k, v in self.link_prediction_decoder.state_dict().items()}
                 }
+                # Optional: Save checkpoint to disk every time we find a new best
+                torch.save(best_state["htgn"], self.htgn_model_path)
+                torch.save(best_state["decoder"], self.decoder_model_path)
             else:
                 counter += 1
-                if counter >= patience: break
+                if counter >= patience: 
+                    print(f"Early stopping triggered at epoch {epoch}")
+                    break
 
+        # Restore best weights to the models in memory
         if best_state["htgn"]:
             self.htgn_model.load_state_dict(best_state["htgn"])
             self.link_prediction_decoder.load_state_dict(best_state["decoder"])
 
         os.makedirs(self.training_plots_path, exist_ok=True)
         self.visualizer.display_loss(train_losses, val_losses, len(train_losses), os.path.join(self.training_plots_path, 'loss.png'))
+        
+        print(f"Final best models saved to:\nEncoder: {self.htgn_model_path}\nDecoder: {self.decoder_model_path}")
         return self.link_prediction_decoder
             
     
@@ -413,130 +385,81 @@ class Runner(object):
             snapshot_samples = self.create_samples([g[-1] for g in self.target_graphs], self.is_directed)
             os.makedirs(os.path.dirname(self.saved_samples), exist_ok=True)
             with open(self.saved_samples, "wb") as f:
-                pickle.dump(snapshot_samples, f)
+                pickle.dump(snapshot_samples, f, protocol=5)
 
         training = snapshot_samples[:self.train_end]
         validation = snapshot_samples[self.train_end:self.val_end]
         test = snapshot_samples[self.val_end:]
         self.train_htgn(training, validation)
-        
-            
-    # ======================= BUILD GRAPH =======================
-    def build_accumulating_filtration_sequence_with_edgebank(self, current_target_snapshot):
-        random.seed(self.seed)
-        np.random.seed(self.seed)
-        
-        # 1. Context Prep
-        edgebank = self.all_edgebanks[current_target_snapshot] 
-        current_target_graph_description = self.graph_descriptions[current_target_snapshot]
-        prev_graphs = [graph[-1] for graph in self.target_graphs[max(current_target_snapshot - self.days_back, 0) : current_target_snapshot]]
-        old_nodes_days = set().union(*[g.nodes() for g in prev_graphs])
-
-        # Target Counts
-        V_total = int(current_target_graph_description[-1][0])
-        E_total = int(current_target_graph_description[-1][1])
-
-        # 2. Node Selection (Prediction of which nodes appear)
-        if self.predict_nodes:
-            # Use the previous hidden states window to find the most likely 'active' old nodes
-            # Note: For HTGN, we use the learnable feat projected to the manifold
-            self.htgn_model.eval()
-            with torch.no_grad():
-                # We use the internal embeddings to rank old nodes
-                # Since x=None uses self.feat, we get global embeddings
-                _, x_hyp = self.htgn_model(
-                    edge_index=torch.zeros((2, 0), dtype=torch.long).to(self.device), # Dummy index
-                    node_id_list=list(old_nodes_days),
-                    node_id_map={n: i for i, n in enumerate(old_nodes_days)},
-                    x=None
-                )
-                # Map back to Euclidean to pass through your node_predictor MLP
-                X_tan = self.htgn_model.toTangentX(x_hyp, self.htgn_model.c[2])
-                probs = self.node_predictor(X_tan).squeeze(-1).sigmoid()
-                topk_probs, topk_indices = torch.topk(probs, self.current_target_count_old_nodes)
-                old_nodes = set([list(old_nodes_days)[i] for i in topk_indices.cpu().tolist()])
-        else:
-            # Add graphs until there are enough nodes
-            available_nodes = set().union(*[g.nodes() for g in prev_graphs])
-            curr_back = self.days_back - 1
-            while(len(available_nodes) < self.current_target_count_old_nodes):
-                prev_graphs.insert(0, (self.target_graphs[curr_back][-1]))
-                available_nodes = set().union(*[g.nodes() for g in prev_graphs])
-                curr_back -= 1
-            old_nodes = self.sample_old_nodes(prev_graphs)
-            
-        # Get the new node id
-        tmp_graphs = [graph[-1] for graph in self.target_graphs[0 : current_target_snapshot]]  # Get the next new node id (the next available number)
-        self.new_node_id = max([node for graphs in tmp_graphs for node in graphs.nodes()]) + 1 
-        new_nodes = np.arange(self.new_node_id, self.new_node_id + self.current_target_count_new_nodes)
-        
-        all_nodes_list = list(old_nodes) + list(new_nodes)
-
-        # 3. HTGN Inference (Generate current hyperbolic coordinates)
+    
+    
+    def predict_next_edges(self, snapshot_idx, threshold=0.5):
+        """
+        Predicts edges for snapshot_idx based on the state of snapshot_idx - 1.
+        """
         self.htgn_model.eval()
+        self.link_prediction_decoder.eval()
+
+        # Get the graph from the previous step to define 'old nodes'
+        prev_graph = self.target_graphs[snapshot_idx - 1][-1]
+        old_nodes = list(prev_graph.nodes())
+        
+        node_id_map = {node_id: idx for idx, node_id in enumerate(old_nodes)}
+        edge_index = torch.tensor(list(prev_graph.edges()), dtype=torch.long).t().contiguous().to(self.device)
+
         with torch.no_grad():
-            # Use a dummy edge_index or the edges from the previous snapshot to 'prime' the HGCN
-            prev_snapshot_edges = torch.tensor(list(prev_graphs[-1].edges()), dtype=torch.long).t().contiguous().to(self.device)
+            # This update ensures the HTGN is aware of the most recent history
+            embeddings_dict, _ = self.htgn_model(edge_index, old_nodes, node_id_map, x=None)
+
+            # --- FIX: Define Z by stacking the embeddings from the dictionary ---
+            # We stack them in the order of 'old_nodes' so the indices match node_id_map
+            Z = torch.stack([embeddings_dict[node_id] for node_id in old_nodes])
+
+            # Candidate pairs: Every combination of existing nodes
+            candidate_u_idx, candidate_v_idx = [], []
+            num_nodes = len(old_nodes)
+            for j in range(num_nodes):
+                for k in range(j + 1, num_nodes):
+                    candidate_u_idx.append(j)
+                    candidate_v_idx.append(k)
+
+            # Direct GPU indexing into the stacked matrix Z
+            u_idx = torch.tensor(candidate_u_idx, device=self.device)
+            v_idx = torch.tensor(candidate_v_idx, device=self.device)
             
-            node_id_map = {node_id: i for i, node_id in enumerate(all_nodes_list)}
-            embeddings_dict, x_hyp = self.htgn_model(
-                edge_index=prev_snapshot_edges, 
-                node_id_list=all_nodes_list, 
-                node_id_map=node_id_map, 
-                x=None
-            )
+            z_u = Z[u_idx]
+            z_v = Z[v_idx]
+
+            # Hyperbolic distance calculation using the HTGN manifold
+            sq_dist = self.htgn_model.manifold.sqdist(z_u, z_v, c=self.htgn_model.c[2])
             
-            # Update the temporal memory window with this inference result
-            self.htgn_model.hiddens.pop(0)
-            self.htgn_model.hiddens.append(x_hyp.detach())
+            # The FermiDiracDecoder acts as the fully connected layer to map 
+            # distances to probabilities [cite: 186]
+            probs = self.link_prediction_decoder(sq_dist).view(-1)
 
-        # 4. Hyperbolic Edge Construction (All-Pairs Distance)
-        # We calculate the distance between all nodes to find the most likely links
-        z = torch.stack([embeddings_dict[node] for node in all_nodes_list])
-        
-        # Calculate pairwise distances in the Poincare Ball
-        # dists size: (N, N)
-        dists = self.htgn_model.manifold.sqdist(z.unsqueeze(1), z.unsqueeze(0), c=self.htgn_model.c[2])
-        
-        # Convert distances to probabilities using the Fermi-Dirac decoder
-        probs_matrix = self.link_prediction_decoder(dists)
-        
-        # Remove self-loops (set diagonal to 0)
-        probs_matrix.fill_diagonal_(0)
-        
-        # 5. Select Top E_total edges
-        # Flatten and get top indices
-        flat_probs = probs_matrix.view(-1)
-        top_probs, top_indices = torch.topk(flat_probs, k=min(E_total, flat_probs.size(0)))
-        
-        # Convert indices back to node pairs
-        rows = top_indices // len(all_nodes_list)
-        cols = top_indices % len(all_nodes_list)
-        
-        edge_list = []
-        for r, c in zip(rows.tolist(), cols.tolist()):
-            edge_list.append((all_nodes_list[r], all_nodes_list[c]))
+            mask = probs > threshold
+            
+            # Map indices back to original node IDs for the final output
+            predicted_edges = [
+                (old_nodes[candidate_u_idx[i]], old_nodes[candidate_v_idx[i]]) 
+                for i, val in enumerate(mask) if val
+            ]
 
-        # 6. Build the Filtration sequence for evaluation
-        constructing_graph = nx.DiGraph() if self.is_directed else nx.Graph()
-        constructing_graph.add_nodes_from(all_nodes_list)
-        constructing_graph.add_edges_from(edge_list)
-        
-        # Set node features (degrees, etc) for evaluator compatibility
-        constructing_graph = get_node_features(constructing_graph, prev_graphs, self.thresholds, 
-                                              current_target_graph_description, old_nodes, new_nodes)
-        
-        filtration_graphs = []
-        for i, threshold in enumerate(self.thresholds[0: len(self.thresholds) - 1]):
-            current_nodes = [node for node, degree in constructing_graph.degree() if degree <= threshold]
-            subgraph = constructing_graph.subgraph(current_nodes).copy()
-            filtration_graphs.append(subgraph)
+        return predicted_edges
 
-        filtration_graphs.append(constructing_graph.copy())
-
-        return filtration_graphs, {"old_nodes": old_nodes, "new_nodes": new_nodes}
+    
+    def construct_predicted_graph(self, threshold):
+        predicted_edges = self.predict_next_edges(snapshot_idx=self.current_target_snapshot, threshold=threshold)
         
+        new_G = nx.Graph() # or nx.DiGraph()
         
+        for u, v in predicted_edges:
+            new_G.add_edge(u, v)
+        
+        # print(f"Constructed graph with {new_G.number_of_nodes()} nodes and {new_G.number_of_edges()} predicted edges.")
+        return new_G
+    
+    
     def run(self):        
         """
         Our main runner function
@@ -548,103 +471,129 @@ class Runner(object):
             None
         """     
         print("INFO: Dataset: {}".format(encoder_config["dataset"]))
-        self.decoder_model_path = os.path.join(self.saved_input, rf"saved_models/decoder_MLP_{self.seed}")
-
-        if os.path.exists(self.decoder_model_path):
+        self.decoder_model_path = os.path.join(self.saved_input, f"saved_models/htgn_decoder_{self.seed}.pt")
+        self.htgn_model_path = os.path.join(self.saved_input, f"saved_models/htgn_encoder_{self.seed}.pt")
+        times = {}
+        start_time = time.time()
+        if os.path.exists(self.decoder_model_path) and os.path.exists(self.htgn_model_path):
+            # Load HTGN Encoder
+            self.htgn_model.load_state_dict(torch.load(self.htgn_model_path, map_location=device))
+            self.htgn_model.to(device)
+            self.htgn_model.eval()
+            
+            # Load Link Prediction Decoder
             self.link_prediction_decoder.load_state_dict(torch.load(self.decoder_model_path, map_location=device))            
             self.link_prediction_decoder.to(device)
             self.link_prediction_decoder.eval()
-            print(f"Link Prediction Decoder loaded from: {self.decoder_model_path}")
-        else:
-            # Train the Decoder and Encoder model
-            print('Training the Link Prediction Decoder and Embedder')
             
+            print(f"INFO: HTGN Encoder loaded from: {self.htgn_model_path}")
+            print(f"INFO: Link Prediction Decoder loaded from: {self.decoder_model_path}")
+        else:
+            # Train both models if any part is missing
+            print('INFO: Models not found. Training the HTGN Encoder and Link Prediction Decoder...')
+            
+            # This will call train_htgn which now saves the best versions of both
             self.train_models()
             
-            os.makedirs(os.path.dirname(self.decoder_model_path), exist_ok=True)
-            torch.save(self.link_prediction_decoder.state_dict(), self.decoder_model_path)
+            print("INFO: Models successfully trained and saved.")
 
-            print("Models successfully saved.")
-            print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
-       
-        # Old graphs that we know up to now
-        self.old_graphs = [self.target_graphs[x][-1] for x in range(self.starting_graph)]
+        times['train'] = time.time() - start_time
         
-        all_node_ids = [node for graphs in self.old_graphs for node in graphs.nodes()]
+        import psutil
+        process = psutil.Process(os.getpid())
+        ram_mb = process.memory_info().rss / (1024 ** 2)
+        gpu_stats = ""
+        if torch.cuda.is_available():
+            curr_alloc = torch.cuda.memory_allocated(device) / (1024 ** 2)
+            peak_alloc = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
+            gpu_stats = f" | GPU Allocated: {curr_alloc:.2f}MB | GPU Peak: {peak_alloc:.2f}MB"
         
-        self.new_node_id = max(all_node_ids) + 1 if all_node_ids else 0
-
-        all_built_graphs = []
-        all_target_graphs = []
-        all_pred_nodes = []
-        all_true_nodes = []
+        print(f"{encoder_config["dataset"]} HTGN TRAIN TIME: {times['train']:.2f}s | RAM: {ram_mb:.2f}MB{gpu_stats}")
         
-        self.H = None
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(self.device)
         
-        # To predict snapshot i, we use snapshot 0,...,i-1 to train
-        for i in range(self.starting_graph, len(self.probabilities)): 
-            print("INFO: >>> Temporal Graph Construction <<<")
-            print("INFO: Predict snapshot: ", i)
-            print("======================================")
+        for threshold in [0.7, 0.75]:
+            # Data to save    
+            all_built_graphs = []
+            all_target_graphs = []
+            all_pred_nodes = []
+            all_true_nodes = []
+            
+            self.saved_graph_dir = f'data/output/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}_threshold{threshold}'
+            output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}.pkl")
+            
+            self.H = None
+            start_time = time.time()
+            # To predict snapshot i, we use snapshot 0,...,i-1 to train
+            for i in range(self.starting_graph, len(self.probabilities)): 
+                # print("INFO: >>> Temporal Graph Construction <<<")
+                # print("INFO: Predict snapshot: ", i)
+                # print("======================================")
 
-            self.current_target_snapshot = i
-            
-            # Get all old nodes in our context window
-            self.current_target_old_nodes = set().union(*[g.nodes() for g in self.old_graphs[0: i]])
-            
-            current_target_graph_description = self.graph_descriptions[self.current_target_snapshot]
-            # Used to convert probabilities
-            V_total = int(current_target_graph_description[-1][0])
-            E_total = int(current_target_graph_description[-1][1])
-            
-            # Get the true count of 4 edges type and number of new, old nodes of the target snapshot (probabilities are fed in as percents)
-            self.current_target_count_old_nodes = int(round(self.probabilities[self.current_target_snapshot][0] * V_total))
-            self.current_target_count_new_nodes = int(round(self.probabilities[self.current_target_snapshot][1] * V_total))
-            self.current_target_count = {
-                    edge_type: int(round(self.probabilities[self.current_target_snapshot][j + 2] * E_total))
-                    for j, edge_type in enumerate(self.all_edge_types)
-                }
-            
-            # Debugging:
-            if self.current_target_count_old_nodes + self.current_target_count_new_nodes != V_total:
-                print(f'WARNING: THE NUMBER OF NODES FROM PROBABILITIES IS WRONG: {self.current_target_count_old_nodes + self.current_target_count_new_nodes} != {V_total}')
-            if sum(self.current_target_count.values()) != E_total:
-                print(f'WARNING: THE NUMBER OF NODES FROM PROBABILITIES IS WRONG: {sum(self.current_target_count.values())} != {E_total}')
-            
-            
-            # Build the filtration sequence using the current parameters
-            filtration_sequence, node_types = self.build_accumulating_filtration_sequence_with_edgebank(current_target_snapshot=i)
-            
-            # Add the graphs to a list to save later
-            built_graph = filtration_sequence[-1]
-            target_graph = self.target_graphs[i][-1]
-            all_built_graphs.append(built_graph)
-            all_target_graphs.append(target_graph)
-            all_pred_nodes.append(node_types)
-            
-            # Get the node types for the target graph
-            current_nodes = target_graph.nodes()
-            old_nodes = current_nodes & self.current_target_old_nodes
-            new_nodes = current_nodes - old_nodes
-            all_true_nodes.append({"old_nodes": old_nodes, "new_nodes": new_nodes})
-            
-            # Add to the old graphs
-            self.old_graphs.append(self.target_graphs[i][-1])
-            
-            old_nodes_days = set().union(*[g.nodes() for g in self.old_graphs[max(i - self.days_back, 0): i]])   # Old nodes of days_back days before
+                self.current_target_snapshot = i
+                            
+                self.htgn_model.init_hiddens()
+                window_size = self.htgn_args.nb_window
+                
+                # Feed the model true graphs leading up to the one we want to predict
+                # This ensures 'self.htgn_model.hiddens' is "primed" with real history
+                start_prime = max(0, i - window_size)
+                for prime_idx in range(start_prime, i):
+                    prev_g = self.target_graphs[prime_idx][-1]
+                    p_nodes = list(prev_g.nodes())
+                    p_map = {node_id: idx for idx, node_id in enumerate(p_nodes)}
+                    p_edges = torch.tensor(list(prev_g.edges()), dtype=torch.long).t().contiguous().to(self.device)
+                    
+                    with torch.no_grad():
+                        # Forward pass updates the internal self.hiddens list
+                        _, x_hyp = self.htgn_model(p_edges, p_nodes, p_map, x=None)
+                        self.htgn_model.hiddens.pop(0)
+                        self.htgn_model.hiddens.append(x_hyp)
+                            
+                # Build the filtration sequence using the current parameters
+                built_graph = self.construct_predicted_graph(threshold)
+                
         
-        output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config["encoder_model"]["nodeEmbeddingType"]}_constructed_graphs_{encoder_config["dataset"]}.pkl")
-        os.makedirs(self.saved_graph_dir, exist_ok=True)
-
-        data_to_save = (all_built_graphs, all_target_graphs, all_pred_nodes, all_true_nodes)
-
-        print("\n======================================")
-        print(f"INFO: Saving {len(all_built_graphs)} pairs of graphs to {output_filepath}")
-        print("======================================")
-
-        with open(output_filepath, "wb") as f:
-            pickle.dump(data_to_save, f) 
+                # Add the graphs to a list to save later
+                target_graph = self.target_graphs[i][-1]
+                all_built_graphs.append(built_graph)
+                all_target_graphs.append(target_graph)
+                all_pred_nodes.append({"old_nodes": built_graph.nodes(), "new_nodes": set()})  # By definition these are all old
+                
+                # Get the node types for the target graph
+                current_nodes = target_graph.nodes()  # These are the old nodes
+                all_true_nodes.append({"old_nodes": current_nodes, "new_nodes": set()})  # new nodes are by definition empty here
+                
+            self.saved_graph_dir = f'data/output/constructed_graphs/{encoder_config["dataset"]}_{self.common_suffix}_threshold{threshold}'
             
+            output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}.pkl")
+            os.makedirs(self.saved_graph_dir, exist_ok=True)
+
+            data_to_save = (all_built_graphs, all_target_graphs, all_pred_nodes, all_true_nodes)
+
+            # print("\n======================================")
+            print(f"INFO: Saving {len(all_built_graphs)} pairs of graphs to {output_filepath}")
+            # print("======================================")
+
+            with open(output_filepath, "wb") as f:
+                pickle.dump(data_to_save, f, protocol=5) 
+            
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f"INFO: Total execution time: {elapsed_time:.2f} seconds")
+            ram_mb = process.memory_info().rss / (1024 ** 2)
+            gpu_stats = ""
+            if torch.cuda.is_available():
+                curr_alloc = torch.cuda.memory_allocated(device) / (1024 ** 2)
+                peak_alloc = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
+                gpu_stats = f" | GPU Allocated: {curr_alloc:.2f}MB | GPU Peak: {peak_alloc:.2f}MB"
+            
+            print(f"CONSTRUCTION (Thr {threshold}): {elapsed_time:.2f}s | RAM: {ram_mb:.2f}MB{gpu_stats}")
+            
+            times[threshold] = elapsed_time
+            
+        print(times)
             
 if __name__ == '__main__':
     runner = Runner()

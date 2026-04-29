@@ -173,6 +173,7 @@ def toEvolveGCN(graphs, node_count, node_map):
         A_list.append(sparse_mx_to_torch_sparse_tensor(adj_norm))
     return {'A_list': A_list, 'Nodes_list': [sparse_x]*len(graphs), 'node_count': node_count, 'feature_dim': node_count}
     # TODO might switch this to use binary encoding for node features
+    # "Nodes_list" can be optimized prob will help with OOM issues
 
 def toStandardPyG(graphs, node_count, node_map):
     processed = []
