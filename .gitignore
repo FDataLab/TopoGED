@@ -61,26 +61,35 @@ wandb/
 toper/slurm_scripts/
 
 # Ignore large output files
-GraphGeneration/output/
-ReinforcementLearning/output/
-data/output/
-output/
-data/output_old/
-GraphGeneration/scripts/results/
-GraphGeneration/scripts/Visualize/
-data/input/cached/
-GraphGeneration/scripts/results/
-GraphGeneration/scripts/Visualize/
+# GraphGeneration/output/
+# ReinforcementLearning/output/
+# data/output/
+# output/
+# data/output_old/
+# GraphGeneration/scripts/results/
+# GraphGeneration/scripts/Visualize/
+# data/input/cached/
+# GraphGeneration/scripts/results/
+# GraphGeneration/scripts/Visualize/
 
-# Input data
-data/input/cached/
-!data/input/cached/*/Benchmarking/*
-!data/input/cached/*/no_weight/*
-!data/input/cached/*/PredCounts/*
-!data/input/cached/*/PredTopER/*
-!data/input/cached/*/probabilities/*
-!data/input/cached/*/subgraphs/*
-!data/input/cached/*/thresholds/*
-!data/input/cached/*/*.pkl
-benchmarkers/data/input/*
+# # Input data
+# data/input/cached/
+# !data/input/cached/*/Benchmarking/*
+# !data/input/cached/*/no_weight/*
+# !data/input/cached/*/PredCounts/*
+# !data/input/cached/*/PredTopER/*
+# !data/input/cached/*/probabilities/*
+# !data/input/cached/*/subgraphs/*
+# !data/input/cached/*/thresholds/*
+# !data/input/cached/*/*.pkl
+# benchmarkers/data/input/*
+# data/*
+
 data/*
+!data/input/
+
+data/input/cached/*
+!data/input/cached/
+
+GraphGeneration/scripts/results/
+GraphGeneration/scripts/Visualize/
