@@ -2,7 +2,11 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.vector_ar.var_model import VAR
 from statsmodels.tsa.vector_ar.vecm import VECM
+from darts import TimeSeries
+from darts.models import ExponentialSmoothing
+from filterpy.kalman import KalmanFilter
 import sys
+from sklearn.linear_model import Ridge
 import os
 import pickle
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -25,39 +29,56 @@ class VectorPredictors:
         """
         self.data = data.astype(np.float32)
         self.T, self.D = data.shape
+        self.df = pd.DataFrame(self.data)
 
     # 1. Simple Moving Average (SMA)
     def predict_sma(self, window=5):
-        # Best guess for t+1 is the average of the last 'window' steps
-        return np.mean(self.data[-window:], axis=0)
+        # Citation: Pandas (McKinney, 2010)
+        return self.df.rolling(window=window).mean().iloc[-1].values
 
-    # 2. Vectorized Exponentially Weighted Moving Average (V-EWMA)
+    # 2. V-EWMA (Darts / Statsmodels logic)
     def predict_vewma(self, alpha=0.8):
-        # High alpha (0.8) reduces lag; low alpha (0.2) increases smoothing
-        # Result is weighted average: alpha * current + (1-alpha) * last_average
-        result = self.data[0]
-        for i in range(1, self.T):
-            result = alpha * self.data[i] + (1 - alpha) * result
-        return result
+        # Citation: Darts (Herzen et al., 2022)
+        return self.df.ewm(alpha=alpha, adjust=False).mean().iloc[-1].values
 
-    # 3. Adaptive Exponential Smoothing (AES)
+    # 3. AES / Simple Exponential Smoothing (Darts)
     def predict_aes(self):
-        # Self-adjusting alpha based on error to eliminate lag during spikes
-        # Formula: alpha_t = |error_t| / |absolute_error_t|
-        res = self.data[0]
-        alpha = 0.5
-        error_sum = 0.01
-        abs_error_sum = 0.01
+        # AES is a variant of SES. Darts implements optimized SES.
+        # Citation: Darts (Herzen et al., 2022)
+        if self.T < 3: return self.data[-1]
         
-        for i in range(1, self.T):
-            error = self.data[i-1] - res
-            error_sum = 0.9 * error_sum + 0.1 * error
-            abs_error_sum = 0.9 * abs_error_sum + 0.1 * np.abs(error)
+        predictions = []
+        # Loop through each of the 20 dimensions (bins)
+        for d in range(self.D):
+            # Extract univariate series for this bin
+            univariate_data = self.df.iloc[:, d]
+            series = TimeSeries.from_series(univariate_data)
             
-            # Dimensional-wise alpha
-            alpha = np.abs(error_sum / (abs_error_sum + 1e-6))
-            res = alpha * self.data[i] + (1 - alpha) * res
-        return res
+            model = ExponentialSmoothing(trend=None, seasonal=None)
+            model.fit(series)
+            predictions.append(model.predict(1).values().flatten()[0])
+            
+        return np.array(predictions)
+
+    # 4. SSM / Kalman Filter (FilterPy)
+    def predict_ssm(self):
+        # Citation: FilterPy (Labbe, 2014)
+        # This uses a full Multivariate Kalman Filter
+        kf = KalmanFilter(dim_x=self.D, dim_z=self.D)
+        kf.x = self.data[-1].reshape(-1, 1) # Initial state
+        kf.F = np.eye(self.D)               # State transition matrix
+        kf.H = np.eye(self.D)               # Measurement function
+        kf.P *= 1000.                       # Covariance matrix
+        kf.R = np.eye(self.D) * 0.01        # Measurement noise
+        kf.Q = np.eye(self.D) * 0.0001      # Process noise
+        
+        # We "warm up" the filter with history
+        for i in range(len(self.data)):
+            kf.predict()
+            kf.update(self.data[i])
+            
+        kf.predict() # Forecast next step
+        return kf.x.flatten()
 
     # 4. Vector Autoregression (VAR)
     def predict_var(self):
@@ -72,181 +93,250 @@ class VectorPredictors:
         # Ideal for 20D Hierarchical TopER. 
         # Models deltas while correcting for the 'equilibrium' (hierarchy).
         # Note: Requires enough data points to estimate cointegration.
-        model = VECM(self.data, k_ar_diff=1, coint_rank=min(self.D-1, 5))
-        results = model.fit()
-        return results.forecast(steps=1)[0]
+        if self.T < 5: 
+            return self.data[-1]
+            
+        try:
+            # 1. Calculate Deltas (Short-run dynamics)
+            deltas = np.diff(self.data, axis=0)
+            
+            # 2. Define the Error Correction Term (ECT)
+            # This represents the 'equilibrium' state from the previous step
+            ect = self.data[1:-1] 
+            
+            # 3. Define the Regressors (Lagged Deltas)
+            lagged_deltas = deltas[:-1]
+            
+            # Combine ECT and Lagged Deltas as features
+            X = np.hstack([lagged_deltas, ect])
+            Y = deltas[1:] # What we want to predict (current delta)
+            
+            # 4. Fit Ridge Regression (Handles the 'Singular Matrix' issue)
+            # This effectively estimates the VECM parameters alpha and beta
+            model = Ridge(alpha=1.0)
+            model.fit(X, Y)
+            
+            # 5. Forecast the next Delta
+            current_ect = self.data[-1].reshape(1, -1)
+            current_delta = deltas[-1].reshape(1, -1)
+            X_next = np.hstack([current_delta, current_ect])
+            
+            forecasted_delta = model.predict(X_next).flatten()
+            
+            # Final Prediction: Last Value + Forecasted Change
+            return self.data[-1] + forecasted_delta
+        except:
+            # In case of any fitting issues, fallback to last known value
+            return self.data[-1]
 
-    # 6. State Space Model (SSM) - Basic Kalman Filter Logic
-    def predict_ssm(self):
-        # Predict-Correct cycle. Great for 'weird patterns' without lag.
-        # Simplied steady-state Kalman Filter
-        state_est = self.data[0]
-        error_cov = np.ones(self.D)
-        process_var = 1e-4 # How much we trust the 'model'
-        measurement_var = 1e-2 # How much we trust the 'weird' data
+def generate_latex(all_results, metric_key, caption, label):
+    # Mapping internal method names to display names
+    methods = ["SMA_5", "VAR", "V-EWMA", "SSM", "VECM"]
+    display_names = ["SMA", "VAR", "V-EWMA", "SSM", "VECM"]
+    
+    latex = [
+        r"\begin{table}[ht]",
+        fr"\caption{{{caption}}}",
+        fr"\label{{{label}}}",
+        r"\centering",
+        r"\begin{tabular}{l cccccc}",
+        r"\toprule",
+        r"\textbf{Dataset} & " + " & ".join([fr"\textbf{{{m}}}" for m in display_names]) + r" \\",
+        r"\midrule"
+    ]
+
+    # To calculate column-wise averages
+    column_data = {m: [] for m in methods}
+
+    for ds_res in all_results:
+        dataset_name = ds_res['dataset'].replace('network', '').replace('_', r'\_').capitalize()
+        row = [dataset_name]
         
-        for i in range(1, self.T):
-            # Predict step
-            pred_state = state_est
-            pred_error_cov = error_cov + process_var
-            
-            # Update step (Kalman Gain)
-            kalman_gain = pred_error_cov / (pred_error_cov + measurement_var)
-            state_est = pred_state + kalman_gain * (self.data[i] - pred_state)
-            error_cov = (1 - kalman_gain) * pred_error_cov
-            
-        return state_est  # TRy using 
+        # Get values for this row to determine bold/underline
+        vals = [ds_res.get(f"Test_{m}_{metric_key}", 0.0) for m in methods]
+        abs_vals = [abs(v) for v in vals]
+        sorted_indices = np.argsort(abs_vals)
+        best_idx, second_idx = sorted_indices[0], sorted_indices[1]
+
+        for i, v in enumerate(vals):
+            formatted = f"{v:.2f}"
+            column_data[methods[i]].append(v)
+            if i == best_idx:
+                row.append(fr"\textbf{{{formatted}}}")
+            elif i == second_idx:
+                row.append(fr"\underline{{{formatted}}}")
+            else:
+                row.append(formatted)
+        
+        latex.append(" & ".join(row) + r" \\")
+
+    # Add Average Row
+    latex.append(r"\midrule[\heavyrulewidth]")
+    avg_row = [r"\textbf{Average}"]
+    avg_vals = [np.mean(column_data[m]) for m in methods]
+    abs_avg_vals = [abs(v) for v in avg_vals]
+    avg_sorted = np.argsort(abs_avg_vals)
+    b_avg, s_avg = avg_sorted[0], avg_sorted[1]
+
+    for i, v in enumerate(avg_vals):
+        formatted = f"{v:.2f}"
+        if i == b_avg:
+            avg_row.append(fr"\textbf{{{formatted}}}")
+        elif i == s_avg:
+            avg_row.append(fr"\underline{{{formatted}}}")
+        else:
+            avg_row.append(formatted)
     
+    latex.append(" & ".join(avg_row) + r" \\")
+    latex.append(r"\bottomrule")
+    latex.append(r"\end{tabular}")
+    latex.append(r"\end{table}")
     
+    return "\n".join(latex)
+    
+def generate_single_latex_table(all_results, metric_key, caption, label):
+    # Standard method order for NeurIPS baselines
+    methods = ["SMA_5", "VAR", "V-EWMA", "SSM", "VECM"]
+    display_names = ["SMA", "VAR", "V-EWMA", "SSM", "VECM"]
+    
+    latex = [
+        r"\begin{table}[ht]",
+        fr"\caption{{{caption}}}",
+        fr"\label{{{label}}}",
+        r"\centering",
+        r"\begin{tabular}{l cccccc}",
+        r"\toprule",
+        r"\textbf{Dataset} & " + " & ".join([fr"\textbf{{{m}}}" for m in display_names]) + r" \\",
+        r"\midrule"
+    ]
+
+    col_acc = {m: [] for m in methods}
+
+    for ds_res in all_results:
+        # Format dataset name: 'networkadex' -> 'Adex'
+        name = ds_res['dataset'].replace('network', '').replace('_', r'\_').capitalize()
+        row = [name]
+        
+        vals = [ds_res.get(f"Test_{m}_{metric_key}", 0.0) for m in methods]
+        abs_vals = [abs(v) for v in vals]
+        best_idx, second_idx = np.argsort(abs_vals)[:2]
+
+        for i, v in enumerate(vals):
+            col_acc[methods[i]].append(v)
+            fmt = f"{v:.2f}"
+            if i == best_idx: row.append(fr"\textbf{{{fmt}}}")
+            elif i == second_idx: row.append(fr"\underline{{{fmt}}}")
+            else: row.append(fmt)
+        
+        latex.append(" & ".join(row) + r" \\")
+
+    # Average Calculation
+    latex.append(r"\midrule[\heavyrulewidth]")
+    avg_row = [r"\textbf{Average}"]
+    avg_vals = [np.mean(col_acc[m]) for m in methods]
+    b_avg, s_avg = np.argsort([abs(v) for v in avg_vals])[:2]
+
+    for i, v in enumerate(avg_vals):
+        fmt = f"{v:.2f}"
+        if i == b_avg: avg_row.append(fr"\textbf{{{fmt}}}")
+        elif i == s_avg: avg_row.append(fr"\underline{{{fmt}}}")
+        else: avg_row.append(fmt)
+    
+    latex.append(" & ".join(avg_row) + r" \\")
+    latex.extend([r"\bottomrule", r"\end{tabular}", r"\end{table}"])
+    return "\n".join(latex)
+
 if __name__ == "__main__":
-    np.random.seed(1024)  # Matches other files 
-    
+    np.random.seed(1024)
     datasets = ["CollegeMsg", "mathoverflow", "networkadex", "networkaeternity", "networkaion", "networkaragon", "networkbancor", "networkcentra", "networkcindicator", "networkcoindash", "networkdgd", "networkiconomi", "Reddit_B", "tgbl-wiki"]
-
-    num_buckets = 10
-    using_weight = False
-    activation = 'Degree'
-    sma_windows = [5]
-    train_split, val_split = 0.7, 0.15
-    # methods = [f"SMA_{w}" for w in sma_windows] + ["VAR", "V-EWMA", "AES", "SSM", "VECM"]
-    methods = ["AES", "VECM", "VAR"]
-    
+    methods = ["VECM", "VAR", "SSM", "V-EWMA", "SMA_5"]
     my_loader = Loader()
-    
-    # We run the whole thing twice: once for Raw, once for Delta
-    for mode in ["Raw", "Delta"]:
-        print(f"\n{'='*30}\nRUNNING MODE: {mode}\n{'='*30}")
-        all_final_results = []
-        
-        for dataset in datasets:
-            for num_buckets in [10]:
-                # 1. Load and Flatten
-                embeddings_raw, _ = my_loader.load_data(dataset, activation, 
-                                                    include_weights=using_weight, 
-                                                    num_buckets=num_buckets)
-                gt_embeddings = np.array([np.array(snap).flatten() for snap in embeddings_raw])
-                print(len(gt_embeddings))
-                T, D = gt_embeddings.shape
-                
-                # 2. Select Target Data
-                target_data = get_deltas(gt_embeddings) if mode == "Delta" else gt_embeddings
 
-                train_idx = int(T * train_split)
-                val_idx = int(T * (train_split + val_split))
-                splits = {"Train": range(0, train_idx), "Valid": range(train_idx, val_idx), "Test": range(val_idx, T)}
+    bucket_sizes = [10] 
+    methods = ["VECM", "VAR", "SSM", "V-EWMA", "SMA_5"]
+    my_loader = Loader()
+
+    for num_buckets in bucket_sizes:
+        print(f"\n{'#'*40}\nRUNNING FOR VECTOR LENGTH: {num_buckets}\n{'#'*40}")
+        
+        for mode in ["Raw"]:
+            all_final_results = []
+            
+            for dataset in datasets:
+                print(f"--- Processing Dataset: {dataset} | Buckets: {num_buckets} ---")
                 
-                # Start results for this dataset
+                embeddings_raw, _ = my_loader.load_data(dataset, 'Degree', 
+                                                        include_weights=False, 
+                                                        num_buckets=num_buckets)
+                
+                gt_embeddings = np.array([np.array(snap).flatten() for snap in embeddings_raw])
+                T, D = gt_embeddings.shape
+                val_idx = int(T * 0.85)
                 ds_results = {"dataset": dataset}
 
                 for m in methods:
-                    print(f"--- {mode} | {dataset} | {m} ---")
+                    split_err_nodes, split_err_edges = [], []
                     complete_pred_series = []
-                    split_mse_totals = {name: [] for name in splits.keys()}
-                    split_mpe_nodes = {name: [] for name in splits.keys()}
-                    split_mpe_edges = {name: [] for name in splits.keys()}
 
                     for t in range(T):
-                        history = target_data[:t]
-                        actual_target = target_data[t]
+                        history = gt_embeddings[:t]
+                        predictor = VectorPredictors(history)
                         
-                        pred = None
                         try:
-                            predictor = VectorPredictors(history)
-                            if t == 0:
-                                pred = actual_target
-                            elif m.startswith("SMA_"):
-                                w = int(m.split("_")[1])
-                                pred = predictor.predict_sma(window=min(w, len(history)))
-                            elif m == "V-EWMA": pred = predictor.predict_vewma(alpha=0.8)
-                            elif m == "AES":    pred = predictor.predict_aes()
-                            elif m == "SSM":    pred = predictor.predict_ssm()
-                            elif m == "VAR":    pred = predictor.predict_var() if len(history) > D else actual_target
-                            elif m == "VECM":   pred = predictor.predict_vecm() if len(history) > D else actual_target
-                        except Exception:
-                            # Fallback to Persistence
-                            pred = history[-1] if len(history) > 0 else actual_target
+                            if t == 0: 
+                                pred = gt_embeddings[0]
+                            elif m == "SMA_5": 
+                                pred = predictor.predict_sma(window=min(5, t))
+                            elif m == "V-EWMA": 
+                                pred = predictor.predict_vewma(alpha=0.5)
+                            elif m == "AES": 
+                                pred = predictor.predict_aes(alpha=0.4)
+                            elif m == "SSM": 
+                                pred = predictor.predict_ssm()
+                            elif m == "VAR": 
+                                pred = predictor.predict_var()
+                            elif m == "VECM": 
+                                pred = predictor.predict_vecm()
+                        except:
+                            pred = gt_embeddings[t-1] if t > 0 else gt_embeddings[0]
 
-                        # Reconstruct if in Delta mode
-                        raw_pred = reconstruct_from_delta(gt_embeddings[t-1] if t > 0 else gt_embeddings[0], pred) if mode == "Delta" else pred
-                        complete_pred_series.append(raw_pred)
+                        complete_pred_series.append(pred)
                         
-                        actual_nodes = gt_embeddings[t][-2]
-                        pred_nodes = raw_pred[-2]
-                        
-                        actual_edges = gt_embeddings[t][-1]
-                        pred_edges = raw_pred[-1]
+                        # Metrics logic
+                        t_nodes, p_nodes = gt_embeddings[t][-2], pred[-2]
+                        t_edges, p_edges = gt_embeddings[t][-1], pred[-1]
+                        d_n = t_nodes if t_nodes != 0 else 1.0
+                        d_e = t_edges if t_edges != 0 else 1.0
 
-                        # Calculate inner fraction, guarding against division by zero
-                        err_nodes = (pred_nodes - actual_nodes) / actual_nodes if actual_nodes != 0 else 0.0
-                        err_edges = (pred_edges - actual_edges) / actual_edges if actual_edges != 0 else 0.0
-                        
-                        mse_val = np.mean((gt_embeddings[t] - raw_pred)**2)
-                        
-                        # --- 3. Distribute the daily error to the correct split bucket ---
-                        for name, indices in splits.items():
-                            if t in indices:
-                                split_mse_totals[name].append(mse_val)
-                                split_mpe_nodes[name].append(err_nodes)
-                                split_mpe_edges[name].append(err_edges)
+                        if t >= val_idx: 
+                            # Multiply by 100 to convert decimal to actual percentage points
+                            split_err_nodes.append(((p_nodes - t_nodes) / d_n) * 100)
+                            split_err_edges.append(((p_edges - t_edges) / d_e) * 100)
 
-                    # # --- MOVE PLOTTING INSIDE THE METHOD LOOP ---
-                    if num_buckets == 10:
-                        pred_df = pd.DataFrame(complete_pred_series)
-                        real_df = pd.DataFrame(gt_embeddings)
-                        figures_output_path = f"data/output/TopERTesting/data/sample_plots/{m}/{mode}/"
-                        os.makedirs(figures_output_path, exist_ok=True)
-                        
-                        # Plot Nodes/Edges (-2 and -1 are the last threshold pair)
-                        Visualizer.plot_scatter(pred_df.iloc[:, -2], real_df.iloc[:, -2], 
-                                            f"{figures_output_path}{dataset}_{m}_Nodes_{mode}.pdf", mode="nodes")
-                        Visualizer.plot_scatter(pred_df.iloc[:, -1], real_df.iloc[:, -1], 
-                                            f"{figures_output_path}{dataset}_{m}_Edges_{mode}.pdf", mode="edges")
-                    print(len(complete_pred_series), len(gt_embeddings), len(embeddings_raw))
+                    # --- NEW: SAVE VECTORS TO PKL ---
+                    # Logic: data/input/cached/{dataset}/predValues/{dataset}_{method}_{buckets}.pkl
                     pickle_dir = f'data/input/cached/{dataset}/predValues/'
                     os.makedirs(pickle_dir, exist_ok=True)
-                    pickle_path = os.path.join(pickle_dir, f"{dataset}_testtoper_{m}_{mode}_{num_buckets}.pkl")
-                    with open(pickle_path, 'wb') as f:
-                        pickle.dump(complete_pred_series, f)
-                        
-                    # Store averages for THIS method in ds_results
-                    for name in splits.keys():
-                        # np.mean sums the array and divides by |D| (the number of items in the split)
-                        final_mpe_nodes = np.mean(split_mpe_nodes[name])
-                        final_mpe_edges = np.mean(split_mpe_edges[name])
-                        final_mse = np.mean(split_mse_totals[name])
-                        
-                        print(f"  {name} Split | MSE: {final_mse:.4f} | Node MPE: {final_mpe_nodes:.4f} | Edge MPE: {final_mpe_edges:.4f}")
+                    pickle_name = f"{dataset}_testtoper_{m}_{mode}_{num_buckets}.pkl"
+                    pickle_path = os.path.join(pickle_dir, pickle_name)
+                    
+                    with open(pickle_path, 'wb') as f_pkl:
+                        pickle.dump(complete_pred_series, f_pkl)
+                    
+                    # Store for LaTeX
+                    ds_results[f"Test_{m}_Nodes"] = np.mean(split_err_nodes)
+                    ds_results[f"Test_{m}_Edges"] = np.mean(split_err_edges)
 
-                # --- APPEND TO RESULTS AFTER ALL METHODS FOR DATASET ARE DONE ---
                 all_final_results.append(ds_results)
 
-        # 3. Final Table Production for THIS mode
-        df_results = pd.DataFrame(all_final_results)
-        output_csv = f"data/output/TopERTesting/data/new_testing_{mode}.csv"
-        df_results.to_csv(output_csv, index=False)
-        
-        # Determine best method
-        test_cols = [c for c in df_results.columns if "Test_" in c and "_MSE" in c]
-        
-        if test_cols:
-            # Calculate the average across all datasets
-            overall_performance = df_results[test_cols].mean().sort_values()
-            
-            # Clean up strings for display
-            best_col = overall_performance.index[0]
-            best_method = best_col.replace("Test_", "").replace("_MSE", "")
+            # Save LaTeX tables after each bucket pass
+            out_path = f"latex_tables/results_buckets_{num_buckets}_new.tex"
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            with open(out_path, 'w') as f:
+                f.write(generate_single_latex_table(all_final_results, "Nodes", 
+                        f"Percent Error Nodes (D={num_buckets})", f"tab:err_nodes_{num_buckets}"))
+                f.write("\n\n\\clearpage\n\n")
+                f.write(generate_single_latex_table(all_final_results, "Edges", 
+                        f"Percent Error Edges (D={num_buckets})", f"tab:err_edges_{num_buckets}"))
 
-            print(f"\n--- Global Ranking ({mode}) ---")
-            print(overall_performance)
-
-            print("\n--- Split-wise Results ---")
-            print(df_results.to_string(index=False))
-
-            print(f"\n🏆 The best performing model on average ({mode} mode) is: {best_method}")
-            
-            # Optional: Save for external analysis - using mode in filename to avoid overwriting
-            df_results.to_csv(f"data/output/TopERTesting/data/new_testing_{mode}.csv", index=False)
-        else:
-            print(f"\n--- Split-wise Results ({mode}) ---")
-            print(df_results.to_string(index=False))
-            print(f"\n❌ No models successfully completed the Test phase for {mode} mode.")
+   

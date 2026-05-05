@@ -144,24 +144,55 @@ class RolandRunner:
         print(f"Optimal Threshold: {best_tau:.2f} | Sampled Val F1: {best_f1:.4f}")
         return best_tau
 
+    @torch.no_grad()
+    def validate(self, snapshot_indices, initial_states):
+        """Helper to compute AUC on a specific split while maintaining state history."""
+        self.model.eval()
+        all_preds, all_targets = [], []
+        states = [s.clone() for s in initial_states] # Start from the end of the previous split
+        
+        for t in range(snapshot_indices[0], snapshot_indices[-1] + 1):
+            x, edge_index, edge_attr = self.get_snapshot(t)
+            states = self.model(x, edge_index, edge_attr, states)
+            z = states[-1]
+            
+            # Target is t+1 (Future Link Prediction)
+            if t + 1 < len(self.snapshots):
+                next_data = self.snapshots[t+1]
+                pos_idx = next_data.edge_index.to(self.device)
+                neg_idx = negative_sampling(pos_idx, num_nodes=self.node_count)
+                
+                pos_score = self.model.predict_links(z, pos_idx).sigmoid()
+                neg_score = self.model.predict_links(z, neg_idx).sigmoid()
+                
+                all_preds.append(torch.cat([pos_score, neg_score]).cpu())
+                all_targets.append(torch.cat([torch.ones_like(pos_score), torch.zeros_like(neg_score)]).cpu())
+            
+            states = [s.detach() for s in states]
+            
+        y_true = torch.cat(all_targets).numpy()
+        y_scores = torch.cat(all_preds).numpy()
+        return roc_auc_score(y_true, y_scores)
+
     def run(self):
         import torch
         from benchmarkers.benchmarker_utils.k_values_extractor import get_topk
         start_train = time.time()
-        if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(self.device)
         
-        best_train_loss = float('inf')
+        # Track metrics for the "Best" state
+        best_val_auc = 0.0
+        best_train_auc_at_val = 0.0
         patience = 15
         no_improve = 0
-        self.best_model = None # This will hold the state_dict for restoration
+        self.best_model = None 
 
         print(f"--- Training ROLAND ({self.args.dataset}) | Persistence: {patience} ---")
         for epoch in range(1, 201):
             self.model.train()
             epoch_loss = 0
-            all_preds, all_targets = [], []
             states = self.model.init_states(self.node_count, self.device)
             
+            # 1. Training Phase
             for t in range(self.train_end - 1):
                 x, edge_index, edge_attr = self.get_snapshot(t)
                 next_data = self.snapshots[t+1]
@@ -183,31 +214,38 @@ class RolandRunner:
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss.item()
-
-                if epoch % 10 == 0 or epoch == 1:
-                    all_preds.append(preds.detach().sigmoid().cpu())
-                    all_targets.append(labels.cpu())
                 states = [s.detach() for s in new_states]
+
+            # 2. Evaluation Phase (Train and Val AUC)
+            # Train AUC uses the states generated during the training pass
+            train_auc = self.validate(range(self.train_end - 1), self.model.init_states(self.node_count, self.device))
+            # Val AUC starts from the final training states
+            val_auc = self.validate(range(self.train_end - 1, self.val_end - 1), states)
             
             avg_loss = epoch_loss / ((self.train_end - 1) * self.args.num_updates_per_snapshot)
             
-            # --- EARLY STOPPING LOGIC ---
-            if avg_loss < best_train_loss:
-                best_train_loss = avg_loss
-                # Save the absolute best weights found so far
+            # 3. Update Best State based on Validation AUC
+            if val_auc > best_val_auc:
+                best_val_auc = val_auc
+                best_train_auc_at_val = train_auc
                 self.best_model = copy.deepcopy(self.model.state_dict())
                 no_improve = 0
+                marker = "*" 
             else:
                 no_improve += 1
+                marker = ""
 
-            if epoch % 10 == 0 or epoch == 1:
-                train_auc = roc_auc_score(torch.cat(all_targets), torch.cat(all_preds))
-                print(f"Epoch {epoch:03d} | Loss: {avg_loss:.6f} | Train AUC: {train_auc:.4f}")
+            print(f"Epoch {epoch:03d} | Loss: {avg_loss:.4f} | Train AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} {marker}")
 
-            # Check patience
             if no_improve >= patience:
-                print(f"Early stopping triggered at epoch {epoch}. Best Loss: {best_train_loss:.6f}")
+                print(f"Early stopping triggered. Best Val AUC: {best_val_auc:.4f}")
                 break
+
+        # --- FINAL SUMMARY PRINT ---
+        print(f"\n[FINAL TRAINING SUMMARY - ROLAND]")
+        print(f"Best Validation AUC: {best_val_auc:.4f}")
+        print(f"Corresponding Train AUC: {best_train_auc_at_val:.4f}")
+        print(f"---------------------------\n")
 
         if self.best_model is not None:
             self.model.load_state_dict(self.best_model)

@@ -146,86 +146,113 @@ class EvolveGCNRunner:
             probs = (probs + probs.T) / 2.0
         return probs
 
+    @torch.no_grad()
+    def evaluate_link_prediction(self, indices):
+        """Helper to calculate AUC on a specific set of snapshot indices."""
+        self.encoder.eval()
+        self.classifier.eval()
+        all_scores, all_targets = [], []
+
+        for t in indices:
+            A_win, N_win, Masks = self.get_window_and_mask(t)
+            emb = self.encoder(A_win, N_win, Masks)
+            
+            adj_t = self.A_list[t].coalesce() if self.A_list[t].is_sparse else self.A_list[t]
+            pos_edges = adj_t.indices().t() if adj_t.is_sparse else adj_t.nonzero()
+            
+            if pos_edges.size(0) == 0: continue
+            
+            # Use same sampling logic as training for consistency
+            num_pos = min(pos_edges.size(0), 10000) 
+            neg_edges = torch.randint(0, self.node_count, (num_pos, 2)).to(self.device)
+            
+            pos_p = torch.sigmoid(self.classifier(torch.cat([emb[pos_edges[:num_pos,0]], emb[pos_edges[:num_pos,1]]], dim=1)))
+            neg_p = torch.sigmoid(self.classifier(torch.cat([emb[neg_edges[:,0]], emb[neg_edges[:,1]]], dim=1)))
+            
+            all_scores.append(torch.cat([pos_p, neg_p]).cpu().numpy().flatten())
+            all_targets.append(np.concatenate([np.ones(pos_p.size(0)), np.zeros(neg_p.size(0))]))
+
+        return roc_auc_score(np.concatenate(all_targets), np.concatenate(all_scores))
+
     def train(self):
         print(f"--- Training {self.args.model} | Task: Future Link Prediction ---")
         start_train = time.time()
-        if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(self.device)
         
-        best_train_loss = float('inf')
+        # Track metrics for the "Best" state
+        best_val_auc = 0.0
+        best_train_auc_at_val = 0.0
         patience = 15
         no_improve = 0
         self.best_encoder, self.best_classifier = None, None
 
         for epoch in range(1, 201):
-            self.encoder.train(); self.classifier.train()
+            # 1. Training Phase
+            self.encoder.train()
+            self.classifier.train()
             epoch_loss = 0
-            all_epoch_preds, all_epoch_targets = [], []
             
             for t in self.train_idx:
                 self.optimizer.zero_grad()
                 A_win, N_win, Masks = self.get_window_and_mask(t)
                 emb = self.encoder(A_win, N_win, Masks)
                 
-                if self.A_list[t].is_sparse:
-                    sparse_t = self.A_list[t].coalesce() 
-                    indices = sparse_t.indices()
-                    values = sparse_t.values()
-                    mask = values > 0
-                    pos_edges = indices[:, mask].t()
-                else:
-                    pos_edges = self.A_list[t].nonzero()
+                # Fetch positive edges
+                adj_t = self.A_list[t].coalesce() if self.A_list[t].is_sparse else self.A_list[t]
+                pos_edges = adj_t.indices().t() if adj_t.is_sparse else adj_t.nonzero()
                 
                 if pos_edges.size(0) == 0: continue
                 
-                num_pos = pos_edges.size(0)
-                MAX_NEG_EDGES = 20000 
-                if num_pos > MAX_NEG_EDGES:
-                    perm = torch.randperm(num_pos)[:MAX_NEG_EDGES]
-                    pos_edges = pos_edges[perm]
-                    num_pos = MAX_NEG_EDGES
-
+                # Subsample if necessary for memory, then sample 1:1 negatives
+                num_pos = min(pos_edges.size(0), 20000)
+                perm = torch.randperm(pos_edges.size(0))[:num_pos]
+                pos_edges = pos_edges[perm]
                 neg_edges = torch.randint(0, self.node_count, (num_pos, 2)).to(self.device)
                 
+                # Compute Loss
                 pos_scores = self.classifier(torch.cat([emb[pos_edges[:,0]], emb[pos_edges[:,1]]], dim=1))
                 neg_scores = self.classifier(torch.cat([emb[neg_edges[:,0]], emb[neg_edges[:,1]]], dim=1))
                 
                 loss = self.bce_loss(pos_scores, torch.ones_like(pos_scores)) + \
                        self.bce_loss(neg_scores, torch.zeros_like(neg_scores))
                 
-                loss.backward(); self.optimizer.step(); epoch_loss += loss.item()
+                loss.backward()
+                self.optimizer.step()
+                epoch_loss += loss.item()
 
-                if epoch % 10 == 0 or epoch == 1:
-                    with torch.no_grad():
-                        preds = torch.cat([torch.sigmoid(pos_scores), torch.sigmoid(neg_scores)]).cpu().numpy().flatten()
-                        targets = np.concatenate([np.ones(pos_scores.size(0)), np.zeros(neg_scores.size(0))])
-                        all_epoch_preds.append(preds)
-                        all_epoch_targets.append(targets)
-
+            # 2. AUC Evaluation Phase (Both Train and Val)
+            train_auc = self.evaluate_link_prediction(self.train_idx)
+            val_auc = self.evaluate_link_prediction(self.val_idx)
             avg_epoch_loss = epoch_loss / len(self.train_idx)
-            
-            # --- EARLY STOPPING LOGIC ---
-            if avg_epoch_loss < best_train_loss:
-                best_train_loss = avg_epoch_loss
-                # Save the best model weights
+
+            # 3. Update Best State based on Validation AUC
+            if val_auc > best_val_auc:
+                best_val_auc = val_auc
+                best_train_auc_at_val = train_auc # Capture the corresponding train metric
                 self.best_encoder = copy.deepcopy(self.encoder)
                 self.best_classifier = copy.deepcopy(self.classifier)
                 no_improve = 0
+                status = "*" 
             else:
                 no_improve += 1
+                status = ""
+
+            print(f"Epoch {epoch:03d} | Loss: {avg_epoch_loss:.4f} | Train AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} {status}")
             
-            if epoch % 10 == 0 or epoch == 1:
-                y_t = np.concatenate(all_epoch_targets)
-                y_p = np.concatenate(all_epoch_preds)
-                print(f"Epoch {epoch:03d} | Loss: {avg_epoch_loss:.6f} | Train AUC: {roc_auc_score(y_t, y_p):.4f}")
-            
-            # Check if patience has been exceeded
             if no_improve >= patience:
-                print(f"Early stopping triggered at epoch {epoch}. Best Loss: {best_train_loss:.6f}")
+                print(f"Early stopping triggered. Best Val AUC: {best_val_auc:.4f}")
                 break
 
-        t1, g1, r1 = time.time() - start_train, get_gpu_memory(), get_ram_usage()
+        # --- FINAL SUMMARY PRINT ---
+        print(f"\n[FINAL TRAINING SUMMARY - {self.args.model}]")
+        print(f"Best Validation AUC: {best_val_auc:.4f}")
+        print(f"Corresponding Train AUC: {best_train_auc_at_val:.4f}")
+        print(f"---------------------------\n")
+
+        # Restore best weights for Phase 2 & 3
         if self.best_encoder is not None:
             self.encoder, self.classifier = self.best_encoder, self.best_classifier
+        
+        t1, g1, r1 = time.time() - start_train, get_gpu_memory(), get_ram_usage()
 
         # === PHASE 2 & 3 ===
         start_opt = time.time()

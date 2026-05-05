@@ -171,12 +171,15 @@ class EvaluateGraphs():
             else:
                 print("INFO: NetworkX objects detected in pickle.")
             
+            if extracted_dataset == "Reddit":
+                extracted_dataset = "Reddit_B"
+            
             _, _, thresholds, target_graphs = load_data(
                 extracted_dataset, '', '', '', 'all', 
                 use_predicted=False, num_buckets=10, use_test_style=None
             )
             
-            if "topoGED" in self.data_path:
+            if "topoGED" in str(self.data_path):
                 target_graphs, _ = modifyGraphIds(target_graphs, thresholds, 10000)
             
             target_graphs_last = [inner_list[-1] for inner_list in target_graphs if inner_list]
@@ -425,148 +428,159 @@ class EvaluateGraphs():
             
         print(self.data_path)
         
-    def makeTable(self, df, path, caption, label):
-        path = Path(path)
+    def makeTable(self, df, path, caption, label, table_type=None):
+        path_obj = Path(path)
+        is_structure = "structure" in str(path).lower()
+        
         min_best_cols = [
             'Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 
-            'Clustering Coefficient', 'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 
-            'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 
-            'Median Extra Edges', 'Missing Edges', 'Median Missing Edges',
+            'Clustering Coefficient', 'Density', 'Num Triangles', 'Descriptor Norm',
+            'Median Extra Nodes', 'Median Missing Nodes', 
+            'Median Extra Edges',  'Median Missing Edges', 'Num o-n Predicted', 'Num n-n Predicted', 'New Nodes Predicted'
         ]
 
-        # 1. Process Headers and Identify TopoGED
-        processed_methods = []
+        # 1. Column Ordering
         bench_indices = []
         edgebank_idx = -1
         topo_idx = -1
-        
+        processed_names = {}
+
         for i, m in enumerate(df.index):
-            m_str = str(m).lower()
-            
-            if "sampling" in m_str:
-                name = "TopoGED"
-                topo_idx = i
-            elif "topoged" in m_str or "oobankchanges" in m_str:
-                name = "TopoGED Edgebank"
+            m_str = str(m)
+            if m_str == "TopoGED Edgebank":
+                processed_names[i] = r"\shortstack{TopoGED \\ Edgebank}"
                 edgebank_idx = i
-            else:
-                name = str(m).replace('_', r'\_')
+            elif m_str == "TopoGED":
+                processed_names[i] = "TopoGED"
+                topo_idx = i
+            elif r"True $\Phi(\widehat{\mathcal{G}}_t)$, True Probs" in m_str:
+                processed_names[i] = r"\shortstack{True $\Phi(\widehat{\mathcal{G}}_t)$ \\ True Probs}"
                 bench_indices.append(i)
-            processed_methods.append(name)
+            else:
+                name = m_str.replace('TopoGED - ', '').replace('_', r'\_')
+                processed_names[i] = name
+                bench_indices.append(i)
 
-        # 2. Final Order: [Benchmarks] + [Edgebank] + [TopoGED]
-        final_order = bench_indices[:]
-        if edgebank_idx != -1: final_order.append(edgebank_idx)
-        if topo_idx != -1: final_order.append(topo_idx)
-        
+        final_order = bench_indices + ([edgebank_idx] if edgebank_idx != -1 else []) + ([topo_idx] if topo_idx != -1 else [])
         ordered_df = df.iloc[final_order]
-        final_names = [processed_methods[i] for i in final_order]
+        final_names = [processed_names[idx] for idx in final_order]
 
-        # 3. Start LaTeX generation
-        latex = []
-        latex.append(r"\begin{table*}[t]")
-        latex.append(r"\centering")
-        latex.append(r"\small")
-        # latex.append(r"\setlength{\tabcolsep}{0pt}") 
-
-        # 4. Column Setup Logic
-        # l: Metric Name
-        # c * (len - 1): All benchmarks
-        # | c: TopoGED (Isolated by separator)
+        # 2. COLUMN SETUP FIX: Removing the 'ill' and fixing rule spanning
         num_benchmarks = len(bench_indices)
+        num_variants = (1 if edgebank_idx != -1 else 0) + (1 if topo_idx != -1 else 0)
         
-        # Count how many special columns we are adding after the bar
-        special_count = 0
-        if edgebank_idx != -1: special_count += 1
-        if topo_idx != -1: special_count += 1
-        
-        # Construct the column format string
-        # We use 'c' * (special_count) to ensure every model has a column definition
-        col_setup = "l " + "c " * (num_benchmarks - 1) + \
-                    r"c @{\extracolsep{\fill}\hspace{1.5em}}|@{\extracolsep{\fill}\hspace{1.5em}} " + \
-                    " ".join(["c"] * special_count)
+        # Standardize the setup for clean horizontal lines
+        # We use @{\extracolsep{\fill}} once at the start to force the horizontal rules to the target width
+        col_setup = "l " + "c " * num_benchmarks + "| " + "c " * num_variants
+        latex = [r"\begin{tabular}{ l c c c c c c c}"]
 
-        latex.append(r"\begin{tabular*}{0.85\textwidth}{@{\extracolsep{\fill}} " + col_setup + " @{}}")
-
-        # Header Row
+        # 3. Header Row
+        latex.append(r"\toprule")
+        latex.append(r"\toprule")
         header_row = [r"\textbf{Metric}"] + [fr"\textbf{{{name}}}" for name in final_names]
         latex.append(" & ".join(header_row) + r" \\ \midrule")
 
-        # 5. Data Rows
+        # 4. Data Rows
         for col_name in df.columns:
-            # Check if row is entirely empty
             if ordered_df[col_name].apply(lambda x: str(x).lower() in ['nan', 'none', '']).all():
                 continue
 
             row_cells = [col_name.replace('_', r'\_')]
             
             def get_num(x):
-                try:
-                    return float(x)
-                except (ValueError, TypeError):
-                    return np.nan
+                try: return float(x)
+                except: return np.nan
 
-            col_data = ordered_df[col_name].apply(get_num).replace([np.inf, -np.inf], np.nan).dropna()
+            col_data = ordered_df[col_name].apply(get_num).dropna()
             
-            # Ranking Logic (across ALL columns in the row)
-            if col_name in min_best_cols:
-                sorted_vals = np.sort(col_data.abs().unique())
-                get_check_val = lambda x: abs(x)
+            # Determine best and second best for bold/underline
+            if not col_data.empty:
+                if col_name in min_best_cols:
+                    sorted_vals = np.sort(col_data.abs().unique())
+                else:
+                    sorted_vals = np.sort(col_data.unique())[::-1]
+                best_val = sorted_vals[0] if len(sorted_vals) > 0 else None
+                second_best = sorted_vals[1] if len(sorted_vals) > 1 else None
             else:
-                sorted_vals = np.sort(col_data.unique())[::-1]
-                get_check_val = lambda x: x
-
-            best_val = sorted_vals[0] if len(sorted_vals) > 0 else None
-            second_best = sorted_vals[1] if len(sorted_vals) > 1 else None
+                best_val, second_best = None, None
 
             for _, row in ordered_df.iterrows():
-                val_raw = row[col_name]
+                val_raw = str(row[col_name])
                 val_num = get_num(val_raw)
 
+                if val_raw == "CHAL":
+                    row_cells.append(r"\text{CHAL}")
+                    continue
                 if np.isnan(val_num):
-                    row_cells.append("$N/A$") # Changed to N/A for clarity
+                    row_cells.append("$OOM$")
                     continue
                 
-                check_val = get_check_val(val_num)
+                check_val = abs(val_num) if col_name in min_best_cols else val_num
                 display_num = str(val_raw)
 
-                if best_val is not None and np.isclose(check_val, best_val, atol=1e-5):
+                if best_val is not None and np.isclose(check_val, best_val, atol=1e-5) and display_num != "0.00":
                     row_cells.append(r"$\mathbf{" + display_num + "}$")
-                elif second_best is not None and np.isclose(check_val, second_best, atol=1e-5):
+                elif second_best is not None and np.isclose(check_val, second_best, atol=1e-5) and display_num != "0.00":
                     row_cells.append(r"$\underline{" + display_num + "}$")
                 else:
                     row_cells.append(f"${display_num}$")
                     
             latex.append(" & ".join(row_cells) + r" \\")
 
-        latex.append(r"\bottomrule")
-        latex.append(r"\end{tabular*}")
-        latex.append(r"\caption{" + caption + "}")
-        latex.append(r"\label{" + label + "}")
-        latex.append(r"\end{table*}")
+            # Insert the horizontal divider for the structure table
+            if is_structure and col_name == "Num Triangles":
+                latex.append(r"\midrule")
 
+        latex.append(r"\bottomrule")
+        latex.append(r"\bottomrule")
+        latex.append(r"\end{tabular}")
+        
+        latex.append(r"\begin{center}")
+        latex.append(r"\vspace{-2pt}") # Tighten space to the table slightly
+        
+        if table_type == "nodes":
+            latex.append(r"{\small For all metrics higher is better. \par}")
+        elif table_type == "structure":
+            latex.append(r"{\small For all metrics closer to 0 is better. \par}")
+        elif table_type == "edges":
+            latex.append(r"{\small For \texttt{Num o-n Predicted} and \texttt{Num n-n Predicted} closer to 0 is better; for others, higher is better. \par}")
+            
+        # The legend (bold/underline) - \par is cleaner than \\ here
+        latex.append(r"{\small \textbf{Bold} indicates best, the second-best is \underline{underlined}. \par}")
+        latex.append(r"\end{center}")
+
+        
         # Save
-        txt_path = path.with_suffix('.txt')
+        txt_path = path_obj.with_suffix('.txt')
         os.makedirs(txt_path.parent, exist_ok=True)
         with open(txt_path, 'w') as f:
             f.write("\n".join(latex))
             
+            
     def collect_data_for_heatmap(self, df, dataset, old_only, threshold=None, lr=None):      
         valid_metrics = [
-            'Assortativity Coefficient', 'Clustering Coefficient', 'Degree Centrality', 'Density', 'Extra Edges', 
-            'Extra Nodes Placed', 'Missing Edges', 'Missing Nodes', 'Num Triangles', 'Num n-n Predicted', 'Num o-n Predicted',
-            'o-o-bank F1', 'o-o-bank Precision', 'o-o-bank Recall', 'o-o-nobank F1', 'o-o-nobank Precision', 'o-o-nobank Recall']
+            'Assortativity Coefficient', 'Clustering Coefficient', 'Degree Centrality', 'Density', 
+            'Num Triangles', 'Num n-n Predicted', 'Num o-n Predicted',
+            'oo-bank F1', 'oo-bank Precision', 'oo-bank Recall', 'oo-nobank F1', 'oo-nobank Precision', 'oo-nobank Recall']
         for model_name in df.index:
+            if "edgebank" in str(model_name).lower():
+                continue
             for metric_name in df.columns:
                 if metric_name in valid_metrics:
                     val = df.at[model_name, metric_name]
+                    
+                    try:
+                        score_val = float(val) if str(val).lower() != "chal" else np.nan
+                    except (ValueError, TypeError):
+                        score_val = np.nan
+                    
                     self.all_results.append({
                         'Dataset': dataset,
                         'Model': model_name,
                         'Metric': metric_name,
                         'Threshold': threshold,
                         'lr': lr,
-                        'Score': float(val),
+                        'Score': score_val,
                         'OldOnly': old_only
                     })
                     
@@ -574,11 +588,13 @@ class EvaluateGraphs():
     def create_heatmaps(self, file_path, curr_models, old_only, target_threshold=None, lr=None):
         # 1. Load base data and filter for current view/threshold
         df_base = pd.DataFrame(self.all_results)
-        df_filtered = df_base[
-            (df_base['OldOnly'] == old_only) & 
-            (df_base['Threshold'] == target_threshold) &
-            (df_base['lr'] == lr)
-        ].copy()        
+        # df_filtered = df_base[
+        #     (df_base['OldOnly'] == old_only) & 
+        #     (df_base['Threshold'] == target_threshold) &
+        #     (df_base['lr'] == lr)
+        # ].copy()        
+        print(df_base.head())
+        
         df_filtered = df_base.copy()
 
         if df_filtered.empty:
@@ -589,13 +605,23 @@ class EvaluateGraphs():
         methods = ['oobankchanges']
         benchmarks = ['HTGN', 'ROLAND', 'VGRNN', 'TGCN', 'GCLSTM', 'EvolveGCN']
         
+        methods = ['TopoGED'] 
+        benchmarks = ['HTGN', 'ROLAND', 'VGRNN', 'TGCN', 'GCLSTM', 'EvolveGCN']
+        
         for method in methods:
             curr_file_path = os.path.join(file_path, f"{method.replace('.', '')}")
             os.makedirs(curr_file_path, exist_ok=True)
 
-            # Filter for models relevant to this specific loop
+            # --- NEW FILTER: Explicitly exclude Edgebank from the heatmap data ---
+            # We only keep benchmarks and the ONE specific method trial
             models_to_keep = benchmarks + [method]
+            
+            # This ensures that even if 'TopoGED Edgebank' is in self.all_results,
+            # it is dropped before the heatmap pivot.
             curr_df = df_filtered[df_filtered['Model'].isin(models_to_keep)].copy()
+            
+            # Double check: remove anything with "Edgebank" in the name just in case
+            curr_df = curr_df[~curr_df['Model'].str.contains('Edgebank', case=False, na=False)]
             
             if curr_df.empty:
                 continue
@@ -608,9 +634,9 @@ class EvaluateGraphs():
             min_best_cols = [
                 'Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 
                 'Assortativity Coefficient', 'Clustering Coefficient', 'Density', 
-                'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 
-                'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 
-                'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges'
+                'Num Triangles', 'Descriptor Norm', 
+                'Median Extra Nodes', 'Median Missing Nodes', 
+                'Median Extra Edges', 'Median Missing Edges', 'Num o-n Predicted', 'Num n-n Predicted', 'New Nodes Predicted'
             ]
 
             # Adjust score so that the "highest" value is always the winner
@@ -751,189 +777,291 @@ class EvaluateGraphs():
             #     plt.close('all')
     
 
-    def construct_ablation_tables(self):
-        datasets = [
-            'CollegeMsg', 'mathoverflow', 'networkadex', 'networkaion', 'networkaeternity', 'networkaragon', 'networkbancor', 'networkcentra', 
-            'networkcoindash', 'networkiconomi', 'networkcindicator', 'networkdgd', 'Reddit_B', 'tgbl-wiki',
-        ]
+    def construct_ablation_tables(self, datasets):
+        ablation_map = {
+            'Ablation 7': 'False Probs',
+            'Ablation 8': r'False $\Phi(\widehat{\mathcal{G}}_t)$',
+            'Ablation 9': r'True $\Phi(\widehat{\mathcal{G}}_t)$, True Probs'
+        }
+
+
+        ablation_modes = [7, 8, 9]
+        lr = 0.001
         for dataset in datasets:
-            print(dataset)
-            for lr in [0.001]:
-                # for setting in ['learnedparams', 'oobankchanges']:
-                for setting in ['oobankchanges']:
-                    for old_only_status in [False]:
-                        file_path = f'data/output/figures/ablation_study_tables_new_random/' 
-                        rows = [f'{setting}']
-                        # rows.extend(f'{setting}_ablation{i}' for i in range(1, 7))
-                        rows.extend(f'{setting}_ablation{i}' for i in range(7, 10))
-                        
-                        # Get prefixes
-                        data = []
-                        # Base prefix
-                        
-                        data.append(f"GraphGeneration/scripts/results/{dataset}/{setting}_lr{lr}_5back{'_oldonly' if old_only_status else ''}/")
-                        
-                        # Ablation prefixes
-                        # for i in range(1, 7):
-                        for i in range(7, 10):
-                            data.append(f"GraphGeneration/scripts/results/{dataset}/ablation/{setting}_lr{lr}_5back_ablation{i}{'_old_only' if old_only_status else ''}/")
-                        
-                        node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes']
-                        structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient', 
-                                    'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges',
-                                    'Median Missing Edges']
-                        if not old_only_status:
-                            edge_columns = ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1',
-                                            'o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1',
-                                            'Num o-n Predicted', 'Num n-n Predicted'
-                                            'Edge Precision', 'Edge Recall', 'Edge F1']
-                        else:
-                            edge_columns = ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1',
-                                            'o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1',
-                                            'Edge Precision', 'Edge Recall', 'Edge F1']
-                        
-                        node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
-                        structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
-                        edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
-                        num_eval_graphs = num_test_graphs[dataset]
-                        
-                        # Compute Metrics for each dataset
-                        for directory in data:
-                            if not os.path.exists(directory):
-                                print(f"Data from: {directory} does not exist")
-                                continue
-                            # Get name of strategy
-                            folder_name = directory.strip('/').split('/')[-1] 
-                            
-                            if 'ablation' in folder_name:
-                                parts = folder_name.split('_')
-                                model = f"{parts[0]}_{parts[3]}"
-                            else:
-                                model = folder_name.split('_')[0].strip()                            
-                            
-                            # Take the tail since we only eval test graphs here
-                            node_eval = pd.read_csv(directory + 'structure/node_evaluation.csv').tail(num_eval_graphs)
-                            true_structure = pd.read_csv(directory + 'structure/structure_true.csv').tail(num_eval_graphs)
-                            pred_structure = pd.read_csv(directory + 'structure/structure_pred.csv').tail(num_eval_graphs)
-                            toper_eval = pd.read_csv(directory + 'structure/toper_eval.csv').tail(num_eval_graphs)
-                            
-                            all_edges = pd.read_csv(directory + 'edge_evaluation/all_edges.csv').tail(num_eval_graphs)
-                            old_only = pd.read_csv(directory + 'edge_evaluation/old_nodes_only.csv').tail(num_eval_graphs)
-                            on_only = pd.read_csv(directory + 'edge_evaluation/on_edges_only.csv').tail(num_eval_graphs)
-                            new_only = pd.read_csv(directory + 'edge_evaluation/new_nodes_only.csv').tail(num_eval_graphs)
+            data = []
+            for ablation in ablation_modes:
+                data_path = f'data/output/ablation/constructed_graphs/{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_lr0.001_5back_oobankchanges_zeros_sampling_predvalsTrue_edgebank_default_VectorTypeV-EWMA_ablation{ablation}/GCN_constructed_graphs_{dataset}.pkl'
+                prefix = f'GraphGeneration/scripts/results/{dataset}/ablations/final/{dataset}_lr{lr}_ablation{ablation}_tmp_V-EWMA/'
 
-                            # Add metrics
-                            structure_df.at[model, 'Avg Node Degree'] = true_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean()
-                            structure_df.at[model, 'Unique Degree Count'] = true_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean()
-                            structure_df.at[model, 'Degree Centrality'] = true_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean()
-                            structure_df.at[model, 'Assortativity Coefficient'] = true_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
-                            structure_df.at[model, 'Clustering Coefficient'] = true_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
-                            structure_df.at[model, 'Density'] = true_structure['Density'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Density'].replace([np.inf, -np.inf], np.nan).mean()
-                            structure_df.at[model, 'Num Triangles'] = true_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean()
-                                            
-                                            
-                            extra_node_slice = toper_eval[toper_eval['node_diff_10'] > 0]['node_diff_10']
-                            structure_df.at[model, 'Extra Nodes Placed'] = extra_node_slice.sum() if not extra_node_slice.empty else 0
-                            structure_df.at[model, 'Median Extra Nodes Placed'] = extra_node_slice.median() if not extra_node_slice.empty else 0
+                if os.path.exists(data_path) and not os.path.exists(prefix):
+                    try:
+                        evaluator = EvaluateGraphs(args=None, prefix=prefix, data_path=data_path)
+                        evaluator.run()
+                    except Exception as e:
+                        print(f"Skipping Eval for {dataset} Ablation {ablation}: {e}")
+                else:
+                    print(f'Skipping eval for {data_path}')
+                    
+                data.append(prefix)
+            
+            data.append(f"data/output/results/TopoGED_{dataset}_zeros_0.001_default_V-EWMA_sampling_tmp/")  # The true method
+            
+            # Setup rows
+            rows = [f'Ablation {d}' for d in ablation_modes] + ['TopoGED']
+            node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'New Nodes Predicted']
+            structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
+                    'Density', 'Num Triangles', 'Descriptor Norm', 'Median Extra Nodes', 'Median Missing Nodes', 'Median Extra Edges', 'Median Missing Edges']
+            edge_columns = ['oo-bank Precision', "oo-bank Recall", "oo-bank F1", 
+                            "oo-nobank Precision", "oo-nobank Recall", "oo-nobank F1",
+                            "Num o-n Predicted", "Num n-n Predicted",
+                            "Edge Precision", "Edge Recall", "Edge F1"]
+        
+            node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
+            structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
+            edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
+            num_eval_graphs = num_test_graphs[dataset]
+            
+            # Compute Metrics for each dataset
+            print(f'Generating ablation table for dataset: {dataset}')
+            for directory in data:
+                print(directory)
+                
+                dir_str = str(directory).lower()
+                curr_ablation = re.search(r'ablation(\d+)', dir_str)
+                
+                if curr_ablation:
+                    model = f'Ablation {curr_ablation.group(1)}'
+                elif "sampling" in dir_str:
+                    model = 'TopoGED'
+                else:
+                    continue
+                    
+                
+                if not os.path.exists(directory):
+                    print(f"Data from: {directory} does not exist")
+                    structure_df.at[model, 'Avg Node Degree'] = np.nan
+                    structure_df.at[model, 'Unique Degree Count'] = np.nan
+                    structure_df.at[model, 'Degree Centrality'] = np.nan
+                    structure_df.at[model, 'Assortativity Coefficient'] = np.nan
+                    structure_df.at[model, 'Clustering Coefficient'] = np.nan
+                    structure_df.at[model, 'Density'] = np.nan
+                    structure_df.at[model, 'Num Triangles'] = np.nan
+                    
+                    structure_df.at[model, 'Median Extra Nodes'] = np.nan
+                    
+                    structure_df.at[model, 'Median Missing Nodes'] = np.nan
+                    
+                    structure_df.at[model, 'Median Extra Edges'] = np.nan
+                    
+                    structure_df.at[model, 'Median Missing Edges'] = np.nan
+                    structure_df.at[model, 'Descriptor Norm'] = np.nan
+                    
+                    node_df.at[model, 'Precision Old Nodes'] = np.nan
+                    node_df.at[model, 'Recall Old Nodes'] = np.nan
+                    node_df.at[model, 'F1 Old Nodes'] = np.nan      
+                    
+                    node_df.at[model, 'Precision Nodes'] = np.nan
+                    node_df.at[model, 'Recall Nodes'] = np.nan
+                    node_df.at[model, 'F1 Nodes'] = np.nan        
+                    
+                    
+                    edge_df.at[model, 'Edge Precision'] = np.nan
+                    edge_df.at[model, 'Edge Recall'] = np.nan
+                    edge_df.at[model, 'Edge F1'] = np.nan
+                    
+                    node_df.at[model, 'New Nodes Predicted'] = np.nan
+                    
+                    edge_df.at[model, 'oo-bank Precision'] = np.nan
+                    edge_df.at[model, 'oo-bank Recall'] = np.nan
+                    edge_df.at[model, 'oo-bank F1'] = np.nan       
                             
-                            missing_node_slice = toper_eval[toper_eval['node_diff_10'] < 0]['node_diff_10']
-                            structure_df.at[model, 'Missing Nodes'] = abs(missing_node_slice.sum()) if not missing_node_slice.empty else 0
-                            structure_df.at[model, 'Median Missing Nodes'] = abs(missing_node_slice.median()) if not missing_node_slice.empty else 0
-                            
-                            extra_edge_slice = toper_eval[toper_eval['edge_diff_10'] > 0]['edge_diff_10']
-                            structure_df.at[model, 'Extra Edges'] = extra_edge_slice.sum() if not extra_edge_slice.empty else 0
-                            structure_df.at[model, 'Median Extra Edges'] = extra_edge_slice.median() if not extra_edge_slice.empty else 0
-                            
-                            missing_edge_slice = toper_eval[toper_eval['edge_diff_10'] < 0]['edge_diff_10']
-                            structure_df.at[model, 'Missing Edges'] = abs(missing_edge_slice.sum()) if not missing_edge_slice.empty else 0
-                            structure_df.at[model, 'Median Missing Edges'] = abs(missing_edge_slice.median()) if not missing_edge_slice.empty else 0
-                            structure_df.at[model, 'TopER L2 Norm'] = toper_eval['l2_norm'].mean()
-                            
-                            node_df.at[model, 'Precision Old Nodes'] = node_eval['Precision_Old'].mean()
-                            node_df.at[model, 'Recall Old Nodes'] = node_eval['Recall_Old'].mean()
-                            node_df.at[model, 'F1 Old Nodes'] = node_eval['F1_Old'].mean()        
-                            
-                            node_df.at[model, 'Precision Nodes'] = node_eval['Precision_All'].mean()
-                            node_df.at[model, 'Recall Nodes'] = node_eval['Recall_All'].mean()
-                            node_df.at[model, 'F1 Nodes'] = node_eval['F1_All'].mean()          
-                            
-                            
-                            edge_df.at[model, 'Edge Precision'] = all_edges['Precision'].mean()
-                            edge_df.at[model, 'Edge Recall'] = all_edges['Recall'].mean()
-                            edge_df.at[model, 'Edge F1'] = all_edges['F1'].mean() 
-                            
-                            node_df.at[model, 'Precision New Nodes'] = node_eval['Precision_New'].mean()
-                            node_df.at[model, 'Recall New Nodes'] = node_eval['Recall_New'].mean()
-                            node_df.at[model, 'F1 New Nodes'] = node_eval['F1_New'].mean()
-                            
-                            edge_df.at[model, 'o-o-bank Precision'] = old_only['Precision_bank'].mean()
-                            edge_df.at[model, 'o-o-bank Recall'] = old_only['Recall_bank'].mean()
-                            edge_df.at[model, 'o-o-bank F1'] = old_only['F1_bank'].mean()          
-                                
-                            edge_df.at[model, 'o-o-nobank Precision'] = old_only['Precision_nobank'].mean()
-                            recall_col_nobank = 'Recall_nobank' if 'Recall_nobank' in old_only.columns else 'Recall_bank_nobank'
-                            edge_df.at[model, 'o-o-nobank Recall'] = old_only[recall_col_nobank].mean()
-                            edge_df.at[model, 'o-o-nobank F1'] = old_only['F1_nobank'].mean()
-                            
-                            if not old_only_status:                    
-                                edge_df.at[model, 'Num o-n Predicted'] = on_only['TP'].sum() + on_only['FP'].sum() + on_only['FN'].sum() + on_only['TN'].sum()
-                                edge_df.at[model, 'Num n-n Predicted'] = new_only['TP'].sum() + new_only['FP'].sum() + new_only['FN'].sum() + new_only['TN'].sum()
-
+                    edge_df.at[model, 'oo-nobank Precision'] = np.nan
+                    # Handles typo
+                    edge_df.at[model, 'oo-nobank Recall'] = np.nan
+                    edge_df.at[model, 'oo-nobank F1'] = np.nan
+                
+                    edge_df.at[model, 'Num o-n Predicted'] = np.nan
+                    edge_df.at[model, 'Num n-n Predicted'] = np.nan
                         
-                        int_cols = [
-                            'Extra Nodes Placed', 
-                            'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 
-                            'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges',
-                            'Num o-n Predicted', 'Num n-n Predicted'
-                        ]
+                    continue    
+                
+                dir_path = Path(directory)
+                # Take the tail since we only eval test graphs here
+                files = {
+                    'node_eval': str(dir_path / 'structure' / 'node_evaluation.csv'),
+                    'true_structure': str(dir_path / 'structure' / 'structure_true.csv'),
+                    'pred_structure': str(dir_path / 'structure' / 'structure_pred.csv'),
+                    'toper_eval': str(dir_path / 'structure' / 'toper_eval.csv'),
+                    'all_edges': str(dir_path / 'edge_evaluation' / 'all_edges.csv'),
+                    'old_only': str(dir_path / 'edge_evaluation' / 'old_nodes_only.csv'),
+                    'on_only': str(dir_path / 'edge_evaluation' / 'on_edges_only.csv'),
+                    'new_only': str(dir_path / 'edge_evaluation' / 'new_nodes_only.csv')
+                }
 
-                        # 2. Apply formatting to each DataFrame
-                        for df in [node_df, structure_df, edge_df]:
-                            for col in df.columns:
-                                if col in int_cols:
-                                    # Round and convert to integer string
-                                    df[col] = df[col].apply(lambda x: f"{int(round(x))}" if pd.notnull(x) else "0")
-                                else:
-                                    # Format as 2-decimal float string
-                                    df[col] = df[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "0.00")
+                # Load each file and check length
+                dfs = {}
+                for key, path in files.items():
+                    temp_df = pd.read_csv(path)
+                    if len(temp_df) < num_eval_graphs:
+                        print(f"ERROR: {path} has {len(temp_df)} rows, expected {num_eval_graphs}")
+                    dfs[key] = temp_df.tail(num_eval_graphs)
+
+                # Map back to your variables
+                node_eval = dfs['node_eval']
+                true_structure = dfs['true_structure']
+                pred_structure = dfs['pred_structure']
+                toper_eval = dfs['toper_eval']
+                all_edges = dfs['all_edges']
+                old_only = dfs['old_only']
+                on_only = dfs['on_only']
+                new_only = dfs['new_only']
+
+                # Add metrics
+                def get_mean(df, col):
+                    return df[col].replace([np.inf, -np.inf], np.nan).mean()
+
+                # Calculate Percent Error: (Pred - True) / True
+                metrics_map = {
+                    'Avg Node Degree': 'Average Node Degree',
+                    'Unique Degree Count': 'Unique Degree Count',
+                    'Degree Centrality': 'Degree Centrality',
+                    'Assortativity Coefficient': 'Assortivity Coefficient',
+                    'Clustering Coefficient': 'Clustering Coefficient',
+                    'Density': 'Density',
+                    'Num Triangles': 'Number of Triangles'
+                }
+
+                for df_col, csv_col in metrics_map.items():
+                    t_vals = true_structure[csv_col]
+                    p_vals = pred_structure[csv_col]
+                    
+                    denom = t_vals.copy()
+                    denom[denom == 0] = 1.0
+                    
+                    relative_errors = (p_vals - t_vals) / denom
+                    
+                    structure_df.at[model, df_col] = relative_errors.mean()
+                    
+                    
+                extra_node_slice = toper_eval[toper_eval['node_diff_10'] > 0]['node_diff_10']
+                structure_df.at[model, 'Median Extra Nodes'] = extra_node_slice.median() if not extra_node_slice.empty else 0
+                
+                missing_node_slice = toper_eval[toper_eval['node_diff_10'] < 0]['node_diff_10']
+                structure_df.at[model, 'Median Missing Nodes'] = abs(missing_node_slice.median()) if not missing_node_slice.empty else 0
+                
+                extra_edge_slice = toper_eval[toper_eval['edge_diff_10'] > 0]['edge_diff_10']
+                structure_df.at[model, 'Median Extra Edges'] = extra_edge_slice.median() if not extra_edge_slice.empty else 0
+                
+                missing_edge_slice = toper_eval[toper_eval['edge_diff_10'] < 0]['edge_diff_10']
+                structure_df.at[model, 'Median Missing Edges'] = abs(missing_edge_slice.median()) if not missing_edge_slice.empty else 0
+                structure_df.at[model, 'Descriptor Norm'] = toper_eval['l2_norm'].mean()
+                
+                node_df.at[model, 'Precision Old Nodes'] = node_eval['Precision_Old'].mean()
+                node_df.at[model, 'Recall Old Nodes'] = node_eval['Recall_Old'].mean()
+                node_df.at[model, 'F1 Old Nodes'] = node_eval['F1_Old'].mean()        
+                
+                node_df.at[model, 'Precision Nodes'] = node_eval['Precision_All'].mean()
+                node_df.at[model, 'Recall Nodes'] = node_eval['Recall_All'].mean()
+                node_df.at[model, 'F1 Nodes'] = node_eval['F1_All'].mean()          
+                
+                
+                edge_df.at[model, 'Edge Precision'] = all_edges['Precision'].mean()
+                edge_df.at[model, 'Edge Recall'] = all_edges['Recall'].mean()
+                edge_df.at[model, 'Edge F1'] = all_edges['F1'].mean() 
+                
+                denom = node_eval['Num_New_True'].copy().astype(float)
+                denom[denom == 0] = 1.0
+                percent_diff_new_nodes = (node_eval['Num_New_Predicted'] - node_eval['Num_New_True']) / denom
+                node_df.at[model, 'New Nodes Predicted'] = percent_diff_new_nodes.mean()
+                
+                edge_df.at[model, 'oo-bank Precision'] = old_only['Precision_bank'].mean()
+                edge_df.at[model, 'oo-bank Recall'] = old_only['Recall_bank'].mean()
+                edge_df.at[model, 'oo-bank F1'] = old_only['F1_bank'].mean()          
                         
+                edge_df.at[model, 'oo-nobank Precision'] = old_only['Precision_nobank'].mean()
+                # Handles typo
+                recall_col_nobank = 'Recall_nobank' if 'Recall_nobank' in old_only.columns else 'Recall_bank_nobank'
+                edge_df.at[model, 'oo-nobank Recall'] = old_only[recall_col_nobank].mean()
+                edge_df.at[model, 'oo-nobank F1'] = old_only['F1_nobank'].mean()
+            
+                # Positive means model under predicted, negative means model over predicted
+                num_true_on = on_only['TP'] + on_only['FN']
+                num_pred_on = on_only['TP'] + on_only['FP']
 
-                        structure_output_path = os.path.join(file_path, f"{dataset}_structure_table.png")
-                        edge_output_path = os.path.join(file_path, f"{dataset}_edge_table.png")
-                        node_output_path = os.path.join(file_path, f"{dataset}_node_table.png")
+                denom_on = num_true_on.copy()
+                denom_on[denom_on == 0] = 1.0 # Force denominator to 1 if true is 0
 
-                        min_best_cols = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient', 
-                                'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges']
-                        # Not used, but for clarity still here
-                        max_best_cols = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Edge Precision', 'Edge Recall', 'Edge F1', 
-                                            'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes',
-                                            'o-o Precision', 'o-o Recall', 'o-o F1',
-                                            'Num o-n Predicted', 'Num n-n Predicted']
-                        
+                percent_diff_on = (num_pred_on - num_true_on) / denom_on
+                edge_df.at[model, 'Num o-n Predicted'] = percent_diff_on.mean()
 
-                        ablation_map = {
-                            'ablation7': '-TopER',
-                            'ablation8': '-probs',
-                            'ablation9': '-TopER -probs'
-                        }
+                # --- n-n Edges ---
+                num_true_nn = new_only['TP'] + new_only['FN']
+                num_pred_nn = new_only['TP'] + new_only['FP']
 
-                        target_dfs = [node_df, structure_df, edge_df]
+                denom_nn = num_true_nn.copy()
+                denom_nn[denom_nn == 0] = 1.0
 
-                        for i in range(len(target_dfs)):
-                            # Create a local map for the current dataframe's actual index labels
-                            current_rename = {}
-                            for label in target_dfs[i].index:
-                                for suffix, friendly_name in ablation_map.items():
-                                    if suffix in str(label):
-                                        current_rename[label] = friendly_name
-                            
-                            # Apply the rename to the index
-                            target_dfs[i].index = target_dfs[i].index.map(lambda x: current_rename.get(x, x))
-                        
-                        self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation")
-                        self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation")
-                        self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation")
-                        gc.collect()
+                percent_diff_nn = (num_pred_nn - num_true_nn) / denom_nn
+                edge_df.at[model, 'Num n-n Predicted'] = percent_diff_nn.mean()
+
+            
+            int_cols = [
+                'Median Extra Nodes ', 'Median Missing Nodes', 
+                'Median Extra Edges',  'Median Missing Edges',
+            ]
+
+            # Apply "CHAL" string to any edge types where there weren't enough nodes to evaluate fairly
+            threshold = -1  # Can modify
+            for model in rows:
+                # Check F1 Old Nodes for bank/nobank edge metrics
+                f1_old = float(node_df.at[model, 'F1 Old Nodes'])
+                if pd.notnull(f1_old) and f1_old < threshold:
+                    cols_to_chal = [
+                        'oo-bank Precision', 'oo-bank Recall', 'oo-bank F1',
+                        'oo-nobank Precision', 'oo-nobank Recall', 'oo-nobank F1'
+                    ]
+                    for c in cols_to_chal:
+                        edge_df.at[model, c] = "CHAL"
+
+                # Check F1 Nodes for overall edge metrics
+                f1_all = float(node_df.at[model, 'F1 Nodes'])
+                if pd.notnull(f1_all) and f1_all < threshold:
+                    cols_to_chal = ['Edge Precision', 'Edge Recall', 'Edge F1']
+                    for c in cols_to_chal:
+                        edge_df.at[model, c] = "CHAL"
+            
+            # 2. Apply formatting to each DataFrame
+            for df in [node_df, structure_df, edge_df]:
+                for col in df.columns:
+                    def format_cell(x):
+                        if x == "CHAL": return "CHAL" # Pass through
+                        if pd.isnull(x): return np.nan
+                        try:
+                            val = float(x)
+                            if col in int_cols:
+                                return f"{int(round(val))}"
+                            return f"{val:.2f}"
+                        except:
+                            return str(x)
+                    df[col] = df[col].apply(format_cell)
+
+            file_path = f'data/output/figures/ablation_tables_vewma/'
+            os.makedirs(file_path, exist_ok=True)
+            structure_output_path = os.path.join(file_path, f"{dataset}_structure_table.png")
+            edge_output_path = os.path.join(file_path, f"{dataset}_edge_table.png")
+            node_output_path = os.path.join(file_path, f"{dataset}_node_table.png")
+                
+            
+            node_df.rename(index=ablation_map, inplace=True)
+            structure_df.rename(index=ablation_map, inplace=True)
+            edge_df.rename(index=ablation_map, inplace=True)
+            
+                
+            self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation", table_type="nodes")
+            self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation", table_type="structure")
+            self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation", table_type="edges")
+
+
 
                         
     def make_heatmaps(self):
@@ -950,161 +1078,551 @@ class EvaluateGraphs():
         #         self.create_heatmaps(f'data/output/figures/evaluation_heatmaps_AllNodes_new_lr{lr}_threshold{threshold}/', models, old_only=False, target_threshold=threshold, lr=lr)
         self.create_heatmaps('data/output/figures/evaluation_heatmaps_Best/', [], old_only=False, target_threshold=None)
             
+            
+    def sensitivity_analysis_days(self, datasets):
+        days_values = [1, 3, 5, 7, 14, 30]
+        lr = 0.001
+        for dataset in datasets:
+            data = []
+            for days_back in days_values:
+                data_path = f'data/output/sensitivity_analysis/days/constructed_graphs/{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_lr0.001_5back_oobankchanges_zeros_sampling_predvalsTrue_edgebank_default_VectorTypeV-EWMA_len10_days{days_back}back/GCN_constructed_graphs_{dataset}.pkl'
+                prefix = f'GraphGeneration/scripts/results/{dataset}/sensitivity_analysis/days/{dataset}_lr{lr}_{days_back}back_tmp_V-EWMA/'
 
-    def sensitivity_analysis(self):
-        datasets = [
-            'CollegeMsg', 'mathoverflow', 'networkadex', 'networkaion',
-            'networkaeternity', 'networkaragon', 'networkbancor', 'networkcentra',
-            'networkcoindash', 'networkiconomi', 'networkcindicator', 'networkdgd',
-            'Reddit_B', 'tgbl-wiki']
-        
-        figure_path = 'data/output/figures/sensitivity_analysis_new/'
-        bucket_values = [5, 10, 15, 20]
-        for lr in [0.001]:
-            for dataset in datasets:
-                metrics = {'Degree Centrality': []}
-                
-                for num_buckets in bucket_values:
-                    data_path = f'data/output/sensitivity_analysis/constructed_graphs/{dataset}_topoGED_embeddingDegree_mlpEncodingConcat_embeddingTypeGCN_lr{lr}_5back_oobankchanges_predvalsTrue_len{num_buckets}/GCN_constructed_graphs_{dataset}.pkl'
-                    prefix = f'GraphGeneration/scripts/results/{dataset}/sensitivity_analysis/{dataset}_lr{lr}_5back_len_{num_buckets}/'
+                # Base method
+                if days_back == 5:
+                    data_path = Path(f"data/output/constructed_graphs/{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_lr0.001_5back_oobankchanges_zeros_sampling_predvalsTrue_tmp_edgebank_default_VectorTypeV-EWMA/GCN_constructed_graphs_{dataset}.pkl")
 
-                    if os.path.exists(data_path) and not os.path.exists(prefix):
-                        try:
-                            evaluator = EvaluateGraphs(args=None, prefix=prefix, data_path=data_path)
-                            evaluator.run()
-                        except Exception as e:
-                            print(f"Skipping Eval for {dataset} B{num_buckets}: {e}")
-                    else:
-                        print(f'Skipping eval for {data_path}')
-                    
+                if os.path.exists(data_path) and not os.path.exists(prefix):
                     try:
-                        true_structure = pd.read_csv(prefix + 'structure/structure_true.csv')
-                        pred_structure = pd.read_csv(prefix + 'structure/structure_pred.csv')
-                        
-                        for metric in metrics.keys():
-                            t_mean = true_structure[metric].replace([np.inf, -np.inf], np.nan).mean()
-                            p_mean = pred_structure[metric].replace([np.inf, -np.inf], np.nan).mean()
-                            metrics[metric].append(t_mean - p_mean)
-                    except FileNotFoundError:
-                        print(f"Data missing for {dataset} at {num_buckets} buckets.")
-                        metrics[metric].append(None) # Keep list length consistent
-
-                for metric in metrics.keys():
-                    y_values = [v for v in metrics[metric] if v is not None]
-                    x_values = [bucket_values[i] for i, v in enumerate(metrics[metric]) if v is not None]
-
-                    if not y_values: continue
-
-                    # figsize=(8, 6) is exactly 4:3 ratio
-                    plt.figure(figsize=(8, 6), constrained_layout=True)
-                    
-                    plt.plot(x_values, y_values, marker='o', linestyle='-', color='b', linewidth=2, label='Error Delta')
-                    plt.axhline(0, color='red', linestyle='--', alpha=0.5, label='Ideal (0)')
-                    
-                    plt.title(f'Sensitivity Analysis: {metric}\nDataset: {dataset}', fontsize=14)
-                    plt.xlabel('Number of Buckets ($K$)', fontsize=12)
-                    plt.ylabel(r'Difference ($\mu_{true} - \mu_{pred}$)', fontsize=12)
-                    
-                    plt.xticks(bucket_values)
-                    plt.grid(True, linestyle='--', alpha=0.7)
-                    plt.legend()
-                    
-                    os.makedirs(figure_path, exist_ok=True)
-                    save_name = os.path.join(figure_path, f'{dataset}_{metric.replace(" ", "_")}_sensitivity.png')
-                    
-                    plt.savefig(save_name, dpi=300) 
-                    plt.close()
-    
-    
-    def learned_vs_oobank(self, dataset, lr=0.001):
-        out_path = f'data/output/figures/method_comparison/'
-        os.makedirs(out_path, exist_ok=True)
-        
-        # Define the metric we are extracting
-        comparison_metric = 'O-O-bank F1'
-        methods = ['learnedParams', 'oobankchanges']
-        
-        # 1. Collect Data
-        data_dict = {}
-        for method in methods:
-            data_path = f'GraphGeneration/scripts/results/{dataset}/{method}_lr{lr}_5back/'
-            # Note: Using structure_pred as per your snippet logic
-            try:
-                curr_path = os.path.join(data_path, 'edge_evaluation/old_nodes_only.csv')
-                print(curr_path)
-                pred_df = pd.read_csv(curr_path)
-                # Extract mean and round for clean LaTeX display
-                val = pred_df['F1_bank'].mean()
-                data_dict[method] = round(val, 2)
-            except Exception as e:
-                print(f"Could not load data for {method}: {e}")
-                data_dict[method] = np.nan
-
-        # 2. Structure DataFrame for the Table
-        # Row = Metric, Columns = Methods
-        df = pd.DataFrame([data_dict], index=[comparison_metric])
-        
-        # 3. LaTeX Generation Setup
-        final_names = methods # These become your column headers
-        ordered_df = df
-        caption = f"Method Comparison for {dataset}"
-        label = f"tab:comp_{dataset}"
-        
-        latex = []
-        latex.append(r"\begin{table*}[t]")
-        latex.append(r"\centering")
-        latex.append(r"\small")
-        # latex.append(r"\setlength{\tabcolsep}{0pt}") 
-
-        # Column setup: Metric name (l) + Method 1 (c) + Vertical Bar + Method 2 (c)
-        # Result: l c | c
-        col_setup = r"l c @{\extracolsep{\fill}\hspace{1.5em}}|@{\extracolsep{\fill}\hspace{1.5em}} c"
-        latex.append(r"\begin{tabular*}{0.85\textwidth}{@{\extracolsep{\fill}} " + col_setup + " @{}}")
-
-        # Header Row
-        header_row = ["Metric"] + [m.replace('_', r'\_') for m in final_names]
-        latex.append(" & ".join(header_row) + r" \\ \midrule")
-
-        # 4. Data Row Logic
-        for metric_name in ordered_df.index:
-            row_cells = [metric_name.replace('_', r'\_')]
-            
-            # Determine ranking (Bold best, Underline second)
-            row_vals = ordered_df.loc[metric_name].values
-            valid_vals = row_vals[~np.isnan(row_vals)]
-            sorted_vals = np.sort(valid_vals)[::-1] # Higher F1 is better
-            
-            best_val = sorted_vals[0] if len(sorted_vals) > 0 else None
-            second_best = sorted_vals[1] if len(sorted_vals) > 1 else None
-
-            for val_num in row_vals:
-                if np.isnan(val_num):
-                    row_cells.append("$nan$")
-                    continue
-                
-                display_num = f"{val_num:.3f}"
-                
-                if best_val is not None and np.isclose(val_num, best_val):
-                    row_cells.append(r"$\mathbf{" + display_num + "}$")
-                elif second_best is not None and np.isclose(val_num, second_best):
-                    row_cells.append(r"$\underline{" + display_num + "}$")
+                        evaluator = EvaluateGraphs(args=None, prefix=prefix, data_path=data_path)
+                        evaluator.run()
+                    except Exception as e:
+                        print(f"Skipping Eval for {dataset} {days_back}back: {e}")
                 else:
-                    row_cells.append(f"${display_num}$")
+                    print(f'Skipping eval for {data_path}')
                     
-            latex.append(" & ".join(row_cells) + r" \\")
-
-        latex.append(r"\bottomrule")
-        latex.append(r"\end{tabular*}")
-        latex.append(r"\caption{" + caption + "}")
-        latex.append(r"\label{" + label + "}")
-        latex.append(r"\end{table*}")
-
-        # 5. Save output
-        txt_path = os.path.join(out_path, f'{dataset}_comparison.txt')
-        with open(txt_path, 'w') as f:
-            f.write("\n".join(latex))
+                data.append(prefix)
+            
+            # Setup rows
+            rows = [f'TopoGED - {d} days' for d in days_values]
+            node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'New Nodes Predicted']
+            structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
+                    'Density', 'Num Triangles', 'Descriptor Norm', 'Median Extra Nodes', 'Median Missing Nodes', 'Median Extra Edges', 'Median Missing Edges']
+            edge_columns = ['oo-bank Precision', "oo-bank Recall", "oo-bank F1", 
+                            "oo-nobank Precision", "oo-nobank Recall", "oo-nobank F1",
+                            "Num o-n Predicted", "Num n-n Predicted",
+                            "Edge Precision", "Edge Recall", "Edge F1"]
         
-        return "\n".join(latex)
+            node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
+            structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
+            edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
+            num_eval_graphs = num_test_graphs[dataset]
+            
+            # Compute Metrics for each dataset
+            print(f'Generating sensitivity analysis days table for dataset: {dataset}')
+            for directory in data:
+                print(directory)
+                
+                dir_str = str(directory)
+                curr_days_back = re.search(r'(\d+)back', dir_str)
+                if curr_days_back:
+                    # MATCH THIS EXACTLY to the 'rows' definition below
+                    model = f'TopoGED - {curr_days_back.group(1)} days' 
+                else:
+                    continue
+                    
+                
+                if not os.path.exists(directory):
+                    print(f"Data from: {directory} does not exist")
+                    structure_df.at[model, 'Avg Node Degree'] = np.nan
+                    structure_df.at[model, 'Unique Degree Count'] = np.nan
+                    structure_df.at[model, 'Degree Centrality'] = np.nan
+                    structure_df.at[model, 'Assortativity Coefficient'] = np.nan
+                    structure_df.at[model, 'Clustering Coefficient'] = np.nan
+                    structure_df.at[model, 'Density'] = np.nan
+                    structure_df.at[model, 'Num Triangles'] = np.nan
+                    
+                    structure_df.at[model, 'Median Extra Nodes'] = np.nan
+                    
+                    structure_df.at[model, 'Median Missing Nodes'] = np.nan
+                    
+                    structure_df.at[model, 'Median Extra Edges'] = np.nan
+                    
+                    structure_df.at[model, 'Median Missing Edges'] = np.nan
+                    structure_df.at[model, 'Descriptor Norm'] = np.nan
+                    
+                    node_df.at[model, 'Precision Old Nodes'] = np.nan
+                    node_df.at[model, 'Recall Old Nodes'] = np.nan
+                    node_df.at[model, 'F1 Old Nodes'] = np.nan      
+                    
+                    node_df.at[model, 'Precision Nodes'] = np.nan
+                    node_df.at[model, 'Recall Nodes'] = np.nan
+                    node_df.at[model, 'F1 Nodes'] = np.nan        
+                    
+                    
+                    edge_df.at[model, 'Edge Precision'] = np.nan
+                    edge_df.at[model, 'Edge Recall'] = np.nan
+                    edge_df.at[model, 'Edge F1'] = np.nan
+                    
+                    node_df.at[model, 'New Nodes Predicted'] = np.nan
+                    
+                    edge_df.at[model, 'oo-bank Precision'] = np.nan
+                    edge_df.at[model, 'oo-bank Recall'] = np.nan
+                    edge_df.at[model, 'oo-bank F1'] = np.nan       
+                            
+                    edge_df.at[model, 'oo-nobank Precision'] = np.nan
+                    # Handles typo
+                    edge_df.at[model, 'oo-nobank Recall'] = np.nan
+                    edge_df.at[model, 'oo-nobank F1'] = np.nan
+                
+                    edge_df.at[model, 'Num o-n Predicted'] = np.nan
+                    edge_df.at[model, 'Num n-n Predicted'] = np.nan
+                        
+                    continue    
+                
+                dir_path = Path(directory)
+                # Take the tail since we only eval test graphs here
+                files = {
+                    'node_eval': str(dir_path / 'structure' / 'node_evaluation.csv'),
+                    'true_structure': str(dir_path / 'structure' / 'structure_true.csv'),
+                    'pred_structure': str(dir_path / 'structure' / 'structure_pred.csv'),
+                    'toper_eval': str(dir_path / 'structure' / 'toper_eval.csv'),
+                    'all_edges': str(dir_path / 'edge_evaluation' / 'all_edges.csv'),
+                    'old_only': str(dir_path / 'edge_evaluation' / 'old_nodes_only.csv'),
+                    'on_only': str(dir_path / 'edge_evaluation' / 'on_edges_only.csv'),
+                    'new_only': str(dir_path / 'edge_evaluation' / 'new_nodes_only.csv')
+                }
+
+                # Load each file and check length
+                dfs = {}
+                for key, path in files.items():
+                    temp_df = pd.read_csv(path)
+                    if len(temp_df) < num_eval_graphs:
+                        print(f"ERROR: {path} has {len(temp_df)} rows, expected {num_eval_graphs}")
+                    dfs[key] = temp_df.tail(num_eval_graphs)
+
+                # Map back to your variables
+                node_eval = dfs['node_eval']
+                true_structure = dfs['true_structure']
+                pred_structure = dfs['pred_structure']
+                toper_eval = dfs['toper_eval']
+                all_edges = dfs['all_edges']
+                old_only = dfs['old_only']
+                on_only = dfs['on_only']
+                new_only = dfs['new_only']
+
+                # Add metrics
+                def get_mean(df, col):
+                    return df[col].replace([np.inf, -np.inf], np.nan).mean()
+
+                # Calculate Percent Error: (Pred - True) / True
+                metrics_map = {
+                    'Avg Node Degree': 'Average Node Degree',
+                    'Unique Degree Count': 'Unique Degree Count',
+                    'Degree Centrality': 'Degree Centrality',
+                    'Assortativity Coefficient': 'Assortivity Coefficient',
+                    'Clustering Coefficient': 'Clustering Coefficient',
+                    'Density': 'Density',
+                    'Num Triangles': 'Number of Triangles'
+                }
+
+                for df_col, csv_col in metrics_map.items():
+                    t_vals = true_structure[csv_col]
+                    p_vals = pred_structure[csv_col]
+                    
+                    denom = t_vals.copy()
+                    denom[denom == 0] = 1.0
+                    
+                    relative_errors = (p_vals - t_vals) / denom
+                
+                    structure_df.at[model, df_col] = relative_errors.mean()
+                    
+                    
+                extra_node_slice = toper_eval[toper_eval['node_diff_10'] > 0]['node_diff_10']
+                structure_df.at[model, 'Median Extra Nodes'] = extra_node_slice.median() if not extra_node_slice.empty else 0
+                
+                missing_node_slice = toper_eval[toper_eval['node_diff_10'] < 0]['node_diff_10']
+                structure_df.at[model, 'Median Missing Nodes'] = abs(missing_node_slice.median()) if not missing_node_slice.empty else 0
+                
+                extra_edge_slice = toper_eval[toper_eval['edge_diff_10'] > 0]['edge_diff_10']
+                structure_df.at[model, 'Median Extra Edges'] = extra_edge_slice.median() if not extra_edge_slice.empty else 0
+                
+                missing_edge_slice = toper_eval[toper_eval['edge_diff_10'] < 0]['edge_diff_10']
+                structure_df.at[model, 'Median Missing Edges'] = abs(missing_edge_slice.median()) if not missing_edge_slice.empty else 0
+                structure_df.at[model, 'Descriptor Norm'] = toper_eval['l2_norm'].mean()
+                
+                node_df.at[model, 'Precision Old Nodes'] = node_eval['Precision_Old'].mean()
+                node_df.at[model, 'Recall Old Nodes'] = node_eval['Recall_Old'].mean()
+                node_df.at[model, 'F1 Old Nodes'] = node_eval['F1_Old'].mean()        
+                
+                node_df.at[model, 'Precision Nodes'] = node_eval['Precision_All'].mean()
+                node_df.at[model, 'Recall Nodes'] = node_eval['Recall_All'].mean()
+                node_df.at[model, 'F1 Nodes'] = node_eval['F1_All'].mean()          
+                
+                
+                edge_df.at[model, 'Edge Precision'] = all_edges['Precision'].mean()
+                edge_df.at[model, 'Edge Recall'] = all_edges['Recall'].mean()
+                edge_df.at[model, 'Edge F1'] = all_edges['F1'].mean() 
+                
+                denom = node_eval['Num_New_True'].copy().astype(float)
+                denom[denom == 0] = 1.0
+                percent_diff_new_nodes = (node_eval['Num_New_Predicted'] - node_eval['Num_New_True']) / denom
+                node_df.at[model, 'New Nodes Predicted'] = percent_diff_new_nodes.mean()
+                
+                edge_df.at[model, 'oo-bank Precision'] = old_only['Precision_bank'].mean()
+                edge_df.at[model, 'oo-bank Recall'] = old_only['Recall_bank'].mean()
+                edge_df.at[model, 'oo-bank F1'] = old_only['F1_bank'].mean()          
+                        
+                edge_df.at[model, 'oo-nobank Precision'] = old_only['Precision_nobank'].mean()
+                # Handles typo
+                recall_col_nobank = 'Recall_nobank' if 'Recall_nobank' in old_only.columns else 'Recall_bank_nobank'
+                edge_df.at[model, 'oo-nobank Recall'] = old_only[recall_col_nobank].mean()
+                edge_df.at[model, 'oo-nobank F1'] = old_only['F1_nobank'].mean()
+            
+                # Positive means model under predicted, negative means model over predicted
+                num_true_on = on_only['TP'] + on_only['FN']
+                num_pred_on = on_only['TP'] + on_only['FP']
+
+                denom_on = num_true_on.copy()
+                denom_on[denom_on == 0] = 1.0 # Force denominator to 1 if true is 0
+
+                percent_diff_on = (num_pred_on - num_true_on) / denom_on
+                edge_df.at[model, 'Num o-n Predicted'] = percent_diff_on.mean()
+
+                # --- n-n Edges ---
+                num_true_nn = new_only['TP'] + new_only['FN']
+                num_pred_nn = new_only['TP'] + new_only['FP']
+
+                denom_nn = num_true_nn.copy()
+                denom_nn[denom_nn == 0] = 1.0
+
+                percent_diff_nn = (num_pred_nn - num_true_nn) / denom_nn
+                edge_df.at[model, 'Num n-n Predicted'] = percent_diff_nn.mean()
+
+            
+            int_cols = [
+                'Median Extra Nodes ', 'Median Missing Nodes', 
+                'Median Extra Edges', 'Median Missing Edges',
+            ]
+
+            # Apply "CHAL" string to any edge types where there weren't enough nodes to evaluate fairly
+            threshold = -1  # Can modify
+            for model in rows:
+                # Check F1 Old Nodes for bank/nobank edge metrics
+                f1_old = float(node_df.at[model, 'F1 Old Nodes'])
+                if pd.notnull(f1_old) and f1_old < threshold:
+                    cols_to_chal = [
+                        'oo-bank Precision', 'oo-bank Recall', 'oo-bank F1',
+                        'oo-nobank Precision', 'oo-nobank Recall', 'oo-nobank F1'
+                    ]
+                    for c in cols_to_chal:
+                        edge_df.at[model, c] = "CHAL"
+
+                # Check F1 Nodes for overall edge metrics
+                f1_all = float(node_df.at[model, 'F1 Nodes'])
+                if pd.notnull(f1_all) and f1_all < threshold:
+                    cols_to_chal = ['Edge Precision', 'Edge Recall', 'Edge F1']
+                    for c in cols_to_chal:
+                        edge_df.at[model, c] = "CHAL"
+            
+            # 2. Apply formatting to each DataFrame
+            for df in [node_df, structure_df, edge_df]:
+                for col in df.columns:
+                    def format_cell(x):
+                        if x == "CHAL": return "CHAL" # Pass through
+                        if pd.isnull(x): return np.nan
+                        try:
+                            val = float(x)
+                            if col in int_cols:
+                                return f"{int(round(val))}"
+                            return f"{val:.2f}"
+                        except:
+                            return str(x)
+                    df[col] = df[col].apply(format_cell)
+
+            file_path = f'data/output/figures/sensitivity_analysis_days_tables_vewma/'
+            os.makedirs(file_path, exist_ok=True)
+            structure_output_path = os.path.join(file_path, f"{dataset}_structure_table.png")
+            edge_output_path = os.path.join(file_path, f"{dataset}_edge_table.png")
+            node_output_path = os.path.join(file_path, f"{dataset}_node_table.png")
+                
+            self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation", table_type="nodes")
+            self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation", table_type="structure")
+            self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation", table_type="edges")
+
+
+        
+    
+    def sensitivity_analysis_len(self, datasets):
+        toper_lens = [5, 10, 20, 50]
+        lr = 0.001
+        for dataset in datasets:
+            data = []
+            for toper_len in toper_lens:
+                data_path = f'data/output/sensitivity_analysis/toper_lens/constructed_graphs/{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_lr0.001_5back_oobankchanges_zeros_sampling_predvalsTrue_edgebank_default_VectorTypeV-EWMA_len{toper_len}_days5back/GCN_constructed_graphs_{dataset}.pkl'
+                prefix = f'GraphGeneration/scripts/results/{dataset}/sensitivity_analysis/lens/{dataset}_lr{lr}_{toper_len}len_tmp_V-EWMA/'
+                
+                # Base method
+                if toper_len == 10:
+                    data_path = Path(f"data/output/constructed_graphs/{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_lr0.001_5back_oobankchanges_zeros_sampling_predvalsTrue_tmp_edgebank_default_VectorTypeV-EWMA/GCN_constructed_graphs_{dataset}.pkl")
+
+                if os.path.exists(data_path) and not os.path.exists(prefix):
+                    try:
+                        evaluator = EvaluateGraphs(args=None, prefix=prefix, data_path=data_path)
+                        evaluator.run()
+                    except Exception as e:
+                        print(f"Skipping Eval for {dataset} {toper_len}len: {e}")
+                else:
+                    print(f'Skipping eval for {data_path}')
+                    
+                data.append(prefix)
+            
+            # Setup rows
+            rows = [f'TopoGED - Len {d}' for d in toper_lens]
+            node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'New Nodes Predicted']
+            structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
+                    'Density', 'Num Triangles', 'Descriptor Norm', 'Median Extra Nodes', 'Median Missing Nodes', 'Median Extra Edges', 'Median Missing Edges']
+            edge_columns = ['oo-bank Precision', "oo-bank Recall", "oo-bank F1", 
+                            "oo-nobank Precision", "oo-nobank Recall", "oo-nobank F1",
+                            "Num o-n Predicted", "Num n-n Predicted",
+                            "Edge Precision", "Edge Recall", "Edge F1"]
+        
+            node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
+            structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
+            edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
+            num_eval_graphs = num_test_graphs[dataset]
+            
+            # Compute Metrics for each dataset
+            print(f'Generating sensitivity analysis days table for dataset: {dataset}')
+            for directory in data:
+                print(directory)
+                
+                dir_str = str(directory)
+                curr_len = re.search(r'(\d+)len', dir_str)
+                if curr_len:
+                    # MATCH THIS EXACTLY to the 'rows' definition below
+                    model = f'TopoGED - Len {curr_len.group(1)}' 
+                else:
+                    continue
+                    
+                
+                if not os.path.exists(directory):
+                    print(f"Data from: {directory} does not exist")
+                    structure_df.at[model, 'Avg Node Degree'] = np.nan
+                    structure_df.at[model, 'Unique Degree Count'] = np.nan
+                    structure_df.at[model, 'Degree Centrality'] = np.nan
+                    structure_df.at[model, 'Assortativity Coefficient'] = np.nan
+                    structure_df.at[model, 'Clustering Coefficient'] = np.nan
+                    structure_df.at[model, 'Density'] = np.nan
+                    structure_df.at[model, 'Num Triangles'] = np.nan
+                    
+                    structure_df.at[model, 'Median Extra Nodes'] = np.nan
+                    
+                    structure_df.at[model, 'Median Missing Nodes'] = np.nan
+                    
+                    structure_df.at[model, 'Median Extra Edges'] = np.nan
+                    
+                    structure_df.at[model, 'Median Missing Edges'] = np.nan
+                    structure_df.at[model, 'Descriptor Norm'] = np.nan
+                    
+                    node_df.at[model, 'Precision Old Nodes'] = np.nan
+                    node_df.at[model, 'Recall Old Nodes'] = np.nan
+                    node_df.at[model, 'F1 Old Nodes'] = np.nan      
+                    
+                    node_df.at[model, 'Precision Nodes'] = np.nan
+                    node_df.at[model, 'Recall Nodes'] = np.nan
+                    node_df.at[model, 'F1 Nodes'] = np.nan        
+                    
+                    
+                    edge_df.at[model, 'Edge Precision'] = np.nan
+                    edge_df.at[model, 'Edge Recall'] = np.nan
+                    edge_df.at[model, 'Edge F1'] = np.nan
+                    
+                    node_df.at[model, 'New Nodes Predicted'] = np.nan
+                    
+                    edge_df.at[model, 'oo-bank Precision'] = np.nan
+                    edge_df.at[model, 'oo-bank Recall'] = np.nan
+                    edge_df.at[model, 'oo-bank F1'] = np.nan       
+                            
+                    edge_df.at[model, 'oo-nobank Precision'] = np.nan
+                    # Handles typo
+                    edge_df.at[model, 'oo-nobank Recall'] = np.nan
+                    edge_df.at[model, 'oo-nobank F1'] = np.nan
+                
+                    edge_df.at[model, 'Num o-n Predicted'] = np.nan
+                    edge_df.at[model, 'Num n-n Predicted'] = np.nan
+                        
+                    continue    
+                
+                dir_path = Path(directory)
+                # Take the tail since we only eval test graphs here
+                files = {
+                    'node_eval': str(dir_path / 'structure' / 'node_evaluation.csv'),
+                    'true_structure': str(dir_path / 'structure' / 'structure_true.csv'),
+                    'pred_structure': str(dir_path / 'structure' / 'structure_pred.csv'),
+                    'toper_eval': str(dir_path / 'structure' / 'toper_eval.csv'),
+                    'all_edges': str(dir_path / 'edge_evaluation' / 'all_edges.csv'),
+                    'old_only': str(dir_path / 'edge_evaluation' / 'old_nodes_only.csv'),
+                    'on_only': str(dir_path / 'edge_evaluation' / 'on_edges_only.csv'),
+                    'new_only': str(dir_path / 'edge_evaluation' / 'new_nodes_only.csv')
+                }
+
+                # Load each file and check length
+                dfs = {}
+                for key, path in files.items():
+                    temp_df = pd.read_csv(path)
+                    if len(temp_df) < num_eval_graphs:
+                        print(f"ERROR: {path} has {len(temp_df)} rows, expected {num_eval_graphs}")
+                    dfs[key] = temp_df.tail(num_eval_graphs)
+
+                # Map back to your variables
+                node_eval = dfs['node_eval']
+                true_structure = dfs['true_structure']
+                pred_structure = dfs['pred_structure']
+                toper_eval = dfs['toper_eval']
+                all_edges = dfs['all_edges']
+                old_only = dfs['old_only']
+                on_only = dfs['on_only']
+                new_only = dfs['new_only']
+
+                # Add metrics
+                def get_mean(df, col):
+                    return df[col].replace([np.inf, -np.inf], np.nan).mean()
+
+                # Calculate Percent Error: (Pred - True) / True
+                metrics_map = {
+                    'Avg Node Degree': 'Average Node Degree',
+                    'Unique Degree Count': 'Unique Degree Count',
+                    'Degree Centrality': 'Degree Centrality',
+                    'Assortativity Coefficient': 'Assortivity Coefficient',
+                    'Clustering Coefficient': 'Clustering Coefficient',
+                    'Density': 'Density',
+                    'Num Triangles': 'Number of Triangles'
+                }
+
+                for df_col, csv_col in metrics_map.items():
+                    t_vals = true_structure[csv_col]
+                    p_vals = pred_structure[csv_col]
+                    
+                    denom = t_vals.copy()
+                    denom[denom == 0] = 1.0
+                    
+                    relative_errors = (p_vals - t_vals) / denom
+                    
+                    structure_df.at[model, df_col] = relative_errors.mean()
+                    
+                extra_node_slice = toper_eval[toper_eval['node_diff_10'] > 0]['node_diff_10']
+                structure_df.at[model, 'Median Extra Nodes'] = extra_node_slice.median() if not extra_node_slice.empty else 0
+                
+                missing_node_slice = toper_eval[toper_eval['node_diff_10'] < 0]['node_diff_10']
+                structure_df.at[model, 'Median Missing Nodes'] = abs(missing_node_slice.median()) if not missing_node_slice.empty else 0
+                
+                extra_edge_slice = toper_eval[toper_eval['edge_diff_10'] > 0]['edge_diff_10']
+                structure_df.at[model, 'Median Extra Edges'] = extra_edge_slice.median() if not extra_edge_slice.empty else 0
+                
+                missing_edge_slice = toper_eval[toper_eval['edge_diff_10'] < 0]['edge_diff_10']
+                structure_df.at[model, 'Median Missing Edges'] = abs(missing_edge_slice.median()) if not missing_edge_slice.empty else 0
+                structure_df.at[model, 'Descriptor Norm'] = toper_eval['l2_norm'].mean()
+                
+                node_df.at[model, 'Precision Old Nodes'] = node_eval['Precision_Old'].mean()
+                node_df.at[model, 'Recall Old Nodes'] = node_eval['Recall_Old'].mean()
+                node_df.at[model, 'F1 Old Nodes'] = node_eval['F1_Old'].mean()        
+                
+                node_df.at[model, 'Precision Nodes'] = node_eval['Precision_All'].mean()
+                node_df.at[model, 'Recall Nodes'] = node_eval['Recall_All'].mean()
+                node_df.at[model, 'F1 Nodes'] = node_eval['F1_All'].mean()          
+                
+                
+                edge_df.at[model, 'Edge Precision'] = all_edges['Precision'].mean()
+                edge_df.at[model, 'Edge Recall'] = all_edges['Recall'].mean()
+                edge_df.at[model, 'Edge F1'] = all_edges['F1'].mean() 
+                
+                denom = node_eval['Num_New_True'].copy().astype(float)
+                denom[denom == 0] = 1.0
+                percent_diff_new_nodes = (node_eval['Num_New_Predicted'] - node_eval['Num_New_True']) / denom
+                node_df.at[model, 'New Nodes Predicted'] = percent_diff_new_nodes.mean()
+                
+                edge_df.at[model, 'oo-bank Precision'] = old_only['Precision_bank'].mean()
+                edge_df.at[model, 'oo-bank Recall'] = old_only['Recall_bank'].mean()
+                edge_df.at[model, 'oo-bank F1'] = old_only['F1_bank'].mean()          
+                        
+                edge_df.at[model, 'oo-nobank Precision'] = old_only['Precision_nobank'].mean()
+                # Handles typo
+                recall_col_nobank = 'Recall_nobank' if 'Recall_nobank' in old_only.columns else 'Recall_bank_nobank'
+                edge_df.at[model, 'oo-nobank Recall'] = old_only[recall_col_nobank].mean()
+                edge_df.at[model, 'oo-nobank F1'] = old_only['F1_nobank'].mean()
+            
+                # Positive means model under predicted, negative means model over predicted
+                num_true_on = on_only['TP'] + on_only['FN']
+                num_pred_on = on_only['TP'] + on_only['FP']
+
+                denom_on = num_true_on.copy()
+                denom_on[denom_on == 0] = 1.0 # Force denominator to 1 if true is 0
+
+                percent_diff_on = (num_pred_on - num_true_on) / denom_on
+                edge_df.at[model, 'Num o-n Predicted'] = percent_diff_on.mean()
+
+                # --- n-n Edges ---
+                num_true_nn = new_only['TP'] + new_only['FN']
+                num_pred_nn = new_only['TP'] + new_only['FP']
+
+                denom_nn = num_true_nn.copy()
+                denom_nn[denom_nn == 0] = 1.0
+
+                percent_diff_nn = (num_pred_nn - num_true_nn) / denom_nn
+                edge_df.at[model, 'Num n-n Predicted'] = percent_diff_nn.mean()
+
+            
+            int_cols = [
+                'Median Extra Nodes', 'Median Missing Nodes', 
+                'Median Extra Edges', 'Median Missing Edges',
+            ]
+
+            # Apply "CHAL" string to any edge types where there weren't enough nodes to evaluate fairly
+            threshold = -1  # Can modify
+            for model in rows:
+                # Check F1 Old Nodes for bank/nobank edge metrics
+                f1_old = float(node_df.at[model, 'F1 Old Nodes'])
+                if pd.notnull(f1_old) and f1_old < threshold:
+                    cols_to_chal = [
+                        'oo-bank Precision', 'oo-bank Recall', 'oo-bank F1',
+                        'oo-nobank Precision', 'oo-nobank Recall', 'oo-nobank F1'
+                    ]
+                    for c in cols_to_chal:
+                        edge_df.at[model, c] = "CHAL"
+
+                # Check F1 Nodes for overall edge metrics
+                f1_all = float(node_df.at[model, 'F1 Nodes'])
+                if pd.notnull(f1_all) and f1_all < threshold:
+                    cols_to_chal = ['Edge Precision', 'Edge Recall', 'Edge F1']
+                    for c in cols_to_chal:
+                        edge_df.at[model, c] = "CHAL"
+            
+            # 2. Apply formatting to each DataFrame
+            for df in [node_df, structure_df, edge_df]:
+                for col in df.columns:
+                    def format_cell(x):
+                        if x == "CHAL": return "CHAL" # Pass through
+                        if pd.isnull(x): return np.nan
+                        try:
+                            val = float(x)
+                            if col in int_cols:
+                                return f"{int(round(val))}"
+                            return f"{val:.2f}"
+                        except:
+                            return str(x)
+                    df[col] = df[col].apply(format_cell)
+
+            file_path = f'data/output/figures/sensitivity_analysis_lens_tables_vewma/'
+            os.makedirs(file_path, exist_ok=True)
+            structure_output_path = os.path.join(file_path, f"{dataset}_structure_table.png")
+            edge_output_path = os.path.join(file_path, f"{dataset}_edge_table.png")
+            node_output_path = os.path.join(file_path, f"{dataset}_node_table.png")
+                
+            self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation", table_type="nodes")
+            self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation", table_type="structure")
+            self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation", table_type="edges")
+
 
     def construct_nn_on_tables(self):
         datasets = [
@@ -1153,8 +1671,7 @@ class EvaluateGraphs():
             res_df.at[dataset, '# Graphs'] = str(num_graphs)
 
         latex = []
-        latex.append(r"\begin{table*}[t]")
-        latex.append(r"\centering\small")
+
         # Column setup: l (dataset) | c c (o-n) | c c (n-n) | c (n)
         latex.append(r"\begin{tabular}{l cc cc c}")
         latex.append(r"\toprule")
@@ -1173,8 +1690,6 @@ class EvaluateGraphs():
             
         latex.append(r"\bottomrule")
         latex.append(r"\end{tabular}")
-        latex.append(r"\caption{Comparison of Number of True vs Predicted edges for Old-New (o-n) and New-New (n-n) nodes.}")
-        latex.append(r"\end{table*}")
         
         output_path = f'data/output/figures/on_nn_comparison/'
         os.makedirs(output_path, exist_ok=True)
@@ -1184,17 +1699,17 @@ class EvaluateGraphs():
             
             
     def formTables(self, data, file_path, dataset, old_only_status):
-        rows = ['TopoGED Edgebank', 'TopoGED', 'HTGN', 'ROLAND', 'VGRNN', 'TGCN', 'GCLSTM', 'EvolveGCN']
-        node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes']
+        rows = ['TopoGED', 'HTGN', 'ROLAND', 'VGRNN', 'TGCN', 'GCLSTM', 'EvolveGCN']
+        node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'New Nodes Predicted']
         structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
-                   'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges']
+                   'Density', 'Num Triangles', 'Descriptor Norm', 'Median Extra Nodes', 'Median Missing Nodes', 'Median Extra Edges', 'Median Missing Edges']
         if not old_only_status:
-            edge_columns = ['o-o-bank Precision', "o-o-bank Recall", "o-o-bank F1", 
-                            "o-o-nobank Precision", "o-o-nobank Recall", "o-o-nobank F1",
+            edge_columns = ['oo-bank Precision', "oo-bank Recall", "oo-bank F1", 
+                            "oo-nobank Precision", "oo-nobank Recall", "oo-nobank F1",
                             "Num o-n Predicted", "Num n-n Predicted",
                             "Edge Precision", "Edge Recall", "Edge F1"]
-            edge_columns = ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1',
-                            'o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1',
+            edge_columns = ['oo-bank Precision', 'oo-bank Recall', 'oo-bank F1',
+                            'oo-nobank Precision', 'oo-nobank Recall', 'oo-nobank F1',
                             'Edge Precision', 'Edge Recall', 'Edge F1']
         
         node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
@@ -1206,12 +1721,17 @@ class EvaluateGraphs():
         for directory in data:
             print(directory)
             # Get name of strategy
-            model = directory.parent.name
-            if model == "results":
-                if "sampling" in str(directory):
+            dir_str = str(directory).lower()
+            
+            # Check the path to see if this is our TopoGED variant
+            if "topoged" in dir_str:
+                if "sampling" in dir_str:
                     model = "TopoGED"
                 else:
                     model = "TopoGED Edgebank"
+            else:
+                # Standard benchmarkers (ROLAND, HTGN, etc.)
+                model = Path(directory).parent.name
                 
             
             if not os.path.exists(directory):
@@ -1224,18 +1744,14 @@ class EvaluateGraphs():
                 structure_df.at[model, 'Density'] = np.nan
                 structure_df.at[model, 'Num Triangles'] = np.nan
                 
-                structure_df.at[model, 'Extra Nodes Placed'] = np.nan
-                structure_df.at[model, 'Median Extra Nodes Placed'] = np.nan
+                structure_df.at[model, 'Median Extra Nodes'] = np.nan
                 
-                structure_df.at[model, 'Missing Nodes'] = np.nan
                 structure_df.at[model, 'Median Missing Nodes'] = np.nan
                 
-                structure_df.at[model, 'Extra Edges'] = np.nan
                 structure_df.at[model, 'Median Extra Edges'] = np.nan
                 
-                structure_df.at[model, 'Missing Edges'] = np.nan
                 structure_df.at[model, 'Median Missing Edges'] = np.nan
-                structure_df.at[model, 'TopER L2 Norm'] = np.nan
+                structure_df.at[model, 'Descriptor Norm'] = np.nan
                 
                 node_df.at[model, 'Precision Old Nodes'] = np.nan
                 node_df.at[model, 'Recall Old Nodes'] = np.nan
@@ -1250,18 +1766,16 @@ class EvaluateGraphs():
                 edge_df.at[model, 'Edge Recall'] = np.nan
                 edge_df.at[model, 'Edge F1'] = np.nan
                 
-                node_df.at[model, 'Precision New Nodes'] = np.nan
-                node_df.at[model, 'Recall New Nodes'] = np.nan
-                node_df.at[model, 'F1 New Nodes'] = np.nan
+                node_df.at[model, 'New Nodes Predicted'] = np.nan
                 
-                edge_df.at[model, 'o-o-bank Precision'] = np.nan
-                edge_df.at[model, 'o-o-bank Recall'] = np.nan
-                edge_df.at[model, 'o-o-bank F1'] = np.nan       
+                edge_df.at[model, 'oo-bank Precision'] = np.nan
+                edge_df.at[model, 'oo-bank Recall'] = np.nan
+                edge_df.at[model, 'oo-bank F1'] = np.nan       
                         
-                edge_df.at[model, 'o-o-nobank Precision'] = np.nan
+                edge_df.at[model, 'oo-nobank Precision'] = np.nan
                 # Handles typo
-                edge_df.at[model, 'o-o-nobank Recall'] = np.nan
-                edge_df.at[model, 'o-o-nobank F1'] = np.nan
+                edge_df.at[model, 'oo-nobank Recall'] = np.nan
+                edge_df.at[model, 'oo-nobank F1'] = np.nan
             
                 if not old_only_status:                    
                     edge_df.at[model, 'Num o-n Predicted'] = np.nan
@@ -1301,30 +1815,44 @@ class EvaluateGraphs():
             new_only = dfs['new_only']
 
             # Add metrics
-            structure_df.at[model, 'Avg Node Degree'] = true_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Average Node Degree'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Unique Degree Count'] = true_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Unique Degree Count'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Degree Centrality'] = true_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Degree Centrality'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Assortativity Coefficient'] = true_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Assortivity Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Clustering Coefficient'] = true_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Clustering Coefficient'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Density'] = true_structure['Density'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Density'].replace([np.inf, -np.inf], np.nan).mean()
-            structure_df.at[model, 'Num Triangles'] = true_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean() - pred_structure['Number of Triangles'].replace([np.inf, -np.inf], np.nan).mean()
-            
+            def get_mean(df, col):
+                return df[col].replace([np.inf, -np.inf], np.nan).mean()
+
+            # Calculate Percent Error: (Pred - True) / True
+            metrics_map = {
+                'Avg Node Degree': 'Average Node Degree',
+                'Unique Degree Count': 'Unique Degree Count',
+                'Degree Centrality': 'Degree Centrality',
+                'Assortativity Coefficient': 'Assortivity Coefficient',
+                'Clustering Coefficient': 'Clustering Coefficient',
+                'Density': 'Density',
+                'Num Triangles': 'Number of Triangles'
+            }
+
+            for df_col, csv_col in metrics_map.items():
+                t_vals = true_structure[csv_col]
+                p_vals = pred_structure[csv_col]
+                
+                denom = t_vals.copy()
+                denom[denom == 0] = 1.0
+                
+                relative_errors = (p_vals - t_vals) / denom
+                
+                structure_df.at[model, df_col] = relative_errors.mean()
+                
+                
             extra_node_slice = toper_eval[toper_eval['node_diff_10'] > 0]['node_diff_10']
-            structure_df.at[model, 'Extra Nodes Placed'] = extra_node_slice.sum() if not extra_node_slice.empty else 0
-            structure_df.at[model, 'Median Extra Nodes Placed'] = extra_node_slice.median() if not extra_node_slice.empty else 0
+            structure_df.at[model, 'Median Extra Nodes'] = extra_node_slice.median() if not extra_node_slice.empty else 0
             
             missing_node_slice = toper_eval[toper_eval['node_diff_10'] < 0]['node_diff_10']
-            structure_df.at[model, 'Missing Nodes'] = abs(missing_node_slice.sum()) if not missing_node_slice.empty else 0
             structure_df.at[model, 'Median Missing Nodes'] = abs(missing_node_slice.median()) if not missing_node_slice.empty else 0
             
             extra_edge_slice = toper_eval[toper_eval['edge_diff_10'] > 0]['edge_diff_10']
-            structure_df.at[model, 'Extra Edges'] = extra_edge_slice.sum() if not extra_edge_slice.empty else 0
             structure_df.at[model, 'Median Extra Edges'] = extra_edge_slice.median() if not extra_edge_slice.empty else 0
             
             missing_edge_slice = toper_eval[toper_eval['edge_diff_10'] < 0]['edge_diff_10']
-            structure_df.at[model, 'Missing Edges'] = abs(missing_edge_slice.sum()) if not missing_edge_slice.empty else 0
             structure_df.at[model, 'Median Missing Edges'] = abs(missing_edge_slice.median()) if not missing_edge_slice.empty else 0
-            structure_df.at[model, 'TopER L2 Norm'] = toper_eval['l2_norm'].mean()
+            structure_df.at[model, 'Descriptor Norm'] = toper_eval['l2_norm'].mean()
             
             node_df.at[model, 'Precision Old Nodes'] = node_eval['Precision_Old'].mean()
             node_df.at[model, 'Recall Old Nodes'] = node_eval['Recall_Old'].mean()
@@ -1339,189 +1867,168 @@ class EvaluateGraphs():
             edge_df.at[model, 'Edge Recall'] = all_edges['Recall'].mean()
             edge_df.at[model, 'Edge F1'] = all_edges['F1'].mean() 
             
-            node_df.at[model, 'Precision New Nodes'] = node_eval['Precision_New'].mean()
-            node_df.at[model, 'Recall New Nodes'] = node_eval['Recall_New'].mean()
-            node_df.at[model, 'F1 New Nodes'] = node_eval['F1_New'].mean()
+            denom = node_eval['Num_New_True'].copy().astype(float)
+            denom[denom == 0] = 1.0
+            percent_diff_new_nodes = (node_eval['Num_New_Predicted'] - node_eval['Num_New_True']) / denom
+            node_df.at[model, 'New Nodes Predicted'] = percent_diff_new_nodes.mean()
             
-            edge_df.at[model, 'o-o-bank Precision'] = old_only['Precision_bank'].mean()
-            edge_df.at[model, 'o-o-bank Recall'] = old_only['Recall_bank'].mean()
-            edge_df.at[model, 'o-o-bank F1'] = old_only['F1_bank'].mean()          
+            edge_df.at[model, 'oo-bank Precision'] = old_only['Precision_bank'].mean()
+            edge_df.at[model, 'oo-bank Recall'] = old_only['Recall_bank'].mean()
+            edge_df.at[model, 'oo-bank F1'] = old_only['F1_bank'].mean()          
                     
-            edge_df.at[model, 'o-o-nobank Precision'] = old_only['Precision_nobank'].mean()
+            edge_df.at[model, 'oo-nobank Precision'] = old_only['Precision_nobank'].mean()
             # Handles typo
             recall_col_nobank = 'Recall_nobank' if 'Recall_nobank' in old_only.columns else 'Recall_bank_nobank'
-            edge_df.at[model, 'o-o-nobank Recall'] = old_only[recall_col_nobank].mean()
-            edge_df.at[model, 'o-o-nobank F1'] = old_only['F1_nobank'].mean()
+            edge_df.at[model, 'oo-nobank Recall'] = old_only[recall_col_nobank].mean()
+            edge_df.at[model, 'oo-nobank F1'] = old_only['F1_nobank'].mean()
         
             if not old_only_status:                    
-                edge_df.at[model, 'Num o-n Predicted'] = on_only['TP'].sum() + on_only['FP'].sum() + on_only['FN'].sum() + on_only['TN'].sum()
-                edge_df.at[model, 'Num n-n Predicted'] = new_only['TP'].sum() + new_only['FP'].sum() + new_only['FN'].sum() + new_only['TN'].sum()
+                # Positive means model under predicted, negative means model over predicted
+                num_true_on = on_only['TP'] + on_only['FN']
+                num_pred_on = on_only['TP'] + on_only['FP']
+
+                denom_on = num_true_on.copy()
+                denom_on[denom_on == 0] = 1.0 # Force denominator to 1 if true is 0
+
+                percent_diff_on = (num_pred_on - num_true_on) / denom_on
+                edge_df.at[model, 'Num o-n Predicted'] = percent_diff_on.mean()
+
+                # --- n-n Edges ---
+                num_true_nn = new_only['TP'] + new_only['FN']
+                num_pred_nn = new_only['TP'] + new_only['FP']
+
+                denom_nn = num_true_nn.copy()
+                denom_nn[denom_nn == 0] = 1.0
+
+                percent_diff_nn = (num_pred_nn - num_true_nn) / denom_nn
+                edge_df.at[model, 'Num n-n Predicted'] = percent_diff_nn.mean()
 
         
         int_cols = [
-            'Extra Nodes Placed', 
-            'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 
-            'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges',
-            'Num o-n Predicted', 'Num n-n Predicted'
+            'Median Extra Nodes', 'Median Missing Nodes', 
+            'Median Extra Edges', 'Median Missing Edges',
         ]
 
+        # Apply "CHAL" string to any edge types where there weren't enough nodes to evaluate fairly
+        threshold = -1  # Can modify
+        for model in rows:
+            # Check F1 Old Nodes for bank/nobank edge metrics
+            f1_old = float(node_df.at[model, 'F1 Old Nodes'])
+            if pd.notnull(f1_old) and f1_old < threshold:
+                cols_to_chal = [
+                    'oo-bank Precision', 'oo-bank Recall', 'oo-bank F1',
+                    'oo-nobank Precision', 'oo-nobank Recall', 'oo-nobank F1'
+                ]
+                for c in cols_to_chal:
+                    edge_df.at[model, c] = "CHAL"
+
+            # Check F1 Nodes for overall edge metrics
+            f1_all = float(node_df.at[model, 'F1 Nodes'])
+            if pd.notnull(f1_all) and f1_all < threshold:
+                cols_to_chal = ['Edge Precision', 'Edge Recall', 'Edge F1']
+                for c in cols_to_chal:
+                    edge_df.at[model, c] = "CHAL"
+        
         # 2. Apply formatting to each DataFrame
         for df in [node_df, structure_df, edge_df]:
             for col in df.columns:
-                if col in int_cols:
-                    # ONLY format if the value is actually a number, else keep as np.nan
-                    df[col] = df[col].apply(lambda x: f"{int(round(x))}" if pd.notnull(x) else np.nan)
-                else:
-                    # ONLY format if the value is actually a number, else keep as np.nan
-                    df[col] = df[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else np.nan)
+                def format_cell(x):
+                    if x == "CHAL": return "CHAL" # Pass through
+                    if pd.isnull(x): return np.nan
+                    try:
+                        val = float(x)
+                        if col in int_cols:
+                            return f"{int(round(val))}"
+                        return f"{val:.2f}"
+                    except:
+                        return str(x)
+                df[col] = df[col].apply(format_cell)
 
             
         structure_output_path = os.path.join(file_path, f"{dataset}_structure_table.png")
         edge_output_path = os.path.join(file_path, f"{dataset}_edge_table.png")
         node_output_path = os.path.join(file_path, f"{dataset}_node_table.png")
             
-        self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation")
-        self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation")
-        self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation")
+        self.makeTable(node_df, node_output_path, caption=f"Node Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_node_evaluation", table_type="nodes")
+        self.makeTable(structure_df, structure_output_path, caption=f"Structure Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_structure_evaluation", table_type="structure")
+        self.makeTable(edge_df, edge_output_path, caption=f"Edge Evaluation Metrics for Dataset: {dataset}", label=f"tab:{dataset}_edge_evaluation", table_type="edges")
 
         # curr_threshold = float(file_path.split('Threshold')[-1].split('_')[0])
         curr_threshold = 0
         self.collect_data_for_heatmap(node_df, dataset, old_only_status, curr_threshold)
         self.collect_data_for_heatmap(structure_df, dataset, old_only_status, curr_threshold)
         self.collect_data_for_heatmap(edge_df, dataset, old_only_status, curr_threshold)
+
+
+    def generate_figures(self, datasets):
+        # Professional Styling
+        plt.rcParams['font.family'] = 'serif'
+        plt.rcParams['figure.dpi'] = 300
+        sns.set_context("paper", font_scale=1.4)
+        sns.set_style("whitegrid", {'axes.grid': True, 'grid.alpha': 0.4})
         
-    def evaluateTopoGED(self, file_path=Path('/mnt/d/Downloads/TopogedResults/LatexTables/TopogedComparisons/'), old_only_status=False):
-        topoged_output_base = Path('/mnt/d/Downloads/TopogedResults/Topoged/results/')
-        datasets = [
-            'CollegeMsg', 'mathoverflow', 'networkadex', 'networkaion', 'networkaeternity', 
-            'networkaragon', 'networkbancor', 'networkcentra', 'networkcoindash', 
-            'networkiconomi', 'networkcindicator', 'networkdgd', 'Reddit_B', 'tgbl-wiki'
-        ]
+        lr = 0.001
         
+        # Comprehensive Metric Mapping
+        metric_map = {
+            'Edge F1': ('edge_evaluation', 'all_edges.csv', 'F1'),
+            'oo-bank F1': ('edge_evaluation', 'old_nodes_only.csv', 'F1_bank'),
+            'oo-nobank F1': ('edge_evaluation', 'old_nodes_only.csv', 'F1_nobank'),
+            'Precision Nodes': ('structure', 'node_evaluation.csv', 'Precision_All'),
+            'Recall Nodes': ('structure', 'node_evaluation.csv', 'Recall_All'),
+            'F1 Nodes': ('structure', 'node_evaluation.csv', 'F1_All'),
+            'Descriptor Norm': ('structure', 'toper_eval.csv', 'l2_norm'),
+            'Degree Centrality': ('structure', 'structure_pred.csv', 'Degree Centrality'),
+            'Density': ('structure', 'structure_pred.csv', 'Density'),
+            'Clustering Coefficient': ('structure', 'structure_pred.csv', 'Clustering Coefficient')
+        }
+
+        output_root = Path('data/output/figures/individual_pdf_plots/')
+        output_root.mkdir(parents=True, exist_ok=True)
+
         for dataset in datasets:
-            rows, combo_names, data = [], [], []
-            
-            # 1. Path Construction (Ensure this matches your actual folder naming convention)
-            for edgebank_style in ['default', 'frequency', 'shuffle']:
-                for node_embedding_type in ['zeros', 'random', 'degree_average']:
-                    for lr in [0.001, 0.01]:
-                        for toper_type in ['VECM', 'VAR', 'AES']:
-                            folder_name = f"TopoGED_{dataset}_{node_embedding_type}_{lr}_{edgebank_style}_{toper_type}"
-                            rows.append(folder_name)
-                            combo_names.append(folder_name)
-                            data.append(topoged_output_base / folder_name)
+            n_test = num_test_graphs.get(dataset, 1)
+            print(f"Generating individual plots for: {dataset}")
 
-            # 2. Column Definitions
-            node_columns = ['Precision Nodes', 'Recall Nodes', 'F1 Nodes', 'Precision Old Nodes', 'Recall Old Nodes', 'F1 Old Nodes', 'Precision New Nodes', 'Recall New Nodes', 'F1 New Nodes']
-            structure_columns = ['Avg Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortativity Coefficient', 'Clustering Coefficient',
-                                'Density', 'Num Triangles', 'TopER L2 Norm', 'Extra Nodes Placed', 'Median Extra Nodes Placed', 'Missing Nodes', 'Median Missing Nodes', 'Extra Edges', 'Median Extra Edges', 'Missing Edges', 'Median Missing Edges']
-            
-            edge_columns = ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1', 
-                            'o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1',
-                            'Edge Precision', 'Edge Recall', 'Edge F1']
-            
-            if not old_only_status:
-                edge_columns += ["Num o-n Predicted", "Num n-n Predicted"]
-
-            # Initialize DataFrames
-            node_df = pd.DataFrame(np.nan, index=rows, columns=node_columns)
-            structure_df = pd.DataFrame(np.nan, index=rows, columns=structure_columns)
-            edge_df = pd.DataFrame(np.nan, index=rows, columns=edge_columns)
-            
-            num_eval_graphs = num_test_graphs[dataset]
-
-            # 3. Processing Loop
-            for directory, combo_name in zip(data, combo_names):
-                if not directory.exists():
-                    print(f"Skipping: {directory} (Not Found)")
-                    continue
-
-                # File Map
-                files = {
-                    'node_eval': directory / 'structure' / 'node_evaluation.csv',
-                    'true_struct': directory / 'structure' / 'structure_true.csv',
-                    'pred_struct': directory / 'structure' / 'structure_pred.csv',
-                    'toper_eval': directory / 'structure' / 'toper_eval.csv',
-                    'all_edges': directory / 'edge_evaluation' / 'all_edges.csv',
-                    'old_only': directory / 'edge_evaluation' / 'old_nodes_only.csv',
-                    'on_only': directory / 'edge_evaluation' / 'on_edges_only.csv',
-                    'new_only': directory / 'edge_evaluation' / 'new_nodes_only.csv'
-                }
-
-                try:
-                    dfs = {k: pd.read_csv(v).tail(num_eval_graphs) for k, v in files.items() if v.exists()}
-                    
-                    # Structural Metrics (Differences)
-                    s_true, s_pred = dfs['true_struct'], dfs['pred_struct']
-                    mapping = {
-                        'Avg Node Degree': ('Average Node Degree', 'Average Node Degree'),
-                        'Unique Degree Count': ('Unique Degree Count', 'Unique Degree Count'),
-                        'Degree Centrality': ('Degree Centrality', 'Degree Centrality'),
-                        'Assortativity Coefficient': ('Assortivity Coefficient', 'Assortivity Coefficient'),
-                        'Clustering Coefficient': ('Clustering Coefficient', 'Clustering Coefficient'),
-                        'Density': ('Density', 'Density'),
-                        'Num Triangles': ('Number of Triangles', 'Number of Triangles')
-                    }
-                    for col, (t_col, p_col) in mapping.items():
-                        structure_df.at[combo_name, col] = s_true[t_col].mean() - s_pred[p_col].mean()
-
-                    # TopER specific metrics
-                    te = dfs['toper_eval']
-                    structure_df.at[combo_name, 'Extra Nodes Placed'] = te[te['node_diff_10'] > 0]['node_diff_10'].sum()
-                    structure_df.at[combo_name, 'Missing Nodes'] = abs(te[te['node_diff_10'] < 0]['node_diff_10'].sum())
-                    structure_df.at[combo_name, 'Extra Edges'] = te[te['edge_diff_10'] > 0]['edge_diff_10'].sum()
-                    structure_df.at[combo_name, 'Missing Edges'] = abs(te[te['edge_diff_10'] < 0]['edge_diff_10'].sum())
-                    structure_df.at[combo_name, 'TopER L2 Norm'] = te['l2_norm'].mean()
-
-                    # Node & Edge Metrics
-                    ne, ae, oo = dfs['node_eval'], dfs['all_edges'], dfs['old_only']
-                    node_df.loc[combo_name, ['Precision Nodes', 'Recall Nodes', 'F1 Nodes']] = [ne['Precision_All'].mean(), ne['Recall_All'].mean(), ne['F1_All'].mean()]
-                    edge_df.loc[combo_name, ['Edge Precision', 'Edge Recall', 'Edge F1']] = [ae['Precision'].mean(), ae['Recall'].mean(), ae['F1'].mean()]
-                    
-                    # Handle typos in your CSV column names
-                    recall_nobank = 'Recall_nobank' if 'Recall_nobank' in oo.columns else 'Recall_bank_nobank'
-                    edge_df.loc[combo_name, ['o-o-bank Precision', 'o-o-bank Recall', 'o-o-bank F1']] = [oo['Precision_bank'].mean(), oo['Recall_bank'].mean(), oo['F1_bank'].mean()]
-                    edge_df.loc[combo_name, ['o-o-nobank Precision', 'o-o-nobank Recall', 'o-o-nobank F1']] = [oo['Precision_nobank'].mean(), oo[recall_nobank].mean(), oo['F1_nobank'].mean()]
-
-                    if not old_only_status:
-                        edge_df.at[combo_name, 'Num o-n Predicted'] = dfs['on_only'][['TP','FP','FN','TN']].sum().sum()
-                        edge_df.at[combo_name, 'Num n-n Predicted'] = dfs['new_only'][['TP','FP','FN','TN']].sum().sum()
-
-                except Exception as e:
-                    print(f"Error processing {combo_name}: {e}")
-
-            # 4. Collect Heatmap Data BEFORE String Formatting
-            self.collect_data_for_heatmap(node_df, dataset, old_only_status, 0)
-            self.collect_data_for_heatmap(structure_df, dataset, old_only_status, 0)
-            self.collect_data_for_heatmap(edge_df, dataset, old_only_status, 0)
-
-            # 5. Final Formatting & Table Generation
-            int_cols = ['Extra Nodes Placed', 'Missing Nodes', 'Extra Edges', 'Missing Edges', 'Num o-n Predicted', 'Num n-n Predicted']
-            for df, p in [(node_df, 'node'), (structure_df, 'structure'), (edge_df, 'edge')]:
-                formatted_df = df.copy()
-                for col in formatted_df.columns:
-                    if col in int_cols:
-                        formatted_df[col] = formatted_df[col].apply(lambda x: f"{int(round(x))}" if pd.notnull(x) else "N/A")
-                    else:
-                        formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "N/A")
+            for metric_name, (folder, filename, col) in metric_map.items():
+                # Sanitize metric name for filenames
+                safe_metric = metric_name.replace(' ', '_').replace('-', '_')
                 
-                file_path = Path(file_path) 
+                # --- 1. TopoER Length Sweep Plot ---
+                len_vals, len_scores = [], []
+                for length in [5, 10, 20, 50]:
+                    path = Path(f'GraphGeneration/scripts/results/{dataset}/sensitivity_analysis/lens/{dataset}_lr{lr}_{length}len/') / folder / filename
+                    if path.exists():
+                        val = pd.read_csv(path)[col].tail(n_test).mean()
+                        len_vals.append(length)
+                        len_scores.append(val)
+                
+                if len_vals:
+                    plt.figure(figsize=(5, 4))
+                    plt.plot(len_vals, len_scores, marker='o', color='#2980b9', lw=2, markersize=8)
+                    plt.xlabel('$n$')
+                    plt.ylabel(metric_name)
+                    plt.tight_layout()
+                    plt.savefig(output_root / f"{dataset}_{safe_metric}_TopER_Length.pdf")
+                    plt.close()
 
-                # Now when you do this, out_path is guaranteed to be a Path object
-                out_path = file_path / f"{dataset}_{p}_table.png"
+                # --- 2. Days Back Sweep Plot ---
+                days_vals, days_scores = [], []
+                for days in [1, 3, 5, 7, 14, 30]:
+                    path = Path(f'GraphGeneration/scripts/results/{dataset}/sensitivity_analysis/days/{dataset}_lr{lr}_{days}back/') / folder / filename
+                    if path.exists():
+                        val = pd.read_csv(path)[col].tail(n_test).mean()
+                        days_vals.append(days)
+                        days_scores.append(val)
 
-                # The function call remains the same, but the object passed is now correct
-                self.makeTable(formatted_df, out_path, 
-                            caption=f"{p.capitalize()} Metrics: {dataset}", 
-                            label=f"tab:{dataset}_{p}")
-            # curr_threshold = float(file_path.split('Threshold')[-1].split('_')[0])
-            # curr_threshold = 0
-            # self.collect_data_for_heatmap(node_df, dataset, old_only_status, curr_threshold)
-            # self.collect_data_for_heatmap(structure_df, dataset, old_only_status, curr_threshold)
-            # self.collect_data_for_heatmap(edge_df, dataset, old_only_status, curr_threshold)        
-    
-
-
+                if days_vals:
+                    plt.figure(figsize=(5, 4))
+                    plt.plot(days_vals, days_scores, marker='s', color='#2980b9', lw=2, markersize=8)
+                    plt.xlabel('$k$')
+                    plt.ylabel(metric_name)
+                    plt.tight_layout()
+                    plt.savefig(output_root / f"{dataset}_{safe_metric}_Sweep_Days.pdf")
+                    plt.close()
     
     
 if __name__ == "__main__":
@@ -1554,7 +2061,7 @@ if __name__ == "__main__":
         'Reddit_B', 
         'tgbl-wiki'
     ]
-    models = ['EvolveGCN', 'GCLSTM', 'HTGN', 'ROLAND', 'SFDyG', 'TGCN', 'VGRNN']
+    models = ['EvolveGCN', 'GCLSTM', 'HTGN', 'ROLAND', 'TGCN', 'VGRNN']
     all_inputs = []
     all_prefixes = []
 
@@ -1565,7 +2072,7 @@ if __name__ == "__main__":
             f"data/output/predicted/ROLAND/{dataset}_128_0.001_3_5_undirected_threshold_5xCap.pkl",
             f"data/output/predicted/VGRNN/{dataset}_64_32_2_0.001_GIN_undirected_threshold_5xCap.pkl",
             f"data/output/predicted/TGCN/{dataset}_128_0.01_0.001_undirected_threshold_5xCap.pkl",
-            f"data/output/predicted/SFDyG/{dataset}_hgcn_7_4_0.0001_1024_100_0_threshold_5xCap.pkl",
+            # f"data/output/predicted/SFDyG/{dataset}_hgcn_7_4_0.0001_1024_100_0_threshold_5xCap.pkl",
             f"data/output/predicted/HTGN/{dataset}_0.001_256_128_0.5_undirected_threshold_5xCap.pkl",
             f"data/output/predicted/EvolveGCN/{dataset}_egcn_o_128_64_32_0.01_0.0001_undirected_threshold_5xCap.pkl",
             f"data/output/predicted/GCLSTM/{dataset}_0.0001_128_2_0.001_undirected_threshold_5xCap.pkl"
@@ -1579,7 +2086,7 @@ if __name__ == "__main__":
             if search_file.exists():
                 all_inputs.append(str(search_file))
                 
-                prefix_path = output_base / model_name / search_file.stem
+                prefix_path = output_base / model_name / f"{search_file.stem}_tmp"
                 
                 all_prefixes.append(str(prefix_path))
             else:
@@ -1588,20 +2095,20 @@ if __name__ == "__main__":
     # Add topoged paths to the evaluation
     topoged_base = Path('data/output/constructed_graphs/')
     topoged_output_base = Path('data/output/results/')
-    
+
     for edgebank_style in ['default']:
-        for node_embedding_type in ['zeros', 'random', 'degree_average']:
+        for node_embedding_type in ['zeros']:
             for lr in [0.001]:
-                for toper_type in ['False', 'True']:
+                for toper_type in ['False']:
                     for dataset in datasets:
                         # Constructing as a Path object is cleaner
                         pred_val_logic = "False" if toper_type == 'True' else "True"
-                        vector_type_logic = "TrueVals" if toper_type == 'True' else "VECM"
+                        vector_type_logic = "TrueVals" if toper_type == 'True' else "V-EWMA"
 
                         relative_path = Path(
                             f"{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_"
                             f"lr{lr}_5back_oobankchanges_{node_embedding_type}_sampling_"
-                            f"predvals{pred_val_logic}_edgebank_{edgebank_style}_"
+                            f"predvals{pred_val_logic}_tmp_edgebank_{edgebank_style}_"
                             f"VectorType{vector_type_logic}"
                         ) / f"GCN_constructed_graphs_{dataset}.pkl"
                         
@@ -1609,7 +2116,7 @@ if __name__ == "__main__":
                         
                         if target_file.exists():
                             all_inputs.append(str(target_file))
-                            prefix_path = topoged_output_base / f"TopoGED_{dataset}_{node_embedding_type}_{lr}_{edgebank_style}_{toper_type}_sampling"
+                            prefix_path = topoged_output_base / f"TopoGED_{dataset}_{node_embedding_type}_{lr}_{edgebank_style}_{vector_type_logic}_sampling_tmp"
                             all_prefixes.append(str(prefix_path))
                         else:
                             print(f"Skipping: File not found at {target_file}")
@@ -1617,9 +2124,9 @@ if __name__ == "__main__":
     # Now, evaluate each            
     import gc
     for prefix, data_path in zip(all_prefixes, all_inputs):
-        # if os.path.exists(prefix):
-        #     print(f'Skipping evaluation for {data_path} since output already exists at {prefix}')
-        #     continue
+        if os.path.exists(prefix):
+            print(f'Skipping evaluation for {data_path} since output already exists at {prefix}')
+            continue
         
         print(f"Processing: {prefix}")
         
@@ -1633,55 +2140,16 @@ if __name__ == "__main__":
         del evaluator
         gc.collect()
     
-        
-        # if not os.path.exists(prefix):
-        #     evaluator = EvaluateGraphs(args=None, prefix=prefix, data_path=data_path)
-        
-        #     if hasattr(evaluator, 'loaded_successfully') and not evaluator.loaded_successfully:
-        #         print(f"Skipping evaluation for {data_path} due to load error.")
-        #         continue
-            
-        #     evaluator.run()
-        #     del evaluator
-        #     gc.collect()
-    
-        # else:
-        #     print(f'Already processed data for path: {prefix}')
-        # # Manually trigger garbage collection
-        # gc.collect()
 
     evaluator = EvaluateGraphs(args=None, prefix='', data_path='')
     table_path = Path('data/output/latex_tables/')
     table_path.mkdir(parents=True, exist_ok=True) # Ensure directory exists
 
-    
-    # Run evaluations in the morning
-    # Assemble table code while they run
-    # Need to compare topoged models against each other
-
-    # for dataset in datasets:
-    #     curr_dataset_data_all = []
-        
-    #     for model in models:
-    #         full_name_with_ext = f"{model}_{dataset}{model_template_part[model]}"
-    #         folder_name = Path(full_name_with_ext).stem
-    #         prefix_path = output_base / folder_name
-    #         curr_dataset_data_all.append(prefix_path)
-        
-        
-        
-    #     # best_topoged = topoged_output_base / f"{model}_{dataset}_{node_embedding_type}_{lr}_{edgebank_style}"  # Find which one we are using
-        
-    #     # Now that the list is full of this dataset's model results, make the table
-    #     if curr_dataset_data_all:
-    #         print(f"Generating tables for {dataset}...")
-    #         evaluator.formTables(curr_dataset_data_all, table_path, dataset, old_only_status=False)
-            
             
     for edgebank_style in ['default']:
-        for node_embedding_type in ['zeros', 'random', 'degree_average']:
+        for node_embedding_type in ['zeros']:
             for lr_topo in [0.001]: # Renamed to avoid conflict with model lr
-                for toper_type in ['False', 'True']:
+                for toper_type in ['False']:
                     for dataset in datasets:
                             # 1. Check for the specific TopoGED variant
                         if toper_type == 'True':
@@ -1689,19 +2157,19 @@ if __name__ == "__main__":
                             vector_type_str = "TrueVals"
                         else:
                             pred_val_str = "True"
-                            vector_type_str = "VECM"
+                            vector_type_str = "V-EWMA"
 
                         topo_folder = (
                             f"{dataset}_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_"
                             f"lr{lr_topo}_5back_oobankchanges_{node_embedding_type}_sampling_"
-                            f"predvals{pred_val_str}_edgebank_{edgebank_style}_VectorType{vector_type_str}"
+                            f"predvals{pred_val_str}_tmp_edgebank_{edgebank_style}_VectorType{vector_type_str}"
                         )
                         relative_path = Path(topo_folder) / f"GCN_constructed_graphs_{dataset}.pkl"
                         target_file = topoged_base / relative_path
                         
                         if target_file.exists():
                             # Define the prefix for THIS specific TopoGED metrics folder
-                            current_topoged_prefix = topoged_output_base / f"TopoGED_{dataset}_{node_embedding_type}_{lr_topo}_{edgebank_style}_{'VECM' if toper_type == 'False' else 'TrueVals'}_sampling"
+                            current_topoged_prefix = topoged_output_base / f"TopoGED_{dataset}_{node_embedding_type}_{lr_topo}_{edgebank_style}_{'V-EWMA' if toper_type == 'False' else 'TrueVals'}_sampling_tmp"
                             current_topoged_prefix.mkdir(parents=True, exist_ok=True)
                             
                             # 2. Collect Benchmarker Baselines for this Dataset
@@ -1712,7 +2180,7 @@ if __name__ == "__main__":
                                 f"data/output/predicted/ROLAND/{dataset}_128_0.001_3_5_undirected_threshold_5xCap.pkl",
                                 f"data/output/predicted/VGRNN/{dataset}_64_32_2_0.001_GIN_undirected_threshold_5xCap.pkl",
                                 f"data/output/predicted/TGCN/{dataset}_128_0.01_0.001_undirected_threshold_5xCap.pkl",
-                                f"data/output/predicted/SFDyG/{dataset}_hgcn_7_4_0.0001_1024_100_0_threshold_5xCap.pkl",
+                                # f"data/output/predicted/SFDyG/{dataset}_hgcn_7_4_0.0001_1024_100_0_threshold_5xCap.pkl",
                                 f"data/output/predicted/HTGN/{dataset}_0.001_256_128_0.5_undirected_threshold_5xCap.pkl",
                                 f"data/output/predicted/EvolveGCN/{dataset}_egcn_o_128_64_32_0.01_0.0001_undirected_threshold_5xCap.pkl",
                                 f"data/output/predicted/GCLSTM/{dataset}_0.0001_128_2_0.001_undirected_threshold_5xCap.pkl"
@@ -1722,16 +2190,19 @@ if __name__ == "__main__":
                                 b_file = pathlib.Path(b_path)
                                 if b_file.exists():
                                     b_model_name = b_file.parts[3]
-                                    b_prefix = output_base / b_model_name / b_file.stem
+                                    b_prefix = output_base / b_model_name / f"{b_file.stem}_tmp"
                                     curr_dataset_baselines.append(b_prefix)
                             
                             # 3. Combine Baselines + the current TopoGED variant
+                            # extra_path = Path(f"data/output/results/TopoGED_{dataset}_zeros_0.001_default_V-EWMA")
+
                             curr_table_inputs = curr_dataset_baselines + [current_topoged_prefix]
 
                             # 4. Generate the unique table
-                            table_filename = f"Table_{dataset}_TopoGED_{node_embedding_type}_lr{lr_topo}_{edgebank_style}_{'VECM' if toper_type == 'False' else 'TrueVals'}_sampling"
+                            table_filename = f"Table_{dataset}_TopoGED_{node_embedding_type}_lr{lr_topo}_{edgebank_style}_{'V-EWMA' if toper_type == 'False' else 'TrueVals'}_sampling"
+                            table_filename = f"final_tables/"
                             final_table_path = table_path / table_filename
-                            
+
                             print(f"Generating Table: {table_filename}")
                             evaluator.formTables(
                                 curr_table_inputs, 
@@ -1742,7 +2213,10 @@ if __name__ == "__main__":
                         else:
                             print(f"Skipping variant: {target_file.name} not found.")
             
-    # evaluator.evaluateTopoGED()
+    evaluator.construct_ablation_tables(datasets)
+    evaluator.sensitivity_analysis_len(datasets)
+    evaluator.sensitivity_analysis_days(datasets)
+    evaluator.generate_figures(datasets)
 
     # Finally, run heatmaps
 # The code is calling a function `make_heatmaps()` on an object named `evaluator` to generate

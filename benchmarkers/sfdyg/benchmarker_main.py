@@ -180,9 +180,38 @@ class SFDyGPipeline:
         print(f"Optimal Threshold: {best_threshold:.2f} | Sampled Val F1: {best_f1:.4f}") 
         return best_threshold
     
+    @torch.no_grad()
+    def evaluate_link_prediction(self, indices):
+        """Helper to calculate AUC on a specific set of snapshot indices."""
+        self.model.eval()
+        all_scores, all_targets = [], []
+
+        for t in indices:
+            if t == 0: continue # Skip first snapshot as there is no history
+            fused_data = self.get_fused_data(t)
+            h = self.model.encoder(fused_data) if hasattr(self.model, 'encoder') else self.model(fused_data)
+            if isinstance(h, tuple): h = h[0]
+            
+            target_snap = self.snapshots[t]
+            pos_edges = target_snap.edge_index.to(self.device)
+            # Use 1:1 negative sampling for standard AUC evaluation
+            neg_edges = self.fast_negative_sampling(pos_edges, self.node_count, 1)
+            
+            scale = 50.0
+            p_s = torch.sigmoid((h[pos_edges[0]] * h[pos_edges[1]]).sum(-1) / scale)
+            n_s = torch.sigmoid((h[neg_edges[0]] * h[neg_edges[1]]).sum(-1) / scale)
+            
+            all_scores.append(torch.cat([p_s, n_s]).cpu())
+            all_targets.append(torch.cat([torch.ones_like(p_s), torch.zeros_like(n_s)]).cpu())
+
+        y_true = torch.cat(all_targets).numpy()
+        y_scores = torch.cat(all_scores).numpy()
+        return roc_auc_score(y_true, y_scores)
+
     def train(self):
-        print(f"--- Training SFDyG ({self.args.model}) | Sparse mode ---")
-        best_loss = float('inf')
+        print(f"--- Training SFDyG ({self.args.model}) | Validation Early Stopping ---")
+        best_val_auc = 0.0
+        best_train_auc_at_val = 0.0
         patience = 15
         no_improve = 0
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.args.epochs)
@@ -190,10 +219,9 @@ class SFDyGPipeline:
         for epoch in range(1, 1 + self.args.epochs):
             self.model.train()
             epoch_loss = 0
-            all_preds, all_targets = [], []
             
-            pbar = tqdm(self.train_idx, desc=f"Epoch {epoch:03d}", leave=False, disable=True)
-            for t in pbar:
+            # 1. Training Pass
+            for t in self.train_idx:
                 if t == 0: continue 
                 fused_data = self.get_fused_data(t)
                 pos_edges = self.snapshots[t].edge_index.to(self.device)
@@ -206,48 +234,41 @@ class SFDyGPipeline:
                 self.optimizer.step()
                 epoch_loss += loss.item()
 
-                # Collect metrics based on eval_steps
-                if epoch % self.args.eval_steps == 0:
-                    with torch.no_grad():
-                        h = self.model.encoder(fused_data) if hasattr(self.model, 'encoder') else self.model(fused_data)
-                        if isinstance(h, tuple): h = h[0]
-                        scale = 50.0
-                        p_s = torch.sigmoid((h[pos_edges[0]] * h[pos_edges[1]]).sum(-1) / scale)
-                        n_s = torch.sigmoid((h[neg_edges[0]] * h[neg_edges[1]]).sum(-1) / scale)
-                        all_preds.append(torch.cat([p_s, n_s]).cpu())
-                        all_targets.append(torch.cat([torch.ones_like(p_s), torch.zeros_like(n_s)]).cpu())
-            
             lr_scheduler.step()
             avg_loss = epoch_loss / len(self.train_idx)
 
-            # Check for improvement every epoch
-            if avg_loss < best_loss:
-                best_loss = avg_loss
-                # CRITICAL: Deepcopy state_dict for restoration
+            # 2. Evaluation Phase
+            # We evaluate both splits to monitor generalization
+            train_auc = self.evaluate_link_prediction(self.train_idx)
+            val_auc = self.evaluate_link_prediction(self.val_idx)
+
+            # 3. Early Stopping Logic on Validation AUC
+            if val_auc > best_val_auc:
+                best_val_auc = val_auc
+                best_train_auc_at_val = train_auc # Capture corresponding train AUC
                 self.best_state = copy.deepcopy(self.model.state_dict())
                 no_improve = 0
+                marker = "*"
             else:
                 no_improve += 1
+                marker = ""
 
-            # Combined logging logic
             if epoch % self.args.eval_steps == 0:
-                output_str = f"Epoch {epoch:03d} | Loss: {avg_loss:.6f}"
-                if len(all_preds) > 0:
-                    y_true = torch.cat(all_targets).numpy()
-                    y_scores = torch.cat(all_preds).numpy()
-                    auc = roc_auc_score(y_true, y_scores)
-                    output_str += f" | Sampled Train AUC: {auc:.4f}"
-                print(output_str)
+                print(f"Epoch {epoch:03d} | Loss: {avg_loss:.4f} | Train AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} {marker}")
             
-            # Check if patience exceeded
             if no_improve >= patience:
-                print(f"Early stopping triggered at epoch {epoch}. Best Training Loss: {best_loss:.6f}")
+                print(f"Early stopping triggered. Best Val AUC: {best_val_auc:.4f}")
                 break
                     
+        # --- FINAL SUMMARY PRINT ---
+        print(f"\n[FINAL TRAINING SUMMARY - SFDyG]")
+        print(f"Best Validation AUC: {best_val_auc:.4f}")
+        print(f"Corresponding Train AUC: {best_train_auc_at_val:.4f}")
+        print(f"---------------------------\n")
+
         if self.best_state is not None:
-            print("Restoring best model weights for evaluation...")
             self.model.load_state_dict(self.best_state)
-                    
+            
     def construct_graphs(self, threshold):
         """
         Memory-safe SFDyG graph construction with standardized 5x Dynamic Capping 

@@ -396,7 +396,7 @@ class Loader():
                 
             # Check for embeddings 
             for activation_name in activation_names:
-                for num_buckets in [5, 10, 15, 20]:
+                for num_buckets in [5, 10, 15, 20, 50]:
                     activation_file = os.path.join(dataset_folder, f'toper_embeddings/{dataset}_{activation_name}_{str(num_buckets)}.pkl')
                     if not os.path.exists(activation_file):
                         missing_cached.append(dataset)

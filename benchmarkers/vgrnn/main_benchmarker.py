@@ -678,6 +678,40 @@ def construct_graphs(model, x_in, edge_list, h_in, test_idx, threshold, dataset_
     return predicted_networks
 
 
+@torch.no_grad()
+def validate_link_prediction(model, x_in, edge_idx_list, h_in, target_idx):
+    """Standardized helper for VGRNN Link Prediction AUC using Prior forecasting."""
+    model.eval()
+    dev = next(model.parameters()).device
+    
+    # In VGRNN, to predict snapshot T, we use input from T-1 to generate the Prior
+    input_indices = [target_idx[0] - 1] + list(target_idx[:-1])
+    
+    # Get Prior Means (the model's future guess)
+    _, _, _, pri_means, _ = model(
+        [x_in[i].to(dev) for i in input_indices], 
+        [edge_idx_list[i].to(dev) for i in input_indices], 
+        [edge_idx_list[i].to(dev) for i in target_idx], # Targets for internal loss calc, unused for AUC
+        h_in
+    )
+    
+    all_scores, all_targets = [], []
+    for i, t_idx in enumerate(target_idx):
+        z = pri_means[i] # Use the Prior, not the Posterior
+        pos_edges = edge_idx_list[t_idx].to(dev)
+        if pos_edges.size(1) == 0: continue
+        
+        num_pos = min(pos_edges.size(1), 10000)
+        neg_edges = torch.randint(0, z.size(0), (2, num_pos), device=dev)
+        
+        p_p = torch.sigmoid(torch.sum(z[pos_edges[0, :num_pos]] * z[pos_edges[1, :num_pos]], dim=1))
+        n_p = torch.sigmoid(torch.sum(z[neg_edges[0]] * z[neg_edges[1]], dim=1))
+        
+        all_scores.append(torch.cat([p_p, n_p]).cpu().numpy().flatten())
+        all_targets.append(np.concatenate([np.ones(p_p.size(0)), np.zeros(n_p.size(0))]))
+
+    return roc_auc_score(np.concatenate(all_targets), np.concatenate(all_scores))
+
 def run_benchmark(dataset, device, h_dim, z_dim, n_layers, lr, conv, eps, is_directed=True):
     data_dict = load_data('vgrnn', dataset)
     snapshots, node_count, feat_dim = data_dict['snapshots'], data_dict['node_count'], data_dict['feature_dim']
@@ -702,58 +736,62 @@ def run_benchmark(dataset, device, h_dim, z_dim, n_layers, lr, conv, eps, is_dir
         torch.cuda.reset_peak_memory_stats(device)
     
     print(f"--- Training VGRNN ({dataset}) | Patience: {patience} ---")
+    best_val_auc = 0.0
+    best_train_auc_at_val = 0.0
+    patience, no_improve, best_model_wts = 15, 0, None
+    
     for epoch in range(1, 501):
         model.train()
         optimizer.zero_grad()
         h_init = torch.zeros(n_layers, node_count, h_dim, device=device)
         
+        # 1. Training Pass
         input_idx_list = list(train_idx[:-1])
         target_idx_list = list(train_idx[1:])
-        
-        kld, nll, mu_list, _, _ = model(
+        kld, nll, _, _, _ = model(
             [x_in[i] for i in input_idx_list], 
             [edge_idx_list[i] for i in input_idx_list], 
             [edge_idx_list[i] for i in target_idx_list], 
             h_init
         )
-        
-        # Loss calculation (Optional: add KLD annealing if it stays stuck at 0.65 AUC)
-        loss = kld + nll
-        loss.backward()
+        (kld + nll).backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 10)
         optimizer.step()
-        
-        current_loss = loss.item()
 
-        # --- EARLY STOPPING LOGIC ---
-        if current_loss < best_loss:
-            best_loss = current_loss
+        # 2. Dual AUC Evaluation
+        # Train AUC (Self-warmup)
+        train_auc = validate_link_prediction(model, x_in, edge_idx_list, h_init, train_idx[1:])
+        
+        # Val AUC (Warmup with Train History)
+        _, _, _, _, hidden_st_train = model(
+            [x_in[i] for i in train_idx], [edge_idx_list[i] for i in train_idx], 
+            [edge_idx_list[i] for i in train_idx], h_init
+        )
+        val_auc = validate_link_prediction(model, x_in, edge_idx_list, hidden_st_train.detach(), val_idx)
+
+        # 3. Early Stopping Logic on Val AUC
+        if val_auc > best_val_auc:
+            best_val_auc = val_auc
+            best_train_auc_at_val = train_auc
             best_model_wts = copy.deepcopy(model.state_dict())
             no_improve = 0
+            marker = "*"
         else:
             no_improve += 1
+            marker = ""
 
-        if epoch % 10 == 0 or epoch == 1:
-            with torch.no_grad():
-                all_p, all_t = [], []
-                for i in range(len(mu_list)):
-                    t_idx = target_idx_list[i]
-                    pos_edges = edge_idx_list[t_idx].to(device)
-                    neg_edges = torch.randint(0, node_count, (2, pos_edges.size(1)), device=device)
-                    
-                    z = mu_list[i]
-                    pos_scores = torch.sigmoid(torch.sum(z[pos_edges[0]] * z[pos_edges[1]], dim=1))
-                    neg_scores = torch.sigmoid(torch.sum(z[neg_edges[0]] * z[neg_edges[1]], dim=1))
-                    
-                    all_p.append(torch.cat([pos_scores, neg_scores]).cpu())
-                    all_t.append(torch.cat([torch.ones(pos_scores.size(0)), torch.zeros(neg_scores.size(0))]))
-                
-                train_auc = roc_auc_score(torch.cat(all_t), torch.cat(all_p))
-                print(f"Epoch {epoch:03d} | Loss: {current_loss:.4f} | Sampled AUC: {train_auc:.4f}")
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch:03d} | Train AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} {marker}")
         
         if no_improve >= patience:
-            print(f"Early stopping triggered at epoch {epoch}. Best Loss: {best_loss:.4f}")
+            print(f"Early stopping triggered. Best Val AUC: {best_val_auc:.4f}")
             break
+
+    # --- FINAL SUMMARY PRINT ---
+    print(f"\n[FINAL TRAINING SUMMARY - VGRNN]")
+    print(f"Best Validation AUC: {best_val_auc:.4f}")
+    print(f"Corresponding Train AUC: {best_train_auc_at_val:.4f}")
+    print(f"---------------------------\n")
 
     t1, g1, r1 = time.time() - start_train, get_gpu_memory(device), get_ram_usage()
     if best_model_wts is not None:

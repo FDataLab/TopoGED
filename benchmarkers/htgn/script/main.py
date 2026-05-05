@@ -312,21 +312,61 @@ class Runner(object):
 
 
 
+@torch.no_grad()
+    def evaluate_link_prediction(self, indices, warm_up_indices=None):
+        """Helper to calculate Hyperbolic AUC on a specific set of snapshot indices."""
+        self.model.eval()
+        self.model.init_hiddens()
+        
+        # Warm up hidden state if history is provided
+        if warm_up_indices:
+            for t in warm_up_indices:
+                snap = self.snapshots[t].to(args.device)
+                z = self.model(snap.edge_index, self.x)
+                self.model.update_hiddens_all_with(z)
+        
+        all_scores, all_targets = [], []
+        for t_idx in indices:
+            # Predict T using state from T-1
+            # For train split, we unroll; for val, we continue from warm_up
+            prev_snap = self.snapshots[t_idx-1].to(args.device)
+            z = self.model(prev_snap.edge_index, self.x)
+            
+            target_snap = self.snapshots[t_idx].to(args.device)
+            pos_edges = target_snap.edge_index
+            neg_edges = torch.randint(0, args.num_nodes, (2, pos_edges.size(1)), device=args.device)
+            
+            # Hyperbolic similarity via sqdist
+            p_dist = self.loss.manifold.sqdist(z[pos_edges[0]], z[pos_edges[1]], c=args.curvature)
+            n_dist = self.loss.manifold.sqdist(z[neg_edges[0]], z[neg_edges[1]], c=args.curvature)
+            
+            # Sigmoid of negative distance is our "probability"
+            scores = torch.cat([torch.sigmoid(-p_dist / 10.0), torch.sigmoid(-n_dist / 10.0)])
+            targets = torch.cat([torch.ones(p_dist.size(0)), torch.zeros(n_dist.size(0))])
+            
+            all_scores.append(scores.cpu())
+            all_targets.append(targets.cpu())
+            self.model.update_hiddens_all_with(z)
+
+        y_true = torch.cat(all_targets).numpy()
+        y_scores = torch.cat(all_scores).numpy()
+        return roc_auc_score(y_true, y_scores)
+
     def run(self):
         import geoopt
         optimizer = geoopt.optim.radam.RiemannianAdam(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-        best_loss = float('inf')
+        
+        best_val_auc = 0.0
+        best_train_auc_at_val = 0.0
         no_improve = 0
         
         start_train = time.time()
         for epoch in range(1, args.max_epoch + 1):
             epoch_losses = []
-            all_epoch_scores = []  # Added for AUC
-            all_epoch_targets = [] # Added for AUC
-            
             self.model.init_hiddens()
             self.model.train()
             
+            # 1. Training Pass
             for t in range(len(self.train_shots) - 1):
                 snap = self.snapshots[self.train_shots[t]].to(args.device)
                 next_snap = self.snapshots[self.train_shots[t+1]].to(args.device)
@@ -340,7 +380,6 @@ class Runner(object):
                 p_dist = self.loss.manifold.sqdist(z[pos_edges[0]], z[pos_edges[1]], c=args.curvature)
                 n_dist = self.loss.manifold.sqdist(z[neg_edges[0]], z[neg_edges[1]], c=args.curvature)
                 
-                # BCE on distances (Hyperbolic link prediction)
                 loss = F.binary_cross_entropy_with_logits(-p_dist, torch.ones_like(p_dist)) + \
                        F.binary_cross_entropy_with_logits(-n_dist, torch.zeros_like(n_dist))
                 
@@ -351,43 +390,40 @@ class Runner(object):
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 optimizer.step()
                 epoch_losses.append(loss.item())
-
-                # --- COLLECT SCORES FOR AUC ---
-                with torch.no_grad():
-                    # Sigmoid of negative distance is our "probability"
-                    scores = torch.cat([torch.sigmoid(-p_dist / 10.0), torch.sigmoid(-n_dist / 10.0)])
-                    targets = torch.cat([torch.ones_like(p_dist), torch.zeros_like(n_dist)])
-                    all_epoch_scores.append(scores.cpu())
-                    all_epoch_targets.append(targets.cpu())
-
                 self.model.update_hiddens_all_with(z.detach())
 
-            avg_loss = np.mean(epoch_losses)
+            # 2. Evaluation Phase
+            # Training AUC (Warm up with first snapshot, evaluate the rest)
+            train_auc = self.evaluate_link_prediction(self.train_shots[1:], warm_up_indices=[self.train_shots[0]])
+            # Validation AUC (Warm up with all training history)
+            val_auc = self.evaluate_link_prediction(self.val_shots, warm_up_indices=self.train_shots)
             
-            # --- CALCULATE EPOCH AUC ---
-            epoch_auc = 0
-            if all_epoch_scores:
-                y_scores = torch.cat(all_epoch_scores).numpy()
-                y_true = torch.cat(all_epoch_targets).numpy()
-                try:
-                    epoch_auc = roc_auc_score(y_true, y_scores)
-                except ValueError:
-                    epoch_auc = 0
-                    print("Warning: NaNs detected in scores, skipping AUC for this epoch.")
+            avg_loss = np.mean(epoch_losses)
 
-            if avg_loss < best_loss:
-                best_loss, no_improve = avg_loss, 0
+            # 3. Early Stopping on Validation AUC
+            if val_auc > best_val_auc:
+                best_val_auc = val_auc
+                best_train_auc_at_val = train_auc
                 self.best_model_state = copy.deepcopy(self.model.state_dict())
+                no_improve = 0
+                marker = "*"
             else:
                 no_improve += 1
+                marker = ""
 
             if epoch % args.log_interval == 0:
-                # Updated log message to include AUC
-                logger.info(f"Epoch:{epoch:03d} | Avg Loss: {avg_loss:.4f} | Train AUC: {epoch_auc:.4f}")
+                logger.info(f"Epoch:{epoch:03d} | Loss: {avg_loss:.4f} | Train AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} {marker}")
             
             if no_improve >= args.patience:
-                logger.info(f"Early stopping triggered at epoch {epoch}. Best Loss: {best_loss:.4f}")
+                logger.info(f"Early stopping triggered. Best Val AUC: {best_val_auc:.4f}")
                 break
+
+        # FINAL SUMMARY
+        print(f"\n[FINAL TRAINING SUMMARY - HTGN]")
+        print(f"Best Validation AUC: {best_val_auc:.4f}")
+        print(f"Corresponding Train AUC: {best_train_auc_at_val:.4f}")
+        print(f"---------------------------\n")
+        
         print('Training done, optimizing threshold now')
         # Tracking metrics...
         t1, g1, r1 = time.time() - start_train, get_gpu_memory(args.device), get_ram_usage()

@@ -239,39 +239,77 @@ def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count,
     return predicted_networks
 
 
+@torch.no_grad()
+def validate_link_prediction(model, val_snaps, train_snaps, node_count, device, window_size=5):
+    """Computes AUC on validation set to guide early stopping."""
+    model.eval()
+    all_probs, all_targets = [], []
+    history = train_snaps[-window_size:] if train_snaps else []
+    full_sequence = history + val_snaps
+    
+    for i in range(window_size, len(full_sequence)):
+        h, c = None, None
+        # Warm up
+        for j in range(i - window_size, i - 1):
+            snap = full_sequence[j].to(device)
+            x = snap.x.to_dense() if snap.x.is_sparse else snap.x
+            _, h, c = model(x, snap.edge_index, h, c)
+        
+        # Predict
+        prev_snap = full_sequence[i - 1].to(device)
+        x_prev = prev_snap.x.to_dense() if prev_snap.x.is_sparse else prev_snap.x
+        z, h, c = model(x_prev, prev_snap.edge_index, h, c)
+        
+        target_snap = full_sequence[i].to(device)
+        pos_idx = target_snap.edge_index
+        # Sample 1:1 negatives
+        neg_idx = torch.randint(0, node_count, (2, pos_idx.size(1)), device=device)
+        
+        pos_scores = torch.sigmoid(torch.sum(z[pos_idx[0]] * z[pos_idx[1]], dim=1))
+        neg_scores = torch.sigmoid(torch.sum(z[neg_idx[0]] * z[neg_idx[1]], dim=1))
+        
+        all_probs.append(torch.cat([pos_scores, neg_scores]).cpu())
+        all_targets.append(torch.cat([torch.ones_like(pos_scores), torch.zeros_like(neg_scores)]).cpu())
+
+    y_true = torch.cat(all_targets).numpy()
+    y_scores = torch.cat(all_probs).numpy()
+    return roc_auc_score(y_true, y_scores)
+
 def train_model(dataset_snaps, node_count, node_features, dataset, beta, hidden_dim, K, lr, is_directed=True, device='cuda'):
     model = GCLSTMModel(node_count, node_features, hidden_dim=hidden_dim, K=K).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    window_size, patience = 5, 15
-    best_loss, no_improve, best_model_wts = float('inf'), 0, None
-    
+    window_size = 5
+        
     n = len(dataset_snaps)
     train_snaps = dataset_snaps[:int(n*0.7)]
     val_snaps = dataset_snaps[int(n*0.7):int(n*0.85)]
     test_snaps = dataset_snaps[int(n*0.85):]
 
     start_train = time.time()
-    if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(device)
     
+    # 1. Initialize tracking variables for the "Best" state
+    best_val_auc = 0.0
+    best_train_auc_at_val = 0.0  # New tracker
+    best_model_wts = None
+    no_improve = 0
+    patience = 15
+
     for epoch in range(200):
         model.train()
         epoch_loss = 0
-        all_preds, all_targets = [], []
         
+        # --- Standard Training Pass ---
         for i in range(window_size, len(train_snaps)):
             h, c = None, None
-            # History window unrolling
             for j in range(i - window_size, i - 1):
                 snap = train_snaps[j].to(device)
                 x = snap.x.to_dense() if snap.x.is_sparse else snap.x
                 _, h, c = model(x, snap.edge_index, h, c)
             
-            # Prediction step
             prev_snap = train_snaps[i - 1].to(device)
             x_prev = prev_snap.x.to_dense() if prev_snap.x.is_sparse else prev_snap.x
             z, h, c = model(x_prev, prev_snap.edge_index, h, c)
             
-            # --- SAMPLED LOSS (Sparse) ---
             target_snap = train_snaps[i].to(device)
             pos_idx = target_snap.edge_index
             neg_idx = torch.randint(0, node_count, (2, pos_idx.size(1)), device=device)
@@ -282,7 +320,6 @@ def train_model(dataset_snaps, node_count, node_features, dataset, beta, hidden_
             loss = F.binary_cross_entropy_with_logits(pos_logits, torch.ones_like(pos_logits)) + \
                    F.binary_cross_entropy_with_logits(neg_logits, torch.zeros_like(neg_logits))
             
-            # Regularization
             loss += beta * sum(p.pow(2.0).sum() for p in model.parameters())
             
             optimizer.zero_grad()
@@ -291,26 +328,34 @@ def train_model(dataset_snaps, node_count, node_features, dataset, beta, hidden_
             optimizer.step()
             epoch_loss += loss.item()
 
-            if epoch % 10 == 0:
-                all_preds.append(torch.cat([pos_logits.sigmoid(), neg_logits.sigmoid()]).detach())
-                all_targets.append(torch.cat([torch.ones_like(pos_logits), torch.zeros_like(neg_logits)]).detach())
-
+        # 2. Evaluation Phase
+        train_auc = validate_link_prediction(model, train_snaps[window_size:], train_snaps[:window_size], node_count, device, window_size)
+        val_auc = validate_link_prediction(model, val_snaps, train_snaps, node_count, device, window_size)
+        
         avg_loss = epoch_loss / (len(train_snaps) - window_size)
-        if epoch % 10 == 0: 
-            y_true = torch.cat(all_targets).cpu().numpy()
-            y_scores = torch.cat(all_preds).cpu().numpy()
-            print(f"Epoch {epoch:03d} | Avg Loss: {avg_loss:.6f} | Sampled Train AUC: {roc_auc_score(y_true, y_scores):.4f}")
-
-        if avg_loss < best_loss:
-            best_loss = avg_loss
+        
+        # 3. Update "Best" state based ONLY on Val AUC
+        if val_auc > best_val_auc:
+            best_val_auc = val_auc
+            best_train_auc_at_val = train_auc  # Capture corresponding train metric
             best_model_wts = copy.deepcopy(model.state_dict())
             no_improve = 0
+            marker = "*"
         else:
             no_improve += 1
-            
+            marker = ""
+
+        print(f"Epoch {epoch:03d} | Loss: {avg_loss:.4f} | Train AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} {marker}")
+
         if no_improve >= patience:
-            print(f"Early stopping triggered at epoch {epoch}. Best training loss: {best_loss:.6f}")
+            print(f"Early stopping triggered. Best Val AUC: {best_val_auc:.4f}")
             break
+
+    # --- FINAL SUMMARY PRINT ---
+    print(f"\n[FINAL TRAINING SUMMARY]")
+    print(f"Best Validation AUC: {best_val_auc:.4f}")
+    print(f"Corresponding Train AUC: {best_train_auc_at_val:.4f}")
+    print(f"---------------------------\n")
 
     t1, g1, r1 = time.time() - start_train, get_gpu_memory(device), get_ram_usage()
 

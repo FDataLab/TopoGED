@@ -233,70 +233,115 @@ def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count,
     print(f"Saved memory-safe TGCN sparse graphs to {save_path}")
     return predicted_networks
 
+@torch.no_grad()
+def validate_link_prediction(model, target_snaps, history_snaps, node_count, hidden_dim, device):
+    """Standardized helper for T-GCN Link Prediction AUC."""
+    model.eval()
+    all_scores, all_targets = [], []
+    
+    # 1. Warm up hidden state through the provided history
+    h = torch.zeros(node_count, hidden_dim, device=device)
+    for snap in history_snaps:
+        x = snap.x.to_dense() if snap.x.is_sparse else snap.x
+        _, h = model(x.to(device), snap.edge_index.to(device), h)
+
+    # 2. Evaluate target snapshots
+    for i in range(len(target_snaps) - 1):
+        snap, target_snap = target_snaps[i], target_snaps[i+1]
+        x = snap.x.to_dense() if snap.x.is_sparse else snap.x
+        z, h = model(x.to(device), snap.edge_index.to(device), h)
+        
+        pos_idx = target_snap.edge_index.to(device)
+        if pos_idx.size(1) == 0: continue
+        
+        # Standard 1:1 sampling
+        num_pos = min(pos_idx.size(1), 10000)
+        neg_idx = torch.randint(0, node_count, (2, num_pos), device=device)
+        
+        p_p = torch.sigmoid(torch.sum(z[pos_idx[0, :num_pos]] * z[pos_idx[1, :num_pos]], dim=1))
+        n_p = torch.sigmoid(torch.sum(z[neg_idx[0]] * z[neg_idx[1]], dim=1))
+        
+        all_scores.append(torch.cat([p_p, n_p]).cpu().numpy().flatten())
+        all_targets.append(np.concatenate([np.ones(p_p.size(0)), np.zeros(n_p.size(0))]))
+
+    return roc_auc_score(np.concatenate(all_targets), np.concatenate(all_scores))
+
 def train_model(dataset_snaps, node_count, node_features, dataset, hidden_dim, lr, lambda_loss, is_directed=True, device='cuda'):
     model = TGCNModel(node_count, node_features, hidden_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     
-    patience, best_loss, no_improve, best_model_wts = 15, float('inf'), 0, None
     n = len(dataset_snaps)
     train_snaps = dataset_snaps[:int(n*0.7)]
     val_snaps = dataset_snaps[int(n*0.7):int(n*0.85)] 
     test_snaps = dataset_snaps[int(n*0.85):]
 
+    best_val_auc = 0.0
+    best_train_auc_at_val = 0.0
+    patience, no_improve, best_model_wts = 15, 0, None
+    
     start_train = time.time()
-    if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(device)
 
     for epoch in range(200): 
         model.train()
         h = torch.zeros(node_count, hidden_dim).to(device) 
-        optimizer.zero_grad()
         epoch_loss = 0
-        all_preds, all_targets = [], []
         
+        # 1. Training Loop
         for i in range(len(train_snaps) - 1):
             snap = train_snaps[i].to(device)
             target_snap = train_snaps[i+1].to(device)
             
-            # Forward: Get embeddings
             z, h = model(snap.x, snap.edge_index, h)
             
-            # Sparse Link Prediction Loss
             pos_idx = target_snap.edge_index
             pos_scores = torch.sum(z[pos_idx[0]] * z[pos_idx[1]], dim=1)
-            
             neg_idx = torch.randint(0, node_count, (2, pos_idx.size(1)), device=device)
             neg_scores = torch.sum(z[neg_idx[0]] * z[neg_idx[1]], dim=1)
             
             loss = F.binary_cross_entropy_with_logits(pos_scores, torch.ones_like(pos_scores)) + \
-                   F.binary_cross_entropy_with_logits(neg_scores, torch.zeros_like(neg_scores))
+                    F.binary_cross_entropy_with_logits(neg_scores, torch.zeros_like(neg_scores))
             
-            # Regularization
             reg_loss = lambda_loss * sum(p.pow(2).sum() for p in model.parameters())
             total_batch_loss = loss + reg_loss
             
+            optimizer.zero_grad()
             total_batch_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            optimizer.zero_grad()
             
             epoch_loss += total_batch_loss.item()
             h = h.detach()
 
-            if epoch % 10 == 0:
-                all_preds.append(torch.cat([torch.sigmoid(pos_scores), torch.sigmoid(neg_scores)]).detach())
-                all_targets.append(torch.cat([torch.ones_like(pos_scores), torch.zeros_like(neg_scores)]).detach())
-
+        # 2. Dual AUC Evaluation
+        # Train AUC (Warm up with first, evaluate rest)
+        train_auc = validate_link_prediction(model, train_snaps[1:], [train_snaps[0]], node_count, hidden_dim, device)
+        # Val AUC (Warm up with full train history)
+        val_auc = validate_link_prediction(model, val_snaps, train_snaps, node_count, hidden_dim, device)
+        
         avg_loss = epoch_loss / (len(train_snaps) - 1)
-        if epoch % 10 == 0:
-            y_t = torch.cat(all_targets).cpu().numpy()
-            y_p = torch.cat(all_preds).cpu().numpy()
-            train_auc = roc_auc_score(y_t, y_p)
-            print(f"Epoch {epoch:03d} | Loss: {avg_loss:.6f} | Sampled AUC: {train_auc:.4f}")
 
-        if avg_loss < best_loss:
-            best_loss, best_model_wts, no_improve = avg_loss, copy.deepcopy(model.state_dict()), 0
-        else: no_improve += 1
-        if no_improve >= patience: break
+        # 3. Early Stopping Logic on Val AUC
+        if val_auc > best_val_auc:
+            best_val_auc = val_auc
+            best_train_auc_at_val = train_auc
+            best_model_wts = copy.deepcopy(model.state_dict())
+            no_improve = 0
+            marker = "*"
+        else:
+            no_improve += 1
+            marker = ""
+
+        print(f"Epoch {epoch:03d} | Loss: {avg_loss:.4f} | Train AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} {marker}")
+        
+        if no_improve >= patience:
+            print(f"Early stopping triggered. Best Val AUC: {best_val_auc:.4f}")
+            break
+            
+    # --- FINAL SUMMARY PRINT ---
+    print(f"\n[FINAL TRAINING SUMMARY - T-GCN]")
+    print(f"Best Validation AUC: {best_val_auc:.4f}")
+    print(f"Corresponding Train AUC: {best_train_auc_at_val:.4f}")
+    print(f"---------------------------\n")
             
     t1 = time.time() - start_train
     g1 = torch.cuda.max_memory_reserved(device) / 1024**2 if torch.cuda.is_available() else 0

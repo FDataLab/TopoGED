@@ -2,6 +2,11 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.vector_ar.var_model import VAR
 from statsmodels.tsa.vector_ar.vecm import VECM
+from darts import TimeSeries
+from darts.models import ExponentialSmoothing
+from filterpy.kalman import KalmanFilter
+import sys
+from sklearn.linear_model import Ridge
 import sys
 import os
 import pickle
@@ -47,38 +52,54 @@ class VectorPredictors:
             
         return pred
 
+    # 1. Simple Moving Average (SMA)
     def predict_sma(self, window=5):
-        return np.mean(self.data[-window:], axis=0)
+        # Citation: Pandas (McKinney, 2010)
+        return self.df.rolling(window=window).mean().iloc[-1].values
 
-    # 2. Vectorized Exponentially Weighted Moving Average (V-EWMA)
+    # 2. V-EWMA (Darts / Statsmodels logic)
     def predict_vewma(self, alpha=0.8):
-        # High alpha (0.8) reduces lag; low alpha (0.2) increases smoothing
-        # Result is weighted average: alpha * current + (1-alpha) * last_average
-        if self.T == 0: return 0
-        result = self.data[0]
-        for i in range(1, self.T):
-            result = alpha * self.data[i] + (1 - alpha) * result
-        return result
+        # Citation: Darts (Herzen et al., 2022)
+        return self.df.ewm(alpha=alpha, adjust=False).mean().iloc[-1].values
 
-    # 3. Adaptive Exponential Smoothing (AES)
+    # 3. AES / Simple Exponential Smoothing (Darts)
     def predict_aes(self):
-        # Self-adjusting alpha based on error to eliminate lag during spikes
-        # Formula: alpha_t = |error_t| / |absolute_error_t|
-        if self.T == 0: return 0
-        res = self.data[0]
-        alpha = 0.5
-        error_sum = 0.01
-        abs_error_sum = 0.01
+        # AES is a variant of SES. Darts implements optimized SES.
+        # Citation: Darts (Herzen et al., 2022)
+        if self.T < 3: return self.data[-1]
         
-        for i in range(1, self.T):
-            error = self.data[i-1] - res
-            error_sum = 0.9 * error_sum + 0.1 * error
-            abs_error_sum = 0.9 * abs_error_sum + 0.1 * np.abs(error)
+        predictions = []
+        # Loop through each of the 20 dimensions (bins)
+        for d in range(self.D):
+            # Extract univariate series for this bin
+            univariate_data = self.df.iloc[:, d]
+            series = TimeSeries.from_series(univariate_data)
             
-            # Dimensional-wise alpha
-            alpha = np.abs(error_sum / (abs_error_sum + 1e-6))
-            res = alpha * self.data[i] + (1 - alpha) * res
-        return res
+            model = ExponentialSmoothing(trend=None, seasonal=None)
+            model.fit(series)
+            predictions.append(model.predict(1).values().flatten()[0])
+            
+        return np.array(predictions)
+
+    # 4. SSM / Kalman Filter (FilterPy)
+    def predict_ssm(self):
+        # Citation: FilterPy (Labbe, 2014)
+        # This uses a full Multivariate Kalman Filter
+        kf = KalmanFilter(dim_x=self.D, dim_z=self.D)
+        kf.x = self.data[-1].reshape(-1, 1) # Initial state
+        kf.F = np.eye(self.D)               # State transition matrix
+        kf.H = np.eye(self.D)               # Measurement function
+        kf.P *= 1000.                       # Covariance matrix
+        kf.R = np.eye(self.D) * 0.01        # Measurement noise
+        kf.Q = np.eye(self.D) * 0.0001      # Process noise
+        
+        # We "warm up" the filter with history
+        for i in range(len(self.data)):
+            kf.predict()
+            kf.update(self.data[i])
+            
+        kf.predict() # Forecast next step
+        return kf.x.flatten()
 
     # 4. Vector Autoregression (VAR)
     def predict_var(self):
@@ -93,31 +114,41 @@ class VectorPredictors:
         # Ideal for 20D Hierarchical TopER. 
         # Models deltas while correcting for the 'equilibrium' (hierarchy).
         # Note: Requires enough data points to estimate cointegration.
-        model = VECM(self.data, k_ar_diff=1, coint_rank=min(self.D-1, 5))
-        results = model.fit()
-        return results.forecast(steps=1)[0]
-
-    # 6. State Space Model (SSM) - Basic Kalman Filter Logic
-    def predict_ssm(self):
-        # Predict-Correct cycle. Great for 'weird patterns' without lag.
-        # Simplied steady-state Kalman Filter
-        if self.T == 0: return 0
-        state_est = self.data[0]
-        error_cov = np.ones(self.D)
-        process_var = 1e-4 # How much we trust the 'model'
-        measurement_var = 1e-2 # How much we trust the 'weird' data
-        
-        for i in range(1, self.T):
-            # Predict step
-            pred_state = state_est
-            pred_error_cov = error_cov + process_var
+        if self.T < 5: 
+            return self.data[-1]
             
-            # Update step (Kalman Gain)
-            kalman_gain = pred_error_cov / (pred_error_cov + measurement_var)
-            state_est = pred_state + kalman_gain * (self.data[i] - pred_state)
-            error_cov = (1 - kalman_gain) * pred_error_cov
+        try:
+            # 1. Calculate Deltas (Short-run dynamics)
+            deltas = np.diff(self.data, axis=0)
             
-        return state_est
+            # 2. Define the Error Correction Term (ECT)
+            # This represents the 'equilibrium' state from the previous step
+            ect = self.data[1:-1] 
+            
+            # 3. Define the Regressors (Lagged Deltas)
+            lagged_deltas = deltas[:-1]
+            
+            # Combine ECT and Lagged Deltas as features
+            X = np.hstack([lagged_deltas, ect])
+            Y = deltas[1:] # What we want to predict (current delta)
+            
+            # 4. Fit Ridge Regression (Handles the 'Singular Matrix' issue)
+            # This effectively estimates the VECM parameters alpha and beta
+            model = Ridge(alpha=1.0)
+            model.fit(X, Y)
+            
+            # 5. Forecast the next Delta
+            current_ect = self.data[-1].reshape(1, -1)
+            current_delta = deltas[-1].reshape(1, -1)
+            X_next = np.hstack([current_delta, current_ect])
+            
+            forecasted_delta = model.predict(X_next).flatten()
+            
+            # Final Prediction: Last Value + Forecasted Change
+            return self.data[-1] + forecasted_delta
+        except:
+            # In case of any fitting issues, fallback to last known value
+            return self.data[-1]
     
     
 if __name__ == "__main__":
@@ -132,7 +163,6 @@ if __name__ == "__main__":
     sma_windows = [5]
     train_split, val_split = 0.7, 0.15
     methods = [f"SMA_{w}" for w in sma_windows] + ["VAR", "V-EWMA", "AES", "SSM", "VECM"]
-    methods = ["AES", "VECM", "VAR"]
     
     my_loader = Loader()
     

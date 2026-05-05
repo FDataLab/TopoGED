@@ -1,4 +1,5 @@
 import argparse
+import gc
 import math
 import numpy as np 
 import networkx as nx
@@ -19,7 +20,9 @@ import copy
 import time
 import psutil
 from torchmetrics.functional import auroc
-
+import os
+print(f"SLURM_JOB_ID: {os.environ.get('SLURM_JOB_ID')}")
+print(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
 faulthandler.enable()
 
 #import line_profiler
@@ -98,9 +101,9 @@ class Runner(object):
             
         # Some default file path
         self.file_visualization_path = "GraphGeneration/scripts/Visualize"
-        self.saved_input = os.path.abspath(f'data/input/cached/{self.dataset}/saved_data_gnn_{self.model_type}{self.feature_type}_lr{encoder_config["training"]["lr"]}_{days_back_val}back_oobankchanges_sampling')
+        self.saved_input = os.path.abspath(f'data/input/cached/{self.dataset}/saved_data_gnn_{self.model_type}{self.feature_type}_lr{encoder_config["training"]["lr"]}_{days_back_val}back_oobankchanges_sampling_tmp')
         self.saved_samples = os.path.join(self.saved_input, 'saved_samples.pkl')
-        self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}_lr{encoder_config["training"]["lr"]}_{days_back_val}back_oobankchanges_{self.new_node_strategy}_sampling_predvals{encoder_config["use_predicted_vals"]}'
+        self.common_suffix = f'topoGED_embedding{encoder_config["encoder_model"]["addOnFeature"]}_mlpEncoding{encoder_config["decoder_model"]["encode_links"]}_embeddingType{encoder_config["encoder_model"]["nodeEmbeddingType"]}_lr{encoder_config["training"]["lr"]}_{days_back_val}back_oobankchanges_{self.new_node_strategy}_sampling_predvals{encoder_config["use_predicted_vals"]}_tmp'
         self.saved_graph_dir = f'data/output/constructed_graphs/{self.dataset}_{self.common_suffix}_edgebank_{self.edgebank_style}_VectorType{encoder_config["use_test_style"] if encoder_config["use_predicted_vals"] else "TrueVals"}'
 
         
@@ -617,6 +620,7 @@ class Runner(object):
         # Reset peak stats for Construction phase monitoring
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats(self.device)
+        gc.collect()
         
         if encoder_config["ablation"]:
             print('PERFORMING ABLATION STUDY')
