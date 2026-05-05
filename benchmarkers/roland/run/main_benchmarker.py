@@ -16,15 +16,18 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from benchmarkers.benchmarker_utils.dataset_setup import load_data
 from benchmarkers.roland.run.roland_model import ROLAND
 
-seed = 42
+import torch
+import numpy as np
+import random
+seed = random.randint(1, 500)
+random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.cuda.manual_seed_all(seed) 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-import random
-random.seed(seed)
+
 print(f"Seed set to: {seed}")
 
 def get_gpu_memory(device):
@@ -341,17 +344,21 @@ class RolandRunner:
                     final_cols = raw_cols
                     status = "ACCEPTED"
 
-                # --- HELPER FUNCTION FOR METRICS ---
+                # --- HELPER FUNCTION FOR METRICS (FIXED FOR NUMPY 1.23+) ---
                 def get_metrics(pred_rows, pred_cols, N):
                     if len(pred_rows) > 0:
-                        matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                        # FIX: Explicitly copy indices to ensure they own their memory and are writeable
+                        r_idx = np.array(pred_rows).copy()
+                        c_idx = np.array(pred_cols).copy()
+                        
+                        matched = np.array(true_adj_sp[r_idx, c_idx]).flatten()
                         tp = np.sum(matched > 0)
                         fp = len(pred_rows) - tp
                         fn = num_true_edges - tp
-                        tn = (N * (N - 1)) - (tp + fp + fn)
+                        tn = (int(N) * (int(N) - 1)) - (tp + fp + fn)
                         return tp, fp, tn, fn
                     else:
-                        return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+                        return 0, 0, (int(N) * (int(N) - 1)) - num_true_edges, num_true_edges
 
                 # Calculate both sets of metrics
                 tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, self.node_count)
@@ -379,7 +386,6 @@ class RolandRunner:
 
                 predicted_networks.append(adj_final)
                 gc.collect()
-
         # 3. Save Logic
         strategy_str = 'threshold_5xCap'
         file_params = (

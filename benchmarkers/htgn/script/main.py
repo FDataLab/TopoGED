@@ -10,19 +10,23 @@ from math import isnan
 from sklearn.metrics import roc_auc_score, f1_score
 from torch_geometric.utils import to_dense_adj
 import torch.nn.functional as F
-
+import scipy.sparse as sp
+import gc
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 from benchmarkers.benchmarker_utils.dataset_setup import load_data
 
-seed = 42
+import torch
+import numpy as np
+import random
+seed = random.randint(1, 500)
+random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.cuda.manual_seed_all(seed) 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-import random
-random.seed(seed)
+
 print(f"Seed set to: {seed}")
 
 import time, psutil, gc
@@ -157,19 +161,12 @@ class Runner(object):
         print(f"Optimal Threshold: {best_tau:.2f} | Sampled Val F1: {best_f1:.4f}")
         return best_tau
 
-    
+        
     def construct_graphs(self, threshold, file_path, dataset_name):
         """
         Memory-safe HTGN construction with standardized 5x Dynamic Capping 
         and Sparse Metric printing (TP, FP, TN, FN).
         """
-        import scipy.sparse as sp
-        import gc
-        import pickle
-        import os
-        import numpy as np
-        import torch
-        import networkx as nx
 
         # 1. Load Ground Truth for Metrics and Dynamic Capping
         from GraphGeneration.scripts.load_data import load_data
@@ -239,7 +236,6 @@ class Runner(object):
                 num_threshold_passed = full_scores_tensor.numel()
 
                 # 3. STANDARDIZED DYNAMIC CAPPING (5x edges of T-1)
-                # t is the index of the snapshot we are predicting
                 max_num_edges = max(num_edges_in_targets[t - 1] * 5, 1000)
                 
                 # Capture the raw/uncapped arrays BEFORE capping
@@ -263,23 +259,27 @@ class Runner(object):
                 true_adj_sp = nx.to_scipy_sparse_array(true_graph, nodelist=range(args.num_nodes), format='csr')
                 num_true_edges = true_adj_sp.nnz
 
-                # --- NEW: HELPER FUNCTION FOR METRICS ---
+                # --- NEW: HELPER FUNCTION FOR METRICS (FIXED) ---
                 def get_metrics(pred_rows, pred_cols, N):
                     if len(pred_rows) > 0:
-                        matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                        # FIX: Explicitly copy indices to ensure they own their memory and are writeable
+                        r_idx = np.array(pred_rows).copy()
+                        c_idx = np.array(pred_cols).copy()
+                        
+                        matched = np.array(true_adj_sp[r_idx, c_idx]).flatten()
                         tp = np.sum(matched > 0)
                         fp = len(pred_rows) - tp
                         fn = num_true_edges - tp
-                        tn = (N * (N - 1)) - (tp + fp + fn)
+                        tn = (int(N) * (int(N) - 1)) - (tp + fp + fn)
                         return tp, fp, tn, fn
                     else:
-                        return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+                        return 0, 0, (int(N) * (int(N) - 1)) - num_true_edges, num_true_edges
                 
                 # Calculate both sets of metrics
                 tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, args.num_nodes)
                 tp_cap, fp_cap, tn_cap, fn_cap = get_metrics(final_rows, final_cols, args.num_nodes)
 
-                # 5. BUILD FINAL SPARSE MATRIX (We still only save the capped version)
+                # 5. BUILD FINAL SPARSE MATRIX
                 adj_final = sp.csr_matrix(
                     (np.ones(len(final_rows), dtype=np.int8), (final_rows, final_cols)),
                     shape=(args.num_nodes, args.num_nodes)
@@ -289,7 +289,6 @@ class Runner(object):
                 print(f"\nSnap {t} | {status} | True Edges: {num_true_edges} | Cap Limit: {max_num_edges}")
                 print(f"  [UNCAPPED] Pred: {len(raw_rows):<7} | TP: {tp_raw:<5} | FP: {fp_raw:<7} | TN: {tn_raw:<7} | FN: {fn_raw:<5}")
                 print(f"  [CAPPED]   Pred: {adj_final.nnz:<7} | TP: {tp_cap:<5} | FP: {fp_cap:<7} | TN: {tn_cap:<7} | FN: {fn_cap:<5}")
-
 
                 if not self.is_directed:
                     adj_final = adj_final + adj_final.T
@@ -312,7 +311,7 @@ class Runner(object):
 
 
 
-@torch.no_grad()
+    @torch.no_grad()
     def evaluate_link_prediction(self, indices, warm_up_indices=None):
         """Helper to calculate Hyperbolic AUC on a specific set of snapshot indices."""
         self.model.eval()

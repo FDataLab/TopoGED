@@ -16,15 +16,18 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from benchmarkers.benchmarker_utils.dataset_setup import load_data
 from benchmarkers.gclstm.model import GCLSTMModel
 
-seed = 42
+import torch
+import numpy as np
+import random
+seed = random.randint(1, 500)
+random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.cuda.manual_seed_all(seed) 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-import random
-random.seed(seed)
+
 print(f"Seed set to: {seed}")
 
 import time, psutil, gc
@@ -109,24 +112,24 @@ def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count,
         dataset, '', '', '', 'all', 
         use_predicted=False, num_buckets=10, use_test_style=None
     )
-    test_start_idx = len(target_graphs_flat) - len(current_snaps)
+    
     # Flatten buckets: target_graphs_flat[i] is the ground truth for snapshot i
     target_graphs_flat = [bucket[-1] for bucket in target_graphs]
     num_edges_in_targets = [g.number_of_edges() for g in target_graphs_flat]
+    
+    test_start_idx = len(target_graphs_flat) - len(current_snaps)
 
     history = previous_snaps[-window_size:] if previous_snaps else []
     full_sequence = history + current_snaps
     
     predicted_networks = []
     
-    # Alignment note: Loop starts at window_size, which corresponds to the first 
-    # test snapshot. This should align with the index in target_graphs_flat.
     print(f"--- Starting GC-LSTM Sparse Construction (5x Dynamic Cap) ---")
     
-    # We map 'i' directly to the snapshot index in the original sequence
     for i in range(window_size, len(full_sequence)):
         global_idx = test_start_idx + (i - window_size)
         h, c = None, None 
+        
         # RNN Warm up
         for j in range(i - window_size, i - 1):
             snap = full_sequence[j].to(device)
@@ -170,13 +173,13 @@ def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count,
         max_num_edges = num_edges_in_targets[global_idx - 1] * 5
         
         # Capture raw/uncapped arrays BEFORE capping
-        raw_rows = final_rows_tensor.numpy().copy()
-        raw_cols = final_cols_tensor.numpy().copy()
+        raw_rows = final_rows_tensor.numpy()
+        raw_cols = final_cols_tensor.numpy()
         
         if num_threshold_passed > max_num_edges:
             _, top_k_idx = torch.topk(final_scores_tensor, max_num_edges)
-            final_rows = final_rows_tensor[top_k_idx].numpy().copy()
-            final_cols = final_cols_tensor[top_k_idx].numpy().copy()
+            final_rows = final_rows_tensor[top_k_idx].numpy()
+            final_cols = final_cols_tensor[top_k_idx].numpy()
             status = "CAPPED"
         else:
             final_rows = raw_rows
@@ -190,23 +193,27 @@ def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count,
         true_adj_sp = nx.to_scipy_sparse_array(true_graph, nodelist=range(node_count), format='csr')
         num_true_edges = true_adj_sp.nnz
 
-        # --- HELPER FUNCTION FOR METRICS ---
+        # --- HELPER FUNCTION FOR METRICS (FIXED) ---
         def get_metrics(pred_rows, pred_cols, N):
             if len(pred_rows) > 0:
-                matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                # FIX: Force explicit copy for writeable flag compatibility
+                r_idx = np.array(pred_rows).copy()
+                c_idx = np.array(pred_cols).copy()
+                
+                matched = np.array(true_adj_sp[r_idx, c_idx]).flatten()
                 tp = np.sum(matched > 0)
                 fp = len(pred_rows) - tp
                 fn = num_true_edges - tp
-                tn = (N * (N - 1)) - (tp + fp + fn)
+                tn = (int(N) * (int(N) - 1)) - (tp + fp + fn)
                 return tp, fp, tn, fn
             else:
-                return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+                return 0, 0, (int(N) * (int(N) - 1)) - num_true_edges, num_true_edges
         
         # Calculate both sets of metrics
         tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, node_count)
         tp_cap, fp_cap, tn_cap, fn_cap = get_metrics(final_rows, final_cols, node_count)
 
-        # 4. BUILD FINAL SPARSE MATRIX (We still only save the capped version)
+        # 4. BUILD FINAL SPARSE MATRIX
         adj_final = sp.csr_matrix(
             (np.ones(len(final_rows), dtype=np.int8), (final_rows, final_cols)),
             shape=(node_count, node_count)
@@ -226,7 +233,6 @@ def construct_predicted_graphs(model, current_snaps, previous_snaps, node_count,
         # Cleanup
         del z, all_rows, all_cols, all_scores, final_rows_tensor, final_cols_tensor, final_scores_tensor
         gc.collect()
-
     # 6. Save Logic
     base_name = file_path.replace("_threshold", "")
     save_path = f"data/output/predicted/GCLSTM/{base_name}_threshold_5xCap.pkl"

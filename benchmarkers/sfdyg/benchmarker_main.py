@@ -32,15 +32,20 @@ def get_gpu_memory(device_id=0):
 def get_ram_usage():
     return psutil.Process(os.getpid()).memory_info().rss / 1024**2
 
-def seed_everything(seed=42):
+def seed_everything(old_seed=42):
+    import torch
+    import numpy as np
     import random
+    seed = random.randint(1, 500)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed_all(seed) 
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+    print(f"Seed set to: {seed}")
 
 class SFDyGPipeline:
     def __init__(self, args, data_dict, device, is_directed=True):
@@ -339,7 +344,6 @@ class SFDyGPipeline:
                 num_threshold_passed = full_scores_tensor.numel()
 
                 # 3. STANDARDIZED DYNAMIC CAPPING (5x edges of T-1)
-                # t is the index of the snapshot we are currently predicting
                 max_num_edges = max(num_edges_in_targets[t - 1] * 5, 1000)
                 
                 # Capture the raw/uncapped arrays BEFORE capping
@@ -363,23 +367,27 @@ class SFDyGPipeline:
                 true_adj_sp = nx.to_scipy_sparse_array(true_graph, nodelist=range(self.node_count), format='csr')
                 num_true_edges = true_adj_sp.nnz
 
-                # --- HELPER FUNCTION FOR METRICS ---
+                # --- HELPER FUNCTION FOR METRICS (FIXED FOR NUMPY 1.23+) ---
                 def get_metrics(pred_rows, pred_cols, N):
                     if len(pred_rows) > 0:
-                        matched = np.array(true_adj_sp[pred_rows, pred_cols]).flatten()
+                        # FIX: Explicitly copy indices to ensure they own their memory and are writeable
+                        r_idx = np.array(pred_rows).copy()
+                        c_idx = np.array(pred_cols).copy()
+                        
+                        matched = np.array(true_adj_sp[r_idx, c_idx]).flatten()
                         tp = np.sum(matched > 0)
                         fp = len(pred_rows) - tp
                         fn = num_true_edges - tp
-                        tn = (N * (N - 1)) - (tp + fp + fn)
+                        tn = (int(N) * (int(N) - 1)) - (tp + fp + fn)
                         return tp, fp, tn, fn
                     else:
-                        return 0, 0, (N * (N - 1)) - num_true_edges, num_true_edges
+                        return 0, 0, (int(N) * (int(N) - 1)) - num_true_edges, num_true_edges
 
                 # Calculate both sets of metrics
                 tp_raw, fp_raw, tn_raw, fn_raw = get_metrics(raw_rows, raw_cols, self.node_count)
                 tp_cap, fp_cap, tn_cap, fn_cap = get_metrics(final_rows, final_cols, self.node_count)
 
-                # 5. BUILD FINAL SPARSE MATRIX (We still only save the capped version)
+                # 5. BUILD FINAL SPARSE MATRIX (Only save the capped version)
                 adj_final = sp.csr_matrix(
                     (np.ones(len(final_rows), dtype=np.int8), (final_rows, final_cols)),
                     shape=(self.node_count, self.node_count)
