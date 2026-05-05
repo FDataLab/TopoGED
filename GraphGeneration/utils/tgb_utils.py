@@ -44,6 +44,6 @@ def export_tgb_datasets(dataset_list, root_dir=".GraphGeneration/utils/tgb_data"
         print(f"Successfully saved to: {output_file}")
 
 # Run for both Wiki and Amazon
-datasets_to_run = ["tgbl-wiki", "tgbl-review"]
+datasets_to_run = ["tgbl-wiki", "tgbl-review", "tgbl-coin"]
 export_tgb_datasets(datasets_to_run)
 

@@ -418,7 +418,7 @@ class Visualizer:
         plt.show()
 
 
-    def plot_scatter(true, predicted, save_path, mode="nodes", xlabel="", ylabel=""):
+    def plot_scatter(predicted, true, save_path, mode="nodes", xlabel="", ylabel=""):
         import numpy as np
         import os
         import matplotlib.pyplot as plt
@@ -427,12 +427,16 @@ class Visualizer:
         predicted = np.asarray(predicted, dtype=np.float32).ravel()
         true = np.asarray(true, dtype=np.float32).ravel()
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        # FIX 1: Use a square figure size (e.g., 8x8 instead of 10x6)
+        fig, ax = plt.subplots(figsize=(8, 8))
 
         ax.scatter(predicted, true, alpha=0.6)
 
         max_val = max(np.max(predicted), np.max(true))
         max_limit = max(1.0, 1.05 * max_val)
+
+        # NEW: Add a dashed diagonal line representing perfect predictions
+        ax.plot([0, max_limit], [0, max_limit], color='black', linestyle='--', alpha=0.4)
 
         fs = 14
         if mode == "nodes":
@@ -451,7 +455,9 @@ class Visualizer:
 
         ax.set_xlim(0, max_limit)
         ax.set_ylim(0, max_limit)
-        ax.set_aspect('equal', adjustable='datalim')
+        
+        # FIX 2: Set adjustable to 'box' so the physical axes stay square
+        ax.set_aspect('equal', adjustable='box')
 
         ax.tick_params(labelsize=12)
         ax.spines['top'].set_visible(False)
@@ -461,7 +467,7 @@ class Visualizer:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         fig.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close(fig)
-            
+                
     
     def plot_line_graph(true_vals, pred_vals, prob_type, xlabel="Time Index", ylabel="Probability", title="True vs Real: ", save_path="plot.png"):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)

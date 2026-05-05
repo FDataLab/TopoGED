@@ -3,14 +3,14 @@ import torch
 import os
 import sys
 import pickle
-#from GraphGeneration.models.temporal_gnn.script.config import args
+import numpy as np
 import random
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from utils.loader import Loader
 
 
-def load_data(dataset, embedding, mlpEncoding, embeddingType, num_back, use_predicted=False):
+def load_data(dataset, embedding, mlpEncoding, embeddingType, num_back, use_predicted=False, num_buckets=10, use_test_style=None):
     my_loader = Loader()
     output_dir = os.path.abspath(f'data/input/cached/{dataset}')
     
@@ -19,114 +19,135 @@ def load_data(dataset, embedding, mlpEncoding, embeddingType, num_back, use_pred
     cached_data_dataset_folder = os.path.join(output_dir, 'saved_data/')
 
     # Construct output evaluation csv
-    structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_pred.csv'
-    structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_true.csv'
-    structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_diff.csv'
-    kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_pred.csv'
-    kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_true.csv'
-    edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/edge_analysis.csv'
-    topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/toper_diff.csv'
-    animation_path = f'GraphGeneration/output/results/animations/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/pred_vs_true.mp4'
+#     structure_pred_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_pred.csv'
+#     structure_true_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_true.csv'
+#     structure_diff_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/structure_diff.csv'
+#     kernel_pred_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_pred.csv'
+#     kernel_true_file_path = f'GraphGeneration/output/results/kernel/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/kernel_true.csv'
+#     edge_file_path = f'GraphGeneration/output/results/structure/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/edge_analysis.csv'
+#     topER_file_path = f'GraphGeneration/output/results/topER/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/toper_diff.csv'
+#     animation_path = f'GraphGeneration/output/results/animations/{dataset}/topoGED_embedding{embedding}_mlpEncoding{mlpEncoding}_embeddingType{embeddingType}/pred_vs_true.mp4'
 
-    # Create file paths if needed
-    for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 
-                kernel_true_file_path, edge_file_path, topER_file_path, animation_path, cached_model_dataset_folder, cached_data_dataset_folder]:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+#     # Create file paths if needed
+#     for path in [structure_pred_file_path, structure_true_file_path, structure_diff_file_path, kernel_pred_file_path, 
+#                 kernel_true_file_path, edge_file_path, topER_file_path, animation_path, cached_model_dataset_folder, cached_data_dataset_folder]:
+#         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    columns_structure = ['Graph Number', 'Average Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortivity Coefficient',
-            'Clustering Coefficient', 'Density', 'Number of Weakly Connected Components',
-            'Number of Strongly Connected Components', 'Number of Nodes', 'Number of Edges',
-            'Eigenvalue_1', 'Eigenvalue_2', 'Eigenvalue_3', 'Eigenvalue_4', 'Eigenvalue_5', ]
-    removed = ['Betweenness Centrality', 'Closeness Centrality', 'Number of Cliques', 'Diameter', 'Number of 3-Motifs',  'Number of Cycles', ]
+#     columns_structure = ['Graph Number', 'Average Node Degree', 'Unique Degree Count', 'Degree Centrality', 'Assortivity Coefficient',
+#             'Clustering Coefficient', 'Density', 'Number of Weakly Connected Components',
+#             'Number of Strongly Connected Components', 'Number of Nodes', 'Number of Edges',
+#             'Eigenvalue_1', 'Eigenvalue_2', 'Eigenvalue_3', 'Eigenvalue_4', 'Eigenvalue_5', ]
+#     removed = ['Betweenness Centrality', 'Closeness Centrality', 'Number of Cliques', 'Diameter', 'Number of 3-Motifs',  'Number of Cycles', ]
 
-    # Write the header and empty content
-    pd.DataFrame(columns=columns_structure).to_csv(structure_pred_file_path, index=False)
-    pd.DataFrame(columns=columns_structure).to_csv(structure_true_file_path, index=False)
-    pd.DataFrame(columns=columns_structure + ['Kernel Distance']).to_csv(structure_diff_file_path, index=False)
+#     # Write the header and empty content
+#     pd.DataFrame(columns=columns_structure).to_csv(structure_pred_file_path, index=False)
+#     pd.DataFrame(columns=columns_structure).to_csv(structure_true_file_path, index=False)
+#     pd.DataFrame(columns=columns_structure + ['Kernel Distance']).to_csv(structure_diff_file_path, index=False)
 
-#     columns_edges = ['Graph Number', 'precision overall', 'recall overall', 'tp_overall', 'fp_overall','tn_overall','fn_overall', 'precision oo', 'recall oo', 'tp_oo', 'fp_oo','tn_oo','fn_oo', 'precision oon', 'recall oon', 'tp_oon', 'fp_oon','tn_oon','fn_oon',  'precision on', 'recall on', 'tp_on', 'fp_on','tn_on','fn_on', 'precision nn', 'recall nn', 'tp_nn', 'fp_nn','tn_nn','fn_nn', 
-#                         'Correct Node IDs', 'Correct Old Node IDs', 'Precision Old IDs', 'Recall Old IDs',  'Correct New Node IDs', 'Precision New IDs', 
-#                         'Recall New IDs', 'Correct Overall IDs', 'Precision Overall IDs', 'Recall Overall IDs']
+# #     columns_edges = ['Graph Number', 'precision overall', 'recall overall', 'tp_overall', 'fp_overall','tn_overall','fn_overall', 'precision oo', 'recall oo', 'tp_oo', 'fp_oo','tn_oo','fn_oo', 'precision oon', 'recall oon', 'tp_oon', 'fp_oon','tn_oon','fn_oon',  'precision on', 'recall on', 'tp_on', 'fp_on','tn_on','fn_on', 'precision nn', 'recall nn', 'tp_nn', 'fp_nn','tn_nn','fn_nn', 
+# #                         'Correct Node IDs', 'Correct Old Node IDs', 'Precision Old IDs', 'Recall Old IDs',  'Correct New Node IDs', 'Precision New IDs', 
+# #                         'Recall New IDs', 'Correct Overall IDs', 'Precision Overall IDs', 'Recall Overall IDs']
 
-    columns_edges = ['Graph Number','precision oo', 'recall oo', 'tp_oo', 'fp_oo','tn_oo','fn_oo', 'precision oon', 'recall oon', 'tp_oon', 'fp_oon','tn_oon','fn_oon']
+#     columns_edges = ['Graph Number','precision oo', 'recall oo', 'tp_oo', 'fp_oo','tn_oo','fn_oo', 'precision oon', 'recall oon', 'tp_oon', 'fp_oon','tn_oon','fn_oon']
 
-    # Write the header and empty content
-    pd.DataFrame(columns=columns_edges).to_csv(edge_file_path, index=False)
+#     # Write the header and empty content
+#     pd.DataFrame(columns=columns_edges).to_csv(edge_file_path, index=False)
 
-    columns_kernel = [f"Graphlet{i}" for i in range(1, 22)]
+#     columns_kernel = [f"Graphlet{i}" for i in range(1, 22)]
 
-    # Write the header and empty content
-    pd.DataFrame(columns=columns_kernel).to_csv(kernel_pred_file_path, index=False)
-    pd.DataFrame(columns=columns_kernel).to_csv(kernel_true_file_path, index=False)
+#     # Write the header and empty content
+#     pd.DataFrame(columns=columns_kernel).to_csv(kernel_pred_file_path, index=False)
+#     pd.DataFrame(columns=columns_kernel).to_csv(kernel_true_file_path, index=False)
 
+    print(f'Loading data for {dataset} with use_predicted={use_predicted}, num_back={num_back}, num_buckets={num_buckets}, use_test_style={use_test_style}')
     # Load probabilities
-    probabilities_df = my_loader.load_data(type='probabilities', dataset=dataset, activation='', normalized=True, use_predicted=use_predicted, num_back=num_back)
-    probabilities = probabilities_df.values.tolist()
+    if use_predicted:
+        print(f'USING TEST WITH {use_test_style} FOR LOADING PROBS AND TOPER')
+        with open(f'data/input/cached/{dataset}/predValues/{dataset}_testprobs_{use_test_style}_Raw_10.pkl', 'rb') as f:
+            probabilities = pickle.load(f)
+    else:
+        print(f'USING TRUE VALS FOR LOADING PROBS AND TOPER')
+        probabilities = my_loader.load_data(type='probabilities', dataset=dataset, activation='', normalized=True, use_predicted=use_predicted, num_back=num_back)
+
+        
+
+    # FIX: Only call .values.tolist() if it's actually a DataFrame/Series
+    if not use_predicted:
+        if hasattr(probabilities, 'values'):
+            probabilities = probabilities.values.tolist()
+        # If it's already a list, we don't need to do anything.
+        elif isinstance(probabilities, list):
+            pass 
+        else:
+            # Optional: handle numpy arrays if they appear
+            probabilities = np.array(probabilities).tolist()
 
     # Load all features, thresholds, and target subgraphs
-    features, _ = my_loader.load_data(dataset, activation='Degree', type='features', use_predicted=use_predicted, include_weights=False)
-    thresholds = my_loader.load_data(dataset, activation='Degree', type='thresholds', include_weights=False)
-    target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraphs', include_weights=False)
+    if use_predicted:
+        with open(f'data/input/cached/{dataset}/predValues/{dataset}_testtoper_{use_test_style}_Raw_{num_buckets}.pkl', 'rb') as f:
+            features = pickle.load(f)
+    else:
+        features, _ = my_loader.load_data(dataset, activation='Degree', type='features', use_predicted=use_predicted, include_weights=False, num_buckets=num_buckets)
+
+        
+    thresholds = my_loader.load_data(dataset, activation='Degree', type='thresholds', include_weights=False, num_buckets=num_buckets)
+    target_graphs = my_loader.load_data(dataset, activation='Degree', type='subgraphs', include_weights=False, num_buckets=num_buckets)
     
     return probabilities, features, thresholds, target_graphs
 
 
+
 def generate_negative_edges(G, num_samples, edge_type, old_nodes, is_directed, edgebank=None):
-    """
-    For training the MLP, we need some negative edges that did not occur in the graph to predict
-    
-    Args:
-        G (nx.DiGraph): The graph we are trying to generate samples on, we use its structure to check what edges dont exist
-        num_samples (int): How many negative samples we want to create (we aim for equal amounts of positive and negative)
-        edge_type (string): The type of edge we are attempting to generate negative samples for
-        edgebank (dict):  A dict of {node_id: [neighbors]} built up over time to store the previously seen edges
-        
-    Returns:
-        list(negatives) (list): A list of negative edges for training the MLP
-    """
     all_nodes = list(G.nodes())
+    new_nodes = list(set(all_nodes) - set(old_nodes))
+    old_nodes_list = list(old_nodes)
     negatives = set()
-
-    # Precompute sets for efficiency
+    
     G_edges = set(G.edges())
-    if not is_directed:
-        G_edges |= {(v, u) for u, v in G_edges}
+    eb_lookup = edgebank if edgebank is not None else {}
 
-    print(f'For edge type {edge_type}')
+    # Safety to prevent infinite loops if the graph is nearly complete
+    max_attempts = num_samples * 150
+    attempts = 0
 
-    # Generate candidate pairs
-    if is_directed:
-        node_pairs = [(u, v) for u in all_nodes for v in all_nodes if u != v]
-    else:
-        node_pairs = [(u, v) for i, u in enumerate(all_nodes) for v in all_nodes[i+1:]]
-
-    for u, v in node_pairs:
-        # Filter edges based on edge_type
-        if edge_type == 'o-o-bank':
-            if u in old_nodes and v in old_nodes and v in edgebank.get(u, set()):
-                if (u, v) not in G_edges:
-                    negatives.add((u, v))
-        elif edge_type == 'o-o-nobank':
-            if u in old_nodes and v in old_nodes and v not in edgebank.get(u, set()):
-                if (u, v) not in G_edges:
-                    negatives.add((u, v))
+    while len(negatives) < num_samples and attempts < max_attempts:
+        attempts += 1
+        
+        # 1. Targeted Sampling based on edge_type
+        # We pick nodes from the correct pools immediately rather than filtering later
+        if edge_type == 'o-o-bank' or edge_type == 'o-o-nobank':
+            if len(old_nodes_list) < 2: continue
+            u, v = random.sample(old_nodes_list, 2)
+            
+            if edge_type == 'o-o-bank' and v not in eb_lookup.get(u, set()):
+                continue
+            if edge_type == 'o-o-nobank' and v in eb_lookup.get(u, set()):
+                continue
+                
         elif edge_type == 'n-n':
-            if u not in old_nodes and v not in old_nodes:
-                if (u, v) not in G_edges:
-                    negatives.add((u, v))
+            if len(new_nodes) < 2: continue
+            u, v = random.sample(new_nodes, 2)
+            
         elif edge_type == 'o-n':
-            if (u in old_nodes and v not in old_nodes) or (u not in old_nodes and v in old_nodes):
-                if (u, v) not in G_edges:
-                    negatives.add((u, v))
+            if not old_nodes_list or not new_nodes: continue
+            # Randomly decide direction if directed, otherwise just pick one from each
+            u = random.choice(old_nodes_list)
+            v = random.choice(new_nodes)
+            if is_directed and random.random() > 0.5:
+                u, v = v, u
 
-        if len(negatives) >= num_samples:
-            break
+        # 2. Validity Check
+        if (u, v) in G_edges:
+            continue
+        if not is_directed and (v, u) in G_edges:
+            continue
+            
+        negatives.add((u, v))
 
-    negatives = list(negatives)
     if len(negatives) < num_samples:
-        print(f"Only {len(negatives)} unique negative edges found for type {edge_type}, requested {num_samples}")
+        print(f"Only {len(negatives)} unique negative edges found for type {edge_type}")
 
-    return negatives
+    return list(negatives)
 
 
 def generate_training_data(training_graphs, all_edgebanks, days_back, is_directed):

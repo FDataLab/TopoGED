@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from itertools import product
 import math
-from GraphGeneration.models.temporal_gnn.script.config import args
 
 
 def generate_candidates(graph:nx.DiGraph, nodes_1, flag, nodes_2=None, edgebank=None, is_directed=False): 

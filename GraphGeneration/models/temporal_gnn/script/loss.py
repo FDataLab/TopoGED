@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, average_precision_score
-from script.config import args
+from GraphGeneration.models.temporal_gnn.script.config import args
 # from script.utils.util import negative_sampling
-from script.hgcn.manifolds import PoincareBall
+from GraphGeneration.models.temporal_gnn.script.hgcn.manifolds import PoincareBall
 from torch_geometric.utils import negative_sampling
-from script.utils.util import logger
+from GraphGeneration.models.temporal_gnn.script.utils.util import logger
 
 device = args.device
 

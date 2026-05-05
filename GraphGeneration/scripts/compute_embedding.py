@@ -4,7 +4,6 @@ import numpy as np
 import networkx as nx
 import torch
 from node2vec import Node2Vec
-from GraphGeneration.models.temporal_gnn.script.config import args
 import yaml
 
 # Load YAML config

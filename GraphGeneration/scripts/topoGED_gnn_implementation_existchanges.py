@@ -1,4 +1,5 @@
 import math
+import time
 import numpy as np 
 import networkx as nx
 import random
@@ -12,6 +13,8 @@ import os
 import sys
 import yaml
 import pickle 
+import copy
+
 #import line_profiler
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
@@ -40,7 +43,9 @@ from utils.embedding_methods.degree import EmbedDegree
 from nn.custom_model import Decoder
 
 import warnings
+import time
 from sklearn.exceptions import UndefinedMetricWarning
+from GraphGeneration.utils.EdgeDataset import EdgeDataset
 
 # Suppress only the specific AUC warning
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
@@ -145,6 +150,8 @@ class Runner(object):
         self.best_validation_model_auc = 0
         
         # Load all the snapshot true data 
+        days_back_val = 'all' 
+        print('[INFO] USING ALL BACK FOR PROBABILITIES AS A TEST SINCE IM PRETTY SURE THAT ACTUALLY MAKES MORE SENSE')
         self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(encoder_config["dataset"], encoder_config["encoder_model"]["addOnFeature"], 
                                                                                                      encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], days_back_val, encoder_config["use_predicted_vals"])
         
@@ -973,7 +980,7 @@ class Runner(object):
         self.learnable_path = os.path.join(self.saved_input, rf"saved_models/embeddings")
         self.encoder_model_path = os.path.join(self.saved_input, rf'saved_models/embedder_{self.seed}')
         self.decoder_model_path = os.path.join(self.saved_input, rf"saved_models/decoder_MLP_{self.seed}")
-
+        start_time = time.time()
         if os.path.exists(self.decoder_model_path) and os.path.exists(self.encoder_model_path):
             # self.learnable_path.load_state_dict(torch.load(self.learnable_path, map_location=device))            
             # self.learnable_path.to(device)
@@ -997,6 +1004,11 @@ class Runner(object):
 
             print("Models successfully saved.")
             print('Finished training the Link Prediction Decoder and Encoder; Start Graph Construction')
+       
+        end_time = time.time()
+        times = {}
+        times['train'] = end_time - start_time
+        start_time = time.time()
        
         # Old graphs that we know up to now
         self.old_graphs = [self.target_graphs[x][-1] for x in range(self.starting_graph)]
@@ -1064,7 +1076,9 @@ class Runner(object):
             
             old_nodes_days = set().union(*[g.nodes() for g in self.old_graphs[max(i - self.days_back, 0): i]])   # Old nodes of days_back days before
         
-        output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config["encoder_model"]["nodeEmbeddingType"]}_constructed_graphs_{encoder_config["dataset"]}.pkl")
+        times['construction'] = time.time() - start_time
+        
+        output_filepath = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}.pkl")
         os.makedirs(self.saved_graph_dir, exist_ok=True)
 
         data_to_save = (all_built_graphs, all_target_graphs, all_pred_nodes, all_true_nodes)
@@ -1076,7 +1090,7 @@ class Runner(object):
         with open(output_filepath, "wb") as f:
             pickle.dump(data_to_save, f) 
             
-        output_filepath_old_only = os.path.join(self.saved_graph_dir, f"{encoder_config["encoder_model"]["nodeEmbeddingType"]}_constructed_graphs_{encoder_config["dataset"]}_old_only.pkl")
+        output_filepath_old_only = os.path.join(self.saved_graph_dir, f"{encoder_config['encoder_model']['nodeEmbeddingType']}_constructed_graphs_{encoder_config['dataset']}_old_only.pkl")
         
         # Take the graphs that are just old nodes (o-o-bank and o-o-nobank only)
         # So we will save the same data (including nodes, minus new nodes and edges involving new nodes)
@@ -1106,8 +1120,11 @@ class Runner(object):
         data_to_save_old_only = (all_built_graphs_old_only, all_target_graphs_old_only, all_pred_nodes_old_only, all_true_nodes_old_only)    
         with open(output_filepath_old_only, "wb") as f:
             pickle.dump(data_to_save_old_only, f)  
-            
-            
+         
+        end_time = time.time()
+        print(f"Total Time taken: {end_time - start_time} seconds")    
+        print(times)
+        
 if __name__ == '__main__':
     runner = Runner()
     runner.run()

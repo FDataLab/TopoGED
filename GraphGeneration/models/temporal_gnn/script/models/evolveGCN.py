@@ -1,5 +1,6 @@
 import torch
 from torch_geometric_temporal.nn.recurrent import EvolveGCNO
+import torch.nn.functional as F
 
 class EvolveGCN(torch.nn.Module):
     def __init__(self, node_feat_dim, hidden_dim):

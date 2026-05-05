@@ -8,8 +8,8 @@ from torch_geometric.utils import train_test_split_edges
 from torch_geometric.transforms import RandomLinkSplit
 from torch_geometric.data import Data
 import pickle
-from script.utils.make_edges_orign import mask_edges_det, mask_edges_prd, mask_edges_prd_new_by_marlin
-from script.utils.make_edges_new import get_edges, get_prediction_edges, get_prediction_edges_modified, get_new_prediction_edges, get_new_prediction_edges_modified
+from GraphGeneration.models.temporal_gnn.script.utils.make_edges_orign import mask_edges_det, mask_edges_prd, mask_edges_prd_new_by_marlin
+from GraphGeneration.models.temporal_gnn.script.utils.make_edges_new import get_edges, get_prediction_edges, get_prediction_edges_modified, get_new_prediction_edges, get_new_prediction_edges_modified
 
 
 def mkdirs(path):
