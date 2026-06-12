@@ -258,13 +258,6 @@ mathoverflow values since it is the same network.
 | sx-mathoverflow-700 | 700 | 105 | Last 700 days of the full network |
 | sx-mathoverflow | 2,350 | 353 | Full SNAP network, 2009–2016 |
 
-I picked the three paper datasets for hardware reasons: my GPU has 4 GB, and the construction builds
-all old-node candidate pairs at once, so memory grows with the square of the old-node count. These
-three have the smallest snapshots. The sx-mathoverflow runs ran on a rented GPU node
-([run_sx_mathoverflow.sbatch](run_sx_mathoverflow.sbatch),
-log: [runpod_sxmathoverflow_run.log](runpod_sxmathoverflow_run.log)). Building the full
-2,350-day network took about 105 seconds once the GNN was trained.
-
 **How to read the tables.** ↑ means higher is better. →0 means closer to zero is better (these are
 relative errors: positive = over-predicted, negative = under-predicted). **Bold** marks the better
 method. Values come straight from `summary.csv` / the generated `.tex` files.
