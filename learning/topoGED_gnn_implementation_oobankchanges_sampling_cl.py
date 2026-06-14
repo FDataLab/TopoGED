@@ -159,7 +159,9 @@ class Runner(object):
         import pickle as _pkl
 
         def _load_pred_vectors(kind, method):
-            name = 'V-EWMA' if method == 'VEWMA' else method
+            suffix = '-norm' if method.endswith('-norm') else ''
+            base = method[:-len('-norm')] if suffix else method
+            name = ('V-EWMA' if base == 'VEWMA' else base) + suffix
             path = os.path.join(_learning, 'pred_vectors', self.dataset,
                                 f'{self.dataset}_test{kind}_{name}_Raw_{encoder_config["num_toper_buckets"]}.pkl')
             if not os.path.exists(path):
@@ -875,9 +877,10 @@ if __name__ == '__main__':
     parser.add_argument("--alpha", type=float, required=True)
     parser.add_argument("--beta", type=float, required=True)
     parser.add_argument("--new_node_strategy", type=str, required=True)
-    parser.add_argument("--rnn_type", type=str, default=None, choices=["RNN", "LSTM", "GRU", "VEWMA"])
-    parser.add_argument("--toper_method", type=str, default=None, choices=["RNN", "LSTM", "GRU", "VEWMA"])
-    parser.add_argument("--probs_method", type=str, default=None, choices=["RNN", "LSTM", "GRU", "VEWMA"])
+    _methods = ["RNN", "LSTM", "GRU", "VEWMA", "RNN-norm", "LSTM-norm", "GRU-norm", "VEWMA-norm"]
+    parser.add_argument("--rnn_type", type=str, default=None, choices=_methods)
+    parser.add_argument("--toper_method", type=str, default=None, choices=_methods)
+    parser.add_argument("--probs_method", type=str, default=None, choices=_methods)
     args = parser.parse_args()
     runner = Runner(args)
     runner.run()

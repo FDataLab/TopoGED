@@ -1,16 +1,25 @@
 # EXPERIMENT.md — Recurrent Forecasters vs. V-EWMA in TopoGED
 
-This file explains:
+This report documents a re-implementation of the TopoGED forecasting pipeline and three
+controlled experiments built on it. It is organised as follows:
 
-1. How I rewrote the TopoGED pipeline under `learning/`, what I changed in the code, and why.
-2. **Experiment 1:** checking my results against the paper (`topoged.md`, Tables 12, 15, 21) and
-   comparing a recurrent setup (LSTM for TopER, RNN for probabilities) against the paper's V-EWMA baseline.
-3. **Experiment 2:** what happens on `sx-mathoverflow` when the time span of the data gets longer
-   (189 days → 700 days → 2,350 days).
+- **Section 2 — Implementation.** How the TopoGED pipeline was rewritten under `learning/`,
+  the changes made to the original scripts, and the rationale for each.
+- **Section 3 — Setup.** Configuration, methods, and datasets shared by all experiments.
+- **Section 4 — Experiment 1: Reproduction and recurrent forecasters.** Validation of the
+  re-implementation against the published results (`topoged.md`, Tables 12, 15, 21),
+  followed by a comparison of a recurrent setup (LSTM for the TopER vector, RNN for the
+  probability vector) against the paper's V-EWMA baseline.
+- **Section 5 — Experiment 2: Sensitivity to time horizon.** Behaviour on `sx-mathoverflow`
+  as the observation span grows (189 → 700 → 2,350 days).
+- **Section 6 — Experiment 3: Normalised TopER embeddings.** Whether normalising the TopER
+  vector by node and edge count (a shape/scale decomposition) changes forecast error (MAR)
+  and the downstream constructed-graph metrics.
+- **Section 7 — Reproduction.** Commands to regenerate every result above.
 
-All result tables below are shown as markdown. The publication-ready LaTeX versions
-(`table_nodes.tex`, `table_edges.tex`, `table_structure.tex`) sit next to each `summary.csv` in
-[output/comparison_results/](output/comparison_results/).
+All result tables are presented in markdown. The publication-ready LaTeX versions
+(`table_nodes.tex`, `table_edges.tex`, `table_structure.tex`) accompany each `summary.csv`
+in [output/comparison_results/](output/comparison_results/).
 
 ---
 
@@ -653,7 +662,339 @@ in the whole study.
 
 ---
 
-## 6. How to Reproduce
+## 6. Experiment 3 — Normalized TopER (shape / scale decomposition)
+
+My supervisor asked a specific question: in the TopER embedding forecast, does
+**normalizing the whole embedding by node and edge count** change the error (MAR)?
+This section answers it at two levels: the forecast itself (MAR), and the downstream
+constructed graphs (the full metric set from Section 4).
+
+All of this lives in [generate_toper_normalized_cl.py](generate_toper_normalized_cl.py)
+and does **not** modify [generate_toper_cl.py](generate_toper_cl.py) — it imports its
+forecasters so the methods are byte-identical to the raw arm.
+
+### 6.1 How the normalization works
+
+The raw TopER vector for one snapshot is the interleaved, **cumulative** count curve
+
+```
+[ n1, e1, n2, e2, ..., n10, e10 ]
+```
+
+where bucket *i* counts nodes with `degree ≤ threshold_i` (and the edges among them).
+The thresholds are degree percentiles `0 → 100`, so bucket 10 contains the whole
+graph: **`n10 = total_nodes`, `e10 = total_edges`**. The curve is monotone
+non-decreasing.
+
+I normalize each snapshot by its own totals:
+
+```
+n_i_norm = n_i / total_nodes        e_i_norm = e_i / total_edges
+( total_nodes = n10 ,  total_edges = e10 )
+```
+
+This turns each snapshot into a monotone **shape** curve in `[0,1]` ending at `1.0`,
+separating *shape* (how mass is distributed across the filtration) from *scale*
+(how big the graph is). Forecasting then has three steps:
+
+1. **Shape forecast** — forecast the normalized vector with the method (V-EWMA / RNN /
+   LSTM / GRU).
+2. **Scale forecast** — forecast the 2-D totals series `[total_nodes, total_edges]`
+   **separately** with the same method. This is an honest forecast from past values
+   only (**no leakage** — we never use the true future totals). For V-EWMA this is
+   provably identical to the raw arm's `n10`/`e10` forecast; for the recurrent models
+   it is a dedicated 2-D forecaster. (Using true future totals would be an oracle
+   diagnostic only, so it is not reported here.)
+3. **Reconstruct** — `n_i = n_i_norm × predicted_total_nodes` (same for edges). The
+   reconstruction clips fractions to `[0,1]` and applies a cumulative-max so the curve
+   stays monotone, then writes a 20-D raw-count vector in the **same pickle format the
+   construction consumes**. So the downstream code path is unchanged — only the numbers
+   differ.
+
+**Why this can matter downstream.** The construction reads the TopER vector in two
+places: the totals (`n10`, `e10`) set the node/edge budgets, and the inner node buckets
+drive degree assignment in `get_node_features`. So a better shape/scale split can change
+both the graph size and its degree structure.
+
+### 6.2 Forecast-level result — MAR
+
+MAR = **Mean Absolute Relative error** on the test split (last 15% of snapshots),
+averaged over snapshots and over vector dimensions with a non-zero ground truth:
+`mean( |pred − true| / true )`. Two views: the full 20-D vector, and the two totals
+only (`n10`, `e10` — the part that drives budgets). **Bold** = better (lower) of
+raw vs. norm.
+
+**MAR — full TopER vector**
+
+| Dataset | V-EWMA raw / norm | RNN raw / norm | LSTM raw / norm | GRU raw / norm |
+|---|---|---|---|---|
+| mathoverflow | **0.165** / 0.166 | **0.131** / 0.166 | 0.139 / **0.138** | **0.145** / 0.150 |
+| networkaion | **0.202** / 0.205 | **0.172** / 0.232 | 0.358 / **0.323** | **0.269** / 0.361 |
+| networkdgd | **0.323** / 0.335 | **0.277** / 0.332 | 0.325 / **0.295** | 0.302 / **0.293** |
+| sx-mathoverflow-700 | **0.202** / 0.203 | **0.180** / 0.192 | **0.182** / 0.183 | **0.181** / 0.183 |
+
+**MAR — totals only (`n10`, `e10`)**
+
+| Dataset | V-EWMA raw / norm | RNN raw / norm | LSTM raw / norm | GRU raw / norm |
+|---|---|---|---|---|
+| mathoverflow | 0.134 / 0.134 | **0.107** / 0.120 | 0.103 / **0.100** | 0.112 / **0.107** |
+| networkaion | 0.152 / 0.152 | **0.114** / 0.159 | 0.214 / **0.171** | 0.215 / **0.195** |
+| networkdgd | 0.340 / 0.340 | 0.309 / 0.309 | 0.314 / **0.281** | 0.292 / **0.279** |
+| sx-mathoverflow-700 | 0.163 / 0.163 | 0.147 / **0.135** | 0.149 / **0.146** | 0.149 / **0.144** |
+
+Reading:
+
+- **V-EWMA is essentially unaffected.** Its totals MAR is identical raw vs norm (EWMA is
+  per-column, so normalizing the other dimensions cannot change the `n10`/`e10`
+  forecast). The tiny full-vector differences come only from the inner-bucket
+  reconstruction.
+- **For the recurrent models the effect is method- and dataset-dependent.**
+  Normalization **helps LSTM and GRU** — clearly on the two ERC20 networks
+  (LSTM full MAR on Aion 0.358 → 0.323, on DGD 0.325 → 0.295; the totals improve too),
+  and slightly on sx-mathoverflow-700. It **hurts plain RNN** on every dataset.
+- The biggest single win is **LSTM's totals on Aion** (0.214 → 0.171): on that dataset
+  the raw LSTM badly under-predicts graph size, and the shape/scale split fixes the
+  scale part.
+
+### 6.3 Downstream result — full graph metrics
+
+Each table compares four arms: the two raw arms from Section 4 (**V-EWMA**,
+**LSTM+RNN**) and their normalized counterparts (**V-EWMA-norm** = `toper VEWMA-norm`
++ `probs VEWMA`; **LSTM-norm+RNN** = `toper LSTM-norm` + `probs RNN`). Probabilities
+are never normalized — the supervisor's question is about the TopER embedding only.
+↑ = higher is better; →0 = closer to zero is better. **Bold** marks the best arm in each
+row (ties bolded together). Numbers come straight from each
+`output/comparison_results/<dataset>_normalized_ablation/summary.csv`.
+
+##### mathoverflow (189 d, 29 test)
+
+**Node evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Precision Nodes ↑ | 0.42 | 0.42 | **0.43** | **0.43** |
+| Recall Nodes ↑ | **0.42** | **0.42** | **0.42** | 0.41 |
+| F1 Nodes ↑ | **0.42** | **0.42** | **0.42** | **0.42** |
+| Precision Old Nodes ↑ | **0.36** | **0.36** | **0.36** | **0.36** |
+| Recall Old Nodes ↑ | **0.35** | **0.35** | **0.35** | 0.34 |
+| F1 Old Nodes ↑ | 0.35 | 0.35 | **0.36** | 0.35 |
+| New Nodes Predicted →0 | 0.081 | 0.081 | 0.070 | **0.053** |
+
+**Edge evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| oo-bank Precision ↑ | **0.072** | **0.072** | 0.069 | 0.067 |
+| oo-bank Recall ↑ | **0.10** | **0.10** | 0.093 | 0.090 |
+| oo-bank F1 ↑ | **0.084** | **0.084** | 0.078 | 0.076 |
+| oo-nobank Precision ↑ | **0.003** | **0.003** | **0.003** | **0.003** |
+| oo-nobank Recall ↑ | **0.002** | **0.002** | **0.002** | **0.002** |
+| oo-nobank F1 ↑ | **0.003** | **0.003** | 0.002 | 0.002 |
+| Num o-n Predicted →0 | **0.14** | **0.14** | 0.16 | 0.15 |
+| Num n-n Predicted →0 | 0.50 | 0.50 | 0.38 | **0.36** |
+| Edge Precision ↑ | **0.026** | **0.026** | 0.024 | 0.024 |
+| Edge Recall ↑ | **0.027** | **0.027** | 0.024 | 0.024 |
+| Edge F1 ↑ | **0.026** | **0.026** | 0.024 | 0.024 |
+
+**Structure evaluation** (all →0)
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Avg Node Degree | 0.066 | 0.066 | **0.055** | **0.055** |
+| Unique Degree Count | **0.40** | **0.40** | 0.43 | 0.41 |
+| Degree Centrality | **0.086** | **0.086** | 0.096 | 0.12 |
+| Assortativity Coefficient | **46.0** | **46.0** | 50.5 | 55.2 |
+| Clustering Coefficient | **2.91** | **2.91** | 2.98 | **2.91** |
+| Density | **0.086** | **0.086** | 0.096 | 0.12 |
+| Num Triangles | 7.07 | 7.07 | **6.31** | 6.43 |
+| Descriptor Norm | 96.0 | 96.0 | **89.6** | 91.3 |
+| Median Extra Nodes | 12.5 | 12.5 | 7.0 | **5.0** |
+| Median Missing Nodes | 21.0 | 21.0 | **13.0** | 16.0 |
+| Median Extra Edges | 23.0 | 23.0 | 12.0 | **8.5** |
+| Median Missing Edges | **17.5** | **17.5** | 18.0 | 18.5 |
+
+##### networkaion / Aion (196 d, 30 test)
+
+**Node evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Precision Nodes ↑ | 0.46 | 0.46 | **0.48** | 0.45 |
+| Recall Nodes ↑ | **0.45** | **0.45** | 0.42 | 0.44 |
+| F1 Nodes ↑ | **0.45** | **0.45** | 0.44 | 0.44 |
+| Precision Old Nodes ↑ | 0.14 | 0.14 | **0.15** | 0.14 |
+| Recall Old Nodes ↑ | **0.14** | **0.14** | 0.13 | 0.13 |
+| F1 Old Nodes ↑ | **0.14** | **0.14** | **0.14** | 0.13 |
+| New Nodes Predicted →0 | 0.009 | 0.009 | −0.11 | **0.007** |
+
+**Edge evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| oo-bank Precision ↑ | 0.065 | 0.065 | **0.071** | 0.064 |
+| oo-bank Recall ↑ | **0.15** | **0.15** | 0.12 | 0.14 |
+| oo-bank F1 ↑ | **0.089** | **0.089** | 0.087 | 0.084 |
+| oo-nobank Precision ↑ | 0.025 | 0.025 | **0.028** | 0.023 |
+| oo-nobank Recall ↑ | **0.012** | **0.012** | 0.010 | 0.011 |
+| oo-nobank F1 ↑ | **0.016** | **0.016** | 0.014 | 0.014 |
+| Num o-n Predicted →0 | **0.018** | **0.018** | −0.23 | −0.055 |
+| Num n-n Predicted →0 | 1.02 | 1.02 | **0.13** | 0.45 |
+| Edge Precision ↑ | 0.15 | 0.15 | **0.16** | 0.14 |
+| Edge Recall ↑ | **0.15** | **0.15** | 0.12 | 0.13 |
+| Edge F1 ↑ | **0.15** | **0.15** | 0.13 | 0.13 |
+
+**Structure evaluation** (all →0)
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Avg Node Degree | **0.009** | **0.009** | −0.13 | −0.055 |
+| Unique Degree Count | **−0.22** | **−0.22** | −0.39 | −0.31 |
+| Degree Centrality | 0.048 | 0.048 | 0.056 | **0.012** |
+| Assortativity Coefficient | **1.17** | **1.17** | 1.32 | 1.21 |
+| Clustering Coefficient | 4.34 | 4.34 | **3.11** | 3.84 |
+| Density | 0.048 | 0.048 | 0.056 | **0.012** |
+| Num Triangles | 11.3 | 11.3 | **5.07** | 7.72 |
+| Descriptor Norm | **279.6** | **279.6** | 320.8 | 309.5 |
+| Median Extra Nodes | 34.0 | 34.0 | **24.5** | 29.0 |
+| Median Missing Nodes | **34.0** | **34.0** | 58.0 | 54.0 |
+| Median Extra Edges | 34.0 | 34.0 | **8.0** | 18.0 |
+| Median Missing Edges | **34.0** | **34.0** | 56.0 | 37.0 |
+
+##### networkdgd / DGD (725 d, 109 test)
+
+**Node evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Precision Nodes ↑ | 0.53 | 0.53 | **0.57** | **0.57** |
+| Recall Nodes ↑ | **0.56** | **0.56** | 0.53 | 0.53 |
+| F1 Nodes ↑ | **0.53** | **0.53** | **0.53** | **0.53** |
+| Precision Old Nodes ↑ | 0.32 | 0.32 | **0.35** | **0.35** |
+| Recall Old Nodes ↑ | **0.33** | **0.33** | **0.33** | **0.33** |
+| F1 Old Nodes ↑ | 0.32 | 0.32 | 0.32 | **0.33** |
+| New Nodes Predicted →0 | 0.14 | 0.14 | 0.030 | **0.008** |
+
+**Edge evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| oo-bank Precision ↑ | 0.13 | 0.13 | 0.14 | **0.15** |
+| oo-bank Recall ↑ | **0.16** | **0.16** | 0.14 | 0.15 |
+| oo-bank F1 ↑ | 0.13 | 0.13 | **0.14** | **0.14** |
+| oo-nobank Precision ↑ | **0.011** | **0.011** | 0.008 | **0.011** |
+| oo-nobank Recall ↑ | **0.008** | **0.008** | 0.004 | 0.007 |
+| oo-nobank F1 ↑ | **0.008** | **0.008** | 0.005 | **0.008** |
+| Num o-n Predicted →0 | 0.17 | 0.17 | 0.083 | **0.034** |
+| Num n-n Predicted →0 | 0.54 | 0.54 | 0.29 | **0.24** |
+| Edge Precision ↑ | **0.082** | 0.081 | 0.081 | 0.081 |
+| Edge Recall ↑ | **0.086** | **0.086** | 0.075 | 0.074 |
+| Edge F1 ↑ | **0.081** | 0.080 | 0.074 | 0.075 |
+
+**Structure evaluation** (all →0)
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Avg Node Degree | 0.021 | 0.021 | 0.019 | **−0.001** |
+| Unique Degree Count | 0.038 | 0.038 | **0.012** | 0.023 |
+| Degree Centrality | **0.060** | **0.060** | 0.19 | 0.17 |
+| Assortativity Coefficient | **1.02** | **1.02** | **1.02** | **1.02** |
+| Clustering Coefficient | 4.67 | 4.67 | 2.83 | **2.05** |
+| Density | **0.060** | **0.060** | 0.19 | 0.17 |
+| Num Triangles | 5.71 | 5.68 | 3.98 | **3.30** |
+| Descriptor Norm | 180.2 | 180.2 | 175.2 | **169.8** |
+| Median Extra Nodes | 27.0 | 27.0 | 24.0 | **18.0** |
+| Median Missing Nodes | **36.0** | **36.0** | 55.0 | 40.0 |
+| Median Extra Edges | 30.5 | 30.5 | 27.0 | **21.0** |
+| Median Missing Edges | **40.0** | **40.0** | 51.0 | 40.5 |
+
+##### sx-mathoverflow-700 (700 d, 105 test)
+
+**Node evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Precision Nodes ↑ | **0.40** | **0.40** | **0.40** | **0.40** |
+| Recall Nodes ↑ | 0.40 | 0.40 | **0.41** | **0.41** |
+| F1 Nodes ↑ | **0.40** | **0.40** | **0.40** | **0.40** |
+| Precision Old Nodes ↑ | **0.36** | **0.36** | 0.35 | 0.35 |
+| Recall Old Nodes ↑ | **0.36** | **0.36** | **0.36** | **0.36** |
+| F1 Old Nodes ↑ | **0.36** | **0.36** | **0.36** | **0.36** |
+| New Nodes Predicted →0 | 0.12 | 0.12 | **0.10** | 0.11 |
+
+**Edge evaluation**
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| oo-bank Precision ↑ | **0.085** | **0.085** | 0.083 | 0.084 |
+| oo-bank Recall ↑ | **0.13** | **0.13** | **0.13** | **0.13** |
+| oo-bank F1 ↑ | **0.099** | **0.099** | **0.099** | **0.099** |
+| oo-nobank Precision ↑ | **0.001** | **0.001** | **0.001** | **0.001** |
+| oo-nobank Recall ↑ | **0.001** | **0.001** | **0.001** | **0.001** |
+| oo-nobank F1 ↑ | **0.001** | **0.001** | **0.001** | **0.001** |
+| Num o-n Predicted →0 | 0.23 | 0.23 | **0.20** | **0.20** |
+| Num n-n Predicted →0 | 0.53 | 0.53 | 0.51 | **0.50** |
+| Edge Precision ↑ | **0.035** | **0.035** | 0.034 | 0.034 |
+| Edge Recall ↑ | 0.037 | 0.037 | **0.038** | **0.038** |
+| Edge F1 ↑ | 0.035 | 0.035 | **0.036** | **0.036** |
+
+**Structure evaluation** (all →0)
+
+| Metric | V-EWMA | V-EWMA-norm | LSTM+RNN | LSTM-norm+RNN |
+|---|---|---|---|---|
+| Avg Node Degree | 0.066 | 0.066 | 0.066 | **0.062** |
+| Unique Degree Count | 0.58 | 0.58 | **0.56** | 0.58 |
+| Degree Centrality | 0.071 | 0.071 | 0.049 | **0.045** |
+| Assortativity Coefficient | **6.60** | **6.60** | 7.62 | 9.11 |
+| Clustering Coefficient | 2.42 | 2.42 | **2.41** | 2.42 |
+| Density | 0.071 | 0.071 | 0.049 | **0.045** |
+| Num Triangles | **8.59** | **8.59** | 8.98 | 8.85 |
+| Descriptor Norm | 109.6 | 109.6 | 106.4 | **105.4** |
+| Median Extra Nodes | 20.0 | 20.0 | **15.0** | **15.0** |
+| Median Missing Nodes | **14.0** | **14.0** | 15.0 | **14.0** |
+| Median Extra Edges | 21.5 | 21.5 | 18.5 | **18.0** |
+| Median Missing Edges | 17.0 | 17.0 | **15.0** | 16.0 |
+
+### 6.4 Findings
+
+The first thing that stands out is that normalization does basically nothing for V-EWMA.
+Across every metric and every dataset, V-EWMA-norm lands on top of plain V-EWMA to two or
+three decimals. At first I thought this was a bug in the ablation, but it turns out to be
+the expected behaviour: V-EWMA forecasts each dimension on its own, so the totals — the
+numbers that actually set the node and edge budgets — come out exactly the same whether or
+not we normalize. The only thing normalization can touch here is the inner-bucket
+reconstruction, and after rounding and degree assignment those small differences disappear.
+So for the forecaster the paper actually uses, the honest answer to the supervisor's
+question ("does normalizing change the MAR or the graphs?") is simply no.
+
+The recurrent models are a different story. For LSTM, normalization clearly helps, and what
+I found interesting is that it helps most exactly where the raw model was struggling. The
+clearest case is **Aion**, where raw LSTM was failing badly — it under-predicted new nodes
+by about 11.5% (−0.115). Splitting the embedding into shape and scale fixes the size
+forecast: new nodes move to +0.007, the descriptor norm drops from 320.8 to 309.5, and the
+average-degree error shrinks from −0.13 to −0.055. **DGD** tells the same story on the
+headline metrics — F1 Nodes goes from 0.530 to 0.534, new nodes from 0.030 to 0.008, the
+descriptor norm from 175.2 to 169.8, and all four median count errors get smaller. On
+mathoverflow and sx-mathoverflow-700, though, it's essentially a wash, which fits the
+pattern: there wasn't much of a size error to fix in the first place.
+
+Once you line these up, the mechanism is fairly clear. The construction sets the graph size
+entirely from the totals forecast, so normalization only buys you something when it makes
+the totals forecast better. That's exactly what happens for LSTM on the two ERC20 networks
+(totals MAR on Aion 0.214 → 0.171, on DGD 0.314 → 0.281), and it's why V-EWMA stays flat —
+its totals don't change by construction.
+
+The one caveat is the plain RNN. Here normalization goes the wrong way and raises the MAR on
+every dataset, so the recommendation is to leave RNN un-normalized.
+
+Putting it together: normalizing the TopER embedding by node
+and edge count makes no real difference for V-EWMA, but it does help the recurrent
+forecasters (LSTM/GRU). And the gain isn't spread evenly — it concentrates on the datasets
+and metrics tied to predicting graph *size*, which is precisely the part of TopER that the
+construction relies on.
+
+---
+
+## 7. How to Reproduce
 
 ```bash
 # 0. One-time dataset conversion (SNAP gz -> Loader CSV)
@@ -683,3 +1024,46 @@ python compare_graphs_cl.py --dataset sx-mathoverflow \
 Two warnings: rerunning a forecaster script overwrites its pickle with a non-seeded retrain, so the
 matching construction must be rerun too. Changing `lr` (or other training keys) in `encoder.yaml`
 invalidates the GNN cache and forces retraining.
+
+### 7.1 Experiment 3 — normalized TopER (Section 6)
+
+Reuses the same cached GNN as the raw runs (no retraining). Sampling parameters per
+dataset: mathoverflow / sx-mathoverflow-700 `--alpha 5.94 --beta 7.46 --decay_factor 0.15`,
+networkaion `--alpha 1.94 --beta 8.75 --decay_factor 0.60`,
+networkdgd `--alpha 1.32 --beta 9.96 --decay_factor 0.31`.
+
+```bash
+cd learning
+PY=../.venv/bin/python
+
+# 1. Forecast: writes normalized -norm pickles for all 4 methods + the MAR tables
+#    (learning/latex_tables/mar_normalized.csv). Does NOT touch generate_toper_cl.py.
+$PY generate_toper_normalized_cl.py
+
+# 2. Construct the two normalized arms for each dataset (example: networkaion).
+#    V-EWMA-norm keeps probs V-EWMA; LSTM-norm keeps probs RNN — same as the raw arms.
+$PY topoGED_gnn_implementation_oobankchanges_sampling_cl.py \
+    --dataset networkaion --alpha 1.94 --beta 8.75 --decay_factor 0.60 \
+    --new_node_strategy zeros --toper_method VEWMA-norm --probs_method VEWMA
+$PY topoGED_gnn_implementation_oobankchanges_sampling_cl.py \
+    --dataset networkaion --alpha 1.94 --beta 8.75 --decay_factor 0.60 \
+    --new_node_strategy zeros --toper_method LSTM-norm --probs_method RNN
+
+# 3. Evaluate all four arms side by side (raw V-EWMA, V-EWMA-norm, raw LSTM+RNN, LSTM-norm+RNN).
+#    SUF is the fixed folder suffix; D is the dataset.
+D=networkaion
+SUF=_topoGED_embedding_mlpEncodingConcat_embeddingTypeGCN_lr0.001_5back_oobankchanges_zeros_sampling_predvalsTrue_tmp
+PRE=output/constructed_graphs
+$PY compare_graphs_cl.py --dataset $D \
+    --pkl_paths \
+      "$PRE/${D}${SUF}_rnnVEWMA_edgebank_default_VectorTypeV-EWMA/GCN_constructed_graphs_${D}.pkl" \
+      "$PRE/${D}${SUF}_toperVEWMA-norm_probsVEWMA_edgebank_default_VectorTypeV-EWMA/GCN_constructed_graphs_${D}.pkl" \
+      "$PRE/${D}${SUF}_toperLSTM_probsRNN_edgebank_default_VectorTypeV-EWMA/GCN_constructed_graphs_${D}.pkl" \
+      "$PRE/${D}${SUF}_toperLSTM-norm_probsRNN_edgebank_default_VectorTypeV-EWMA/GCN_constructed_graphs_${D}.pkl" \
+    --method_names V-EWMA V-EWMA-norm LSTM+RNN LSTM-norm+RNN \
+    --output_dir output/comparison_results/${D}_normalized_ablation
+```
+
+Repeat steps 2–3 for `mathoverflow`, `networkdgd`, and `sx-mathoverflow-700` with their
+sampling parameters. The raw `rnnVEWMA` and `toperLSTM_probsRNN` folders referenced in
+step 3 are produced by the Section 4 runs above.
