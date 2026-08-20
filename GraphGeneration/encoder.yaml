@@ -84,16 +84,16 @@ sampling:
   alpha: 0
 
 
-dataset: CollegeMsg
+dataset: tgbl-wiki
 seed: 1024
 days_back: 5  # Use 10000 as meaning 'all'
 directed_flag: False
-use_predicted_vals: true
+use_predicted_vals: True
 starting_graph_idx: 2 
 use_moving_average: True
 ablation: False
 sensitivity_analysis: False
-num_toper_buckets: 10
+num_descriptor_buckets: 10
 edgebank_style: "shuffle"
-use_test_style: "AES"
+use_test_style: V-EWMA
 new_node_strategy: "random"

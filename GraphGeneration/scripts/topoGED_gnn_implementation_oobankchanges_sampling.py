@@ -129,7 +129,7 @@ class Runner(object):
         days_back_val = 'all' 
         print('[INFO] USING ALL BACK FOR PROBABILITIES AS A TEST SINCE IM PRETTY SURE THAT ACTUALLY MAKES MORE SENSE')
         self.probabilities, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(self.dataset, encoder_config["encoder_model"]["addOnFeature"], 
-                                                                                                     encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], days_back_val, self.use_predicted_vals, encoder_config["num_toper_buckets"], use_test_style=encoder_config["use_test_style"])
+                                                                                                     encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], days_back_val, self.use_predicted_vals, encoder_config["num_descriptor_buckets"], use_test_style=encoder_config["use_test_style"])
         
         # Modify the graph ids to 1,2,3,...
         self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, 10000)
@@ -520,10 +520,10 @@ class Runner(object):
         But, this version also creates a new MLP before each new graph construction. A process called "continual learning"
         
         Args:
-            current_target_graph_description (list): The TopER current_target_graph_description to guide construction of the graph, stores the number of nodes and edges to add to the graph
+            current_target_graph_description (list): The descriptor current_target_graph_description to guide construction of the graph, stores the number of nodes and edges to add to the graph
             
         Returns:
-            filtration_graphs (list(nx.DiGraph)): A list of nx Graphs that we built up from our TopER current_target_graph_description
+            filtration_graphs (list(nx.DiGraph)): A list of nx Graphs that we built up from our descriptor current_target_graph_description
             node_types (dict): A dictionary that stores 'old_nodes' and 'new_nodes' organized into lists
         """
         random.seed(self.seed)
@@ -750,22 +750,22 @@ class Runner(object):
             ablation_modes = [0]
             
         if self.sensitivity_analysis:
-            toper_lens = [5, 10, 15, 20, 25, 30, 50]
+            descriptor_lens = [5, 10, 15, 20, 25, 30, 50]
             days_back_vals = [3, 4, 5, 7, 10, 13, 15, 17, 20]
-            print('PERFORMING SENSITIVITY ANALYSIS ON TOPER LENGTHS AND DAYS BACK')
+            print('PERFORMING SENSITIVITY ANALYSIS ON descriptor LENGTHS AND DAYS BACK')
         else:
-            toper_lens = [encoder_config["num_toper_buckets"]]
+            descriptor_lens = [encoder_config["num_descriptor_buckets"]]
             days_back_vals = [self.days_back]
                         
         if self.ablation and self.sensitivity_analysis:
             raise(ValueError('Cannot perform both ablation study and sensitivity analysis at the same time'))                
             
         # Save these since we will modify them as we go
-        base_toper = copy.deepcopy(self.graph_descriptions)
+        base_descriptor = copy.deepcopy(self.graph_descriptions)
         base_probs = copy.deepcopy(self.probabilities)
         
         for ablation_mode in ablation_modes:
-            for toper_len in toper_lens:
+            for descriptor_len in descriptor_lens:
                 for db_val in days_back_vals:
                     if ablation_mode == 0 and self.ablation:
                         print('Not reconstructing base graphs in ablation')
@@ -787,23 +787,23 @@ class Runner(object):
                         os.makedirs(self.saved_graph_dir, exist_ok=True)
                         # This gets unchanged if not using ablation
                         if ablation_mode < 9:
-                            self.graph_descriptions, self.probabilities = ablationSetup(base_toper, base_probs, setting=ablation_mode)
+                            self.graph_descriptions, self.probabilities = ablationSetup(base_descriptor, base_probs, setting=ablation_mode)
                         elif ablation_mode == 9:
                             use_predicted_vals = False
                             _, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(self.dataset, encoder_config["encoder_model"]["addOnFeature"], 
-                                    encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], 'all', use_predicted_vals, toper_len, use_test_style=encoder_config["use_test_style"])
+                                    encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], 'all', use_predicted_vals, descriptor_len, use_test_style=encoder_config["use_test_style"])
                             self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, 10000)
                             self.graph_descriptions = [[(lst[i], lst[i+1]) for i in range(0, len(lst), 2)] for lst in self.graph_descriptions]
                     elif self.sensitivity_analysis:
-                        # Change the TopER length here
+                        # Change the descriptor length here
                         _, self.graph_descriptions, self.thresholds, self.target_graphs = load_data(self.dataset, encoder_config["encoder_model"]["addOnFeature"], 
-                                                                                                    encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], 'all', self.use_predicted_vals, toper_len, use_test_style=encoder_config["use_test_style"])
+                                                                                                    encoder_config["decoder_model"]["encode_links"], encoder_config["encoder_model"]["nodeEmbeddingType"], 'all', self.use_predicted_vals, descriptor_len, use_test_style=encoder_config["use_test_style"])
                         self.probabilities = base_probs.copy()  # Just in case
                         # We have to redo these steps now
                         # Modify the graph ids to 1,2,3,...
                         self.target_graphs, _ = modifyGraphIds(self.target_graphs, self.thresholds, 10000)
                         self.graph_descriptions = [[(lst[i], lst[i+1]) for i in range(0, len(lst), 2)] for lst in self.graph_descriptions]
-                        self.saved_graph_dir = f'data/output/sensitivity_analysis/constructed_graphs/{self.dataset}_{self.common_suffix}_edgebank_{self.edgebank_style}_VectorType{encoder_config["use_test_style"] if self.use_predicted_vals else "TrueVals"}_len{toper_len}_daysback{db_val}_{self.seed}'
+                        self.saved_graph_dir = f'data/output/sensitivity_analysis/constructed_graphs/{self.dataset}_{self.common_suffix}_edgebank_{self.edgebank_style}_VectorType{encoder_config["use_test_style"] if self.use_predicted_vals else "TrueVals"}_len{descriptor_len}_daysback{db_val}_{self.seed}'
                         os.makedirs(self.saved_graph_dir, exist_ok=True)
                         
                     
