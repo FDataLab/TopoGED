@@ -4,12 +4,15 @@ import numpy as np
 import pickle
 import networkx as nx
 import time
+import torch
 
 # Update path for imports
 import os
 import sys
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from utils.probabilities_ahead import ProbsAhead
 from utils.probabilities import Probs
 from utils.utils import Utils
 from utils.embedding_methods.betweenness import EmbedBetweenness
@@ -366,6 +369,7 @@ class Loader():
         # activations = [EmbedBetweenness] 
         # activation_names = ['Betweenness']
         my_probs_generator = Probs()
+        my_probs_ahead_generator = ProbsAhead()
         
         
         missing_cached = []
@@ -386,7 +390,7 @@ class Loader():
                 
             # Check for embeddings 
             for activation_name in activation_names:
-                for num_buckets in [5, 10, 15, 20]:
+                for num_buckets in [5, 6, 8, 10, 12, 15, 20, 25, 30, 50]:
                     activation_file = os.path.join(dataset_folder, f'toper_embeddings/{dataset}_{activation_name}_{str(num_buckets)}.pkl')
                     if not os.path.exists(activation_file):
                         missing_cached.append(dataset)
@@ -422,6 +426,17 @@ class Loader():
                 probabilities_file = os.path.join(dataset_folder + '/probabilities', f'{dataset}_probabilities_{num_back}_back.csv')
                 if not os.path.exists(probabilities_file):
                     missing_cached.append(dataset)
+                    
+            for k in [3, 5, 7, 10]:
+                for num_back in [5, 7]:
+                    probabilities_file = os.path.join(dataset_folder + '/probabilities_ahead', f'{dataset}_probabilities_{num_back}_back_k{k}.csv')
+                    if not os.path.exists(probabilities_file):
+                        missing_cached.append(dataset)
+                        
+                probabilities_file = os.path.join(dataset_folder + '/probabilities_ahead', f'{dataset}_probabilities_all_back_k{k}.csv')
+                if not os.path.exists(probabilities_file):
+                    missing_cached.append(dataset)
+                
         
             
         # If we are missing files, generate them
@@ -455,7 +470,7 @@ class Loader():
                 # Generate data with embeddings, labels
                 for activation, activation_name in zip(activations, activation_names):
                     for weight_flag in [False, True]:  # Need to go back with only weight = True
-                        for num_buckets in [5, 10, 15, 20]:
+                        for num_buckets in [5, 6, 8, 10, 12, 15, 20, 25, 30, 50]:
                             print(f'Generating for {file} with activation {activation_name} with include_weights={weight_flag} and num_buckets={str(num_buckets)}')
                             my_activation = activation(num_buckets=num_buckets, include_weights=weight_flag)    
                 
@@ -521,6 +536,7 @@ class Loader():
                     df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
                     df.to_csv(norm_probabilities_file_path)
                     
+                    
                 probs = my_probs_generator.gen_probs(num_graphs_back = 1, graphs=graphs, from_start=True)
                 data_dir = self.output_dir + '/' + file + '/probabilities'
                 os.makedirs(data_dir, exist_ok=True)
@@ -532,6 +548,33 @@ class Loader():
                 normalized_probs = np.vstack(df.apply( lambda row: self.my_utils.normalize_vector_by_groups(row.values), axis=1))
                 df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
                 df.to_csv(norm_probabilities_file_path)
+                
+                
+                for k in [3, 5, 7, 10]:
+                    for num_back in [5, 7]:
+                        probs = my_probs_ahead_generator.gen_probs(num_graphs_back = num_back, graphs=graphs, from_start=False, k=k)
+                        print(f'There were {len(probs)} probabilities generated')
+                        data_dir = self.output_dir + '/' + file + '/probabilities_ahead'
+                        os.makedirs(data_dir, exist_ok=True)
+                        probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back_k{k}.csv')
+                        df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                        df.to_csv(probabilities_file_path)
+                        norm_probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_{num_back}_back_norm_k{k}.csv')
+                        normalized_probs = np.vstack(df.apply( lambda row: self.my_utils.normalize_vector_by_groups(row.values), axis=1))
+                        df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                        df.to_csv(norm_probabilities_file_path)
+                        
+                    probs = my_probs_ahead_generator.gen_probs(num_graphs_back = 1, graphs=graphs, from_start=True, k=k)
+                    data_dir = self.output_dir + '/' + file + '/probabilities_ahead'
+                    os.makedirs(data_dir, exist_ok=True)
+                    probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_all_back_k{k}.csv')
+                    df = pd.DataFrame(probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                    df.to_csv(probabilities_file_path)
+                    print(f'Sending probabilities to {probabilities_file_path}')
+                    norm_probabilities_file_path = os.path.join(data_dir, f'{file}_probabilities_all_back_norm_k{k}.csv')
+                    normalized_probs = np.vstack(df.apply( lambda row: self.my_utils.normalize_vector_by_groups(row.values), axis=1))
+                    df = pd.DataFrame(normalized_probs, columns=["Prob Old Nodes", "Prob New Nodes", "Prob OO", "Prob NN", "Prob ON", "Prob OON"])
+                    df.to_csv(norm_probabilities_file_path)
 
 
     # Load from the pkl file
