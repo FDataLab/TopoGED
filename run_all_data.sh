@@ -14,8 +14,6 @@ EMBEDDING_STYLES=("AES" "VECM" "VAR")
 mkdir -p "data/output/pipelineResults"
 
 echo "=== Pipeline Started: $(date) ===" > "$GENERAL_OUTPUT"
-# python probs/probs_testing.py
-# python toper/toper_testing.py
 
 for LR in "${LEARNING_RATES[@]}"; do
     for DS in "${DATASETS[@]}"; do
