@@ -1,2 +1,0 @@
-Graph Number,Average Node Degree,Unique Degree Count,Degree Centrality,Assortivity Coefficient,Clustering Coefficient,Density,Number of Weakly Connected Components,Number of Strongly Connected Components,Number of Nodes,Number of Edges,Eigenvalue_1,Eigenvalue_2,Eigenvalue_3,Eigenvalue_4,Eigenvalue_5,Kernel Distance
-0,-1.4230769230769231,-5,-0.005494505494505495,-inf,0.0,-0.002747252747252747,179,4,0,-185,1.0000000089878023,-1.0000000082047036,-1.0,1.0,-1.0,63241.095238095295
